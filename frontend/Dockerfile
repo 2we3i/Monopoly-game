@@ -1,9 +1,9 @@
 # Frontend Dockerfile
 # Multi-stage: build the static React bundle with Vite/Node, then serve it
-# with a minimal nginx image. Since nginx proxies /socket.io and /api to the
-# backend container (see nginx.conf), the frontend is built WITHOUT a
-# VITE_SERVER_URL override - it talks same-origin, and nginx routes to the
-# backend service by its docker-compose service name.
+# with a minimal nginx image. On Railway, frontend and backend are separate
+# services with their own public URLs, so the frontend talks to the backend
+# directly over its public URL - VITE_SERVER_URL must be set as a build-time
+# variable on the frontend service before building.
 
 FROM node:20-bookworm-slim AS builder
 
