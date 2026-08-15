@@ -1,0 +1,59 @@
+# docker-compose.yml
+# Brings up the whole game: the Node/Socket.io backend (game logic + SQLite
+# persistence) and the nginx-served React frontend (which proxies API/socket
+# traffic to the backend so the browser only needs one port).
+#
+# Quick start:
+#   docker compose up --build -d
+# Then open http://<this-machine's-IP>:8080 (or http://localhost:8080 on
+# the host itself). Share that URL (with your VPS/public IP instead of
+# localhost) with friends so they can join.
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: landmark-backend
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      # CLIENT_ORIGIN=* keeps CORS permissive since nginx is the only
+      # thing browsers talk to directly (it proxies same-origin), and the
+      # backend itself never serves the frontend in this compose setup.
+      - CLIENT_ORIGIN=*
+    volumes:
+      # Named volume so game state (active rooms, in case of a restart)
+      # survives `docker compose down` / container recreation, not just a
+      # simple process restart inside the same container.
+      - landmark-data:/app/data
+    ports:
+      # Exposed directly too, in case you want to point tools, a reverse
+      # proxy, or health checks at the backend without going through
+      # nginx. Not required for normal play - the frontend's proxy
+      # handles that.
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: landmark-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      # This is the port your friends actually connect to.
+      - "8080:80"
+
+volumes:
+  landmark-data:
+    name: landmark-data
