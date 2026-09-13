@@ -1,12 +1,15 @@
 // App.jsx
-// Top-level component. Decides whether to show the Lobby (no room, or room
-// still in LOBBY phase) or the GameUI (room's phase has moved past LOBBY),
-// and renders a connection-status banner when the socket drops.
+// Flow: AuthScreen -> Lobby -> GameUI.
 
+import { useState } from 'react';
 import { useSocket } from './hooks/useSocket';
+import { useAuth } from './hooks/useAuth';
+import AuthScreen from './components/AuthScreen';
 import Lobby from './components/Lobby';
 import GameUI from './components/GameUI';
 import { useTranslation } from './i18n/LanguageContext';
+
+const GUEST_RESOLVED_KEY = 'landmark_guest_resolved';
 
 function ConnectionBanner({ connected, connectionError }) {
   const { t } = useTranslation();
@@ -30,28 +33,54 @@ function RehydratingScreen() {
 }
 
 export default function App() {
-  const socket = useSocket();
-  const inGame = socket.gameState && socket.gameState.phase !== 'LOBBY';
+  const auth = useAuth();
+  const [guestResolved, setGuestResolved] = useState(() => localStorage.getItem(GUEST_RESOLVED_KEY) === '1' || !!localStorage.getItem('landmark_room_code'));
 
-  if (socket.rehydrating) {
-    return <RehydratingScreen />;
+  if (auth.checking) return <RehydratingScreen />;
+
+  // useSocket is only ever mounted once useAuth has FINISHED confirming
+  // whatever token was in localStorage - its connect-and-auto-rejoin
+  // effect runs on its own mount regardless of what the parent renders
+  // afterward, so mounting it early with a not-yet-resolved token risks
+  // the rejoin request firing before the real token is known.
+  return <AppShell auth={auth} guestResolved={guestResolved} setGuestResolved={setGuestResolved} />;
+}
+
+function AppShell({ auth, guestResolved, setGuestResolved }) {
+  const socket = useSocket(auth.token);
+
+  const identityResolved = auth.isLoggedIn || guestResolved;
+  if (!identityResolved && !socket.roomCode) {
+    return (
+      <AuthScreen
+        auth={auth}
+        onGuestReady={(nickname) => {
+          localStorage.setItem('landmark_nickname', nickname);
+          localStorage.setItem(GUEST_RESOLVED_KEY, '1');
+          setGuestResolved(true);
+        }}
+      />
+    );
   }
+
+  if (socket.rehydrating) return <RehydratingScreen />;
+
+  const inGame = socket.gameState && socket.gameState.phase !== 'LOBBY';
 
   return (
     <>
       <ConnectionBanner connected={socket.connected} connectionError={socket.connectionError} />
-
       {socket.gameError && (
-        <div className="fixed inset-x-0 top-0 z-50 animate-pop-in bg-rent px-4 py-2 text-center text-sm font-medium text-white">
+        <div className="fixed inset-x-0 top-0 z-40 bg-ink px-4 py-2 text-center text-sm font-medium text-board">
           {socket.gameError}
         </div>
       )}
-
       {inGame ? (
         <GameUI
           gameState={socket.gameState}
           playerId={socket.playerId}
           actions={{
+            startGame: socket.startGame,
             rollDice: socket.rollDice,
             payJailFine: socket.payJailFine,
             useJailCard: socket.useJailCard,
@@ -64,6 +93,11 @@ export default function App() {
             unmortgage: socket.unmortgage,
             endTurn: socket.endTurn,
             declareBankruptcy: socket.declareBankruptcy,
+            proposeTrade: socket.proposeTrade,
+            acceptTrade: socket.acceptTrade,
+            declineTrade: socket.declineTrade,
+            cancelTrade: socket.cancelTrade,
+            setCustomPrice: socket.setCustomPrice,
           }}
           onLeave={socket.leaveRoom}
           chatMessages={socket.chatMessages}
@@ -79,7 +113,13 @@ export default function App() {
           onStart={socket.startGame}
           onLeave={socket.leaveRoom}
           joining={socket.joining}
-          savedNickname={socket.savedNickname}
+          savedNickname={auth.isLoggedIn ? auth.account.nickname : socket.savedNickname}
+          auth={auth}
+          onSwitchIdentity={() => {
+            if (auth.isLoggedIn) auth.logout();
+            localStorage.removeItem(GUEST_RESOLVED_KEY);
+            setGuestResolved(false);
+          }}
         />
       )}
     </>

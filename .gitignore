@@ -1,0 +1,28 @@
+# Dependencies - restored with `npm install` in backend/ and frontend/.
+node_modules/
+
+# Build output
+frontend/dist/
+backend/public/
+
+# Runtime data: SQLite databases (game rooms + accounts, including
+# password hashes) and uploaded avatars. Never belongs in the repo.
+backend/data/*.db
+backend/data/*.db-shm
+backend/data/*.db-wal
+backend/data/avatars/
+backend/data/_backup_*/
+
+# Secrets
+.env
+.env.local
+*.local
+
+# Logs / editor / OS noise
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/

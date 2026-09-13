@@ -1,18 +1,17 @@
 // RoomManager.js
-// Keeps one GameManager instance per active room in memory, and persists
-// to SQLite on every mutation so state survives a server restart.
+// Keeps one GameManager instance per active room in memory, persists to
+// SQLite on every mutation.
 
 const { GameManager } = require('./GameManager');
 const db = require('../db/database');
 
-const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no O/0/I/1 ambiguity
-const ROOM_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 3; // prune rooms untouched for 3 days
+const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const ROOM_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 3;
 
 class RoomManager {
   constructor() {
-    this.rooms = new Map(); // roomCode -> GameManager
+    this.rooms = new Map();
     this._loadFromDisk();
-    // Periodic prune of very old rooms so the DB doesn't grow forever
     setInterval(() => db.pruneStaleRooms(ROOM_MAX_AGE_MS), 1000 * 60 * 60).unref();
   }
 
@@ -39,9 +38,9 @@ class RoomManager {
     return code;
   }
 
-  createRoom(hostId) {
+  createRoom(hostId, modeId) {
     const code = this.generateRoomCode();
-    const mgr = new GameManager(code, hostId);
+    const mgr = new GameManager(code, hostId, modeId);
     this.rooms.set(code, mgr);
     this.persist(code);
     return mgr;
@@ -63,7 +62,6 @@ class RoomManager {
     db.deleteRoom(roomCode);
   }
 
-  // Remove empty lobby rooms (nobody connected, still in LOBBY phase)
   cleanupEmptyRoom(roomCode) {
     const mgr = this.rooms.get(roomCode);
     if (!mgr) return;

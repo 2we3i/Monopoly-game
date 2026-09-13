@@ -1,8 +1,4 @@
-// Verifies the "up to 10 players" requirement end to end at the socket
-// layer: 10 players can join, an 11th is rejected, and a full 10-player
-// game can actually play through several turns without errors (e.g. rent
-// calculations, turn order wraparound, bankruptcy-driven seat skipping all
-// still work correctly with a full table, not just 2 players).
+// Verifies "up to 10 players" end to end.
 
 process.env.PORT = '4006';
 const http = require('http');
@@ -69,7 +65,6 @@ async function main() {
   const roomCode = createRes.roomCode;
   console.log('✓ room created:', roomCode);
 
-  // Join players 1-9 (total 10 with the host)
   for (let i = 1; i < 10; i++) {
     const res = await emitAck(sockets[i], 'room:join', { roomCode, nickname: `Player${i}`, playerId: `p${i}` });
     if (res.state.players.length !== i + 1) {
@@ -78,7 +73,6 @@ async function main() {
   }
   console.log('✓ 10 players (0-9) successfully joined, room now full');
 
-  // 11th player must be rejected
   try {
     await emitAck(sockets[10], 'room:join', { roomCode, nickname: 'Player10', playerId: 'p10' });
     throw new Error('Expected 11th player join to be rejected, but it succeeded');
@@ -87,15 +81,12 @@ async function main() {
     console.log('✓ 11th player correctly rejected:', e.message);
   }
 
-  // Start the game with a full table
   const v0 = trackers[0].version;
   sockets[0].emit('room:start');
   let state = await trackers[0].waitForUpdate(v0);
   if (state.phase !== 'ROLLING') throw new Error('Expected ROLLING phase, got ' + state.phase);
   console.log('✓ 10-player game started successfully');
 
-  // Play 30 turns to exercise full-table turn order (wraparound past
-  // player index 9 back to 0), rent between many different owners, etc.
   const socketFor = (id) => sockets[state.players.findIndex((p) => p.id === id)];
   const trackerFor = (id) => trackers[state.players.findIndex((p) => p.id === id)];
   let sawWraparound = false;
@@ -116,7 +107,8 @@ async function main() {
     const actor = state.players.find((p) => p.id === actorId);
     if (state.pendingAction?.type === 'BUY_DECISION' && state.pendingAction.playerId === actorId) {
       v = actorTracker.version;
-      if (actor.money > 300) actorSocket.emit('game:buyProperty', { tileId: state.pendingAction.tileId });
+      const tile = state.board[state.pendingAction.tileId];
+      if (actor.money > tile.price) actorSocket.emit('game:buyProperty', { tileId: state.pendingAction.tileId });
       else actorSocket.emit('game:declinePurchase', { tileId: state.pendingAction.tileId });
       state = await actorTracker.waitForUpdate(v);
     }

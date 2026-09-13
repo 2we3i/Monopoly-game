@@ -1,14 +1,12 @@
 // GameState.js
-// Pure data container for one game room. No socket logic here -
-// this makes it easy to serialize to the DB and to unit test.
+// Pure data container for one game room.
 
-const { BOARD, TILE_TYPES } = require('./Board');
-const { CHANCE_TEMPLATE, CHEST_TEMPLATE, CardDeck } = require('./cards');
+const { CardDeck, CHANCE_TEMPLATE, CHEST_TEMPLATE } = require('./cards');
+const { TILE_TYPES } = require('./boardLayouts/tileTypes');
+const { getLayout, DEFAULT_LAYOUT_ID } = require('./boardLayouts');
 
 const STARTING_MONEY = 1500;
 const GO_SALARY = 200;
-const JAIL_TILE = 10;
-const GO_TO_JAIL_TILE = 30;
 const MAX_JAIL_TURNS = 3;
 const JAIL_FINE = 50;
 
@@ -18,11 +16,13 @@ const PLAYER_COLORS = [
   '#118ab2', '#d4622a',
 ];
 
-function makePlayer({ id, socketId, nickname, colorIndex }) {
+function makePlayer({ id, socketId, nickname, colorIndex, avatarUrl = null, accountId = null }) {
   return {
-    id, // stable player id (persists across reconnects)
-    socketId, // current socket id, null if disconnected
+    id,
+    socketId,
     nickname,
+    avatarUrl,
+    accountId,
     color: PLAYER_COLORS[colorIndex % PLAYER_COLORS.length],
     money: STARTING_MONEY,
     position: 0,
@@ -37,46 +37,56 @@ function makePlayer({ id, socketId, nickname, colorIndex }) {
 }
 
 class GameState {
-  constructor(roomCode) {
+  constructor(roomCode, modeId = DEFAULT_LAYOUT_ID) {
     this.roomCode = roomCode;
-    this.players = []; // ordered list, order = turn order
-    this.properties = {}; // tileId -> { ownerId, houses, mortgaged }
+    this.modeId = modeId;
+    this.layout = getLayout(modeId);
+    this.players = [];
+    this.properties = {};
     this.currentPlayerIndex = 0;
-    this.phase = 'LOBBY'; // LOBBY | ROLLING | ACTION | AUCTION | GAME_OVER
+    this.phase = 'LOBBY';
     this.lastRoll = null;
-    this.log = []; // recent event log, capped
+    this.log = [];
     this.freeParkingPot = 0;
-    this.pendingAction = null; // e.g. { type: 'BUY_DECISION', tileId } awaiting current player
+    this.pendingAction = null;
     this.winnerId = null;
     this.turnStartedAt = Date.now();
     this.chanceDeck = new CardDeck(CHANCE_TEMPLATE);
     this.chestDeck = new CardDeck(CHEST_TEMPLATE);
     this.createdAt = Date.now();
-    // Describes the most recent token movement, purely for the client's
-    // animation - never read for any game-logic decision. Shape:
-    // { playerId, path: [tileId, ...], teleport: boolean }. `path` is the
-    // ordered list of tiles the token should visually step through
-    // (excluding the starting tile, including the destination); `teleport`
-    // true means the client should jump instantly instead of stepping
-    // (used for jail sends, which aren't a "walk" in the real game). Reset
-    // to null at the start of every action so a stale move never lingers
-    // into an unrelated later broadcast and gets replayed.
     this.lastMove = null;
+    // Trades are independent of turn order - unlike dice rolls or
+    // property purchases, which only the current player can do, any two
+    // players can propose/accept a trade with each other at any time
+    // during ACTION or ROLLING phase (not while a buy/card decision is
+    // still pending, since that's a single player's immediate decision
+    // point). Kept as a flat array rather than nested under a player so
+    // every client's single game:state broadcast already contains
+    // whatever trades are relevant to them, with no separate fetch.
+    this.trades = [];
+    this._nextTradeId = 1;
 
-    // Initialize property ownership map
-    BOARD.forEach((tile) => {
+    this.layout.board.forEach((tile) => {
       if (tile.type === TILE_TYPES.PROPERTY || tile.type === TILE_TYPES.RAILROAD || tile.type === TILE_TYPES.UTILITY) {
-        this.properties[tile.id] = { ownerId: null, houses: 0, mortgaged: false };
+        // customPrices lets an owner set a specific rent amount for a
+        // specific other player ("For the Family" pricing) - keyed by
+        // the PAYING player's id, so different visitors can be charged
+        // different amounts on the same property. Empty by default;
+        // absence of an entry for a given player means "use the normal
+        // computed rent", never a silent $0.
+        this.properties[tile.id] = {
+          ownerId: null, houses: 0, mortgaged: false, customPrices: {},
+        };
       }
     });
   }
 
-  // `message` is a plain-English fallback (useful for server-side
-  // debugging/log inspection); `type` + `params` are the structured event
-  // data the frontend actually renders through its own translation
-  // dictionary (see frontend/src/i18n/logFormatter.js) so the activity
-  // log can display in whichever language each viewing player has chosen,
-  // independent of what any other player sees.
+  generateTradeId() {
+    const id = `trade-${this._nextTradeId}`;
+    this._nextTradeId += 1;
+    return id;
+  }
+
   addLog(message, type = null, params = null) {
     this.log.push({ message, type, params, ts: Date.now() });
     if (this.log.length > 60) this.log.shift();
@@ -94,10 +104,12 @@ class GameState {
     return this.players.filter((p) => !p.bankrupt);
   }
 
-  // ---- Serialization for persistence & sending to clients ----
   toJSON() {
     return {
       roomCode: this.roomCode,
+      modeId: this.modeId,
+      board: this.layout.board,
+      sideLength: this.layout.sideLength,
       players: this.players,
       properties: this.properties,
       currentPlayerIndex: this.currentPlayerIndex,
@@ -112,13 +124,24 @@ class GameState {
       chestDeck: this.chestDeck.serialize(),
       createdAt: this.createdAt,
       lastMove: this.lastMove,
+      trades: this.trades,
     };
   }
 
   static fromJSON(data) {
-    const gs = new GameState(data.roomCode);
+    const gs = new GameState(data.roomCode, data.modeId || DEFAULT_LAYOUT_ID);
     gs.players = data.players;
     gs.properties = data.properties;
+    // Defensive migration: a room persisted before customPrices existed
+    // would restore property objects missing that field entirely. Rather
+    // than have every downstream read of propState.customPrices need its
+    // own null-check, backfill it once here so the invariant "every
+    // property object always has a customPrices object" holds for the
+    // rest of the codebase, whether the room is brand new or was loaded
+    // from disk after a server restart.
+    Object.values(gs.properties).forEach((p) => {
+      if (!p.customPrices) p.customPrices = {};
+    });
     gs.currentPlayerIndex = data.currentPlayerIndex;
     gs.phase = data.phase;
     gs.lastRoll = data.lastRoll;
@@ -128,14 +151,16 @@ class GameState {
     gs.winnerId = data.winnerId || null;
     gs.turnStartedAt = data.turnStartedAt || Date.now();
     gs.createdAt = data.createdAt || Date.now();
-    // lastMove is intentionally NOT restored from persisted data - it
-    // describes an animation to play for a move that happened before a
-    // server restart/reload, which should never be replayed. A restored
-    // room starts with lastMove = null (set by the constructor above).
     gs.chanceDeck.restore(data.chanceDeck, CHANCE_TEMPLATE);
     gs.chestDeck.restore(data.chestDeck, CHEST_TEMPLATE);
-    // mark everyone disconnected until they actually rejoin via socket
     gs.players.forEach((p) => { p.connected = false; p.socketId = null; });
+    // Trades persisted before a server restart are pending decisions that
+    // were never resolved - restoring them lets the two parties still
+    // see and act on them after the room comes back, rather than silently
+    // losing an in-flight proposal. _nextTradeId is restored too so a
+    // fresh id after restart never collides with an already-used one.
+    gs.trades = data.trades || [];
+    gs._nextTradeId = data._nextTradeId || (gs.trades.length + 1);
     return gs;
   }
 }
@@ -144,8 +169,6 @@ module.exports = {
   GameState,
   STARTING_MONEY,
   GO_SALARY,
-  JAIL_TILE,
-  GO_TO_JAIL_TILE,
   MAX_JAIL_TURNS,
   JAIL_FINE,
   PLAYER_COLORS,

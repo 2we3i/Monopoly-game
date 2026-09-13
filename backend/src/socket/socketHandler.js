@@ -1,20 +1,23 @@
 // socketHandler.js
-// All real-time communication lives here. Design principles:
-//  1. Clients send *intents* only (roll, buy, endTurn...) - never raw state.
-//  2. Every intent is validated by GameManager; errors are sent back only
-//     to the requesting socket via 'game:error'.
-//  3. After every successful mutation we broadcast the *entire* authoritative
-//     state to the room. This is simpler and safer than diffing/patching for
-//     an MVP, and 40-tile Monopoly state is small (~few KB), so it's cheap.
-//  4. Reconnection: each browser tab generates/stores a persistent playerId
-//     in localStorage. Rejoining with the same playerId + roomCode restores
-//     the player's seat instead of creating a new one.
+// All real-time communication lives here.
 
 const roomManager = require('../game/RoomManager');
 const { GameError } = require('../game/GameManager');
+const { LAYOUT_OPTIONS } = require('../game/boardLayouts');
+const accountsDb = require('../db/accounts');
+const sessionToken = require('../auth/sessionToken');
 
-const DISCONNECT_GRACE_MS = 1000 * 60 * 10; // 10 min grace period before auto-skip on disconnect
-const disconnectTimers = new Map(); // `${roomCode}:${playerId}` -> Timeout
+const DISCONNECT_GRACE_MS = 1000 * 60 * 10;
+const disconnectTimers = new Map();
+
+function resolveAccountFromToken(token) {
+  if (!token) return null;
+  const accountId = sessionToken.verify(token);
+  if (!accountId) return null;
+  const row = accountsDb.findById(accountId);
+  if (!row) return null;
+  return accountsDb.toPublicAccount(row);
+}
 
 function roomStatePayload(mgr) {
   return mgr.state.toJSON();
@@ -25,10 +28,6 @@ function broadcastState(io, roomCode) {
   if (!mgr) return;
   roomManager.persist(roomCode);
   io.to(roomCode).emit('game:state', roomStatePayload(mgr));
-  if (process.env.DEBUG_BROADCAST) {
-    // eslint-disable-next-line no-console
-    console.log(`[broadcast] room=${roomCode} phase=${mgr.state.phase} currentIdx=${mgr.state.currentPlayerIndex} pending=${mgr.state.pendingAction?.type || 'none'}`);
-  }
 }
 
 function sendError(socket, message) {
@@ -52,8 +51,6 @@ function scheduleAutoSkip(io, roomCode, playerId) {
     if (!mgr) return;
     const cp = mgr.state.currentPlayer;
     if (cp && cp.id === playerId && !cp.connected && mgr.state.phase !== 'GAME_OVER' && mgr.state.phase !== 'LOBBY') {
-      // Force-resolve: if mid-action with debt, just declare bankruptcy for them
-      // (a disconnected player who never returns can't leave the game stuck).
       try {
         if (cp.money < 0) {
           mgr.declareBankruptcy(playerId);
@@ -64,7 +61,6 @@ function scheduleAutoSkip(io, roomCode, playerId) {
         }
         mgr.state.addLog(`${cp.nickname} was auto-skipped after a long disconnect.`, 'AUTO_SKIPPED', { name: cp.nickname });
       } catch (err) {
-        // best effort - if endTurn fails for some reason, just advance
         mgr.advanceTurn();
       }
       broadcastState(io, roomCode);
@@ -76,19 +72,30 @@ function scheduleAutoSkip(io, roomCode, playerId) {
 
 function registerSocketHandlers(io) {
   io.on('connection', (socket) => {
-    // socket.data will hold { roomCode, playerId } once joined
     socket.data.roomCode = null;
     socket.data.playerId = null;
 
-    // ---------------- Room lifecycle ----------------
-
-    socket.on('room:create', ({ nickname, playerId }, cb) => {
+    socket.on('room:create', ({ nickname, playerId, modeId, token }, cb) => {
       try {
-        if (!nickname || typeof nickname !== 'string' || !nickname.trim()) {
+        const account = resolveAccountFromToken(token);
+        const effectivePlayerId = account ? account.id : playerId;
+        const effectiveNickname = account ? account.nickname : nickname;
+        const effectiveAvatarUrl = account ? account.avatarPath : null;
+
+        if (!effectiveNickname || typeof effectiveNickname !== 'string' || !effectiveNickname.trim()) {
           throw new GameError('Nickname is required.');
         }
-        const mgr = roomManager.createRoom(playerId);
-        const player = mgr.addPlayer({ playerId, socketId: socket.id, nickname: nickname.trim() });
+        if (modeId && !LAYOUT_OPTIONS.some((opt) => opt.id === modeId)) {
+          throw new GameError(`Unknown game mode "${modeId}".`);
+        }
+        const mgr = roomManager.createRoom(effectivePlayerId, modeId);
+        const player = mgr.addPlayer({
+          playerId: effectivePlayerId,
+          socketId: socket.id,
+          nickname: effectiveNickname.trim(),
+          avatarUrl: effectiveAvatarUrl,
+          accountId: account ? account.id : null,
+        });
         socket.join(mgr.state.roomCode);
         socket.data.roomCode = mgr.state.roomCode;
         socket.data.playerId = player.id;
@@ -100,20 +107,39 @@ function registerSocketHandlers(io) {
       }
     });
 
-    socket.on('room:join', ({ roomCode, nickname, playerId }, cb) => {
+    socket.on('room:join', ({ roomCode, nickname, playerId, token }, cb) => {
       try {
         const mgr = roomManager.getRoom(roomCode);
         if (!mgr) throw new GameError('Room not found. Check the code and try again.');
 
-        // Reconnect path: player already exists in this room
-        const existing = mgr.state.getPlayer(playerId);
+        const account = resolveAccountFromToken(token);
+        const effectivePlayerId = account ? account.id : playerId;
+        const effectiveNickname = account ? account.nickname : nickname;
+        const effectiveAvatarUrl = account ? account.avatarPath : null;
+
+        const existing = mgr.state.getPlayer(effectivePlayerId);
         let player;
         if (existing) {
-          clearDisconnectTimer(mgr.state.roomCode, playerId);
-          player = mgr.reconnectPlayer(playerId, socket.id);
+          clearDisconnectTimer(mgr.state.roomCode, effectivePlayerId);
+          player = mgr.reconnectPlayer(effectivePlayerId, socket.id);
+          if (account) {
+            player = mgr.addPlayer({
+              playerId: effectivePlayerId,
+              socketId: socket.id,
+              nickname: effectiveNickname.trim(),
+              avatarUrl: effectiveAvatarUrl,
+              accountId: account.id,
+            });
+          }
         } else {
-          if (!nickname || !nickname.trim()) throw new GameError('Nickname is required.');
-          player = mgr.addPlayer({ playerId, socketId: socket.id, nickname: nickname.trim() });
+          if (!effectiveNickname || !effectiveNickname.trim()) throw new GameError('Nickname is required.');
+          player = mgr.addPlayer({
+            playerId: effectivePlayerId,
+            socketId: socket.id,
+            nickname: effectiveNickname.trim(),
+            avatarUrl: effectiveAvatarUrl,
+            accountId: account ? account.id : null,
+          });
         }
 
         socket.join(mgr.state.roomCode);
@@ -129,13 +155,35 @@ function registerSocketHandlers(io) {
     });
 
     socket.on('room:rejoinCheck', ({ roomCode, playerId }, cb) => {
-      // Lets the client check (without fully joining/creating socket rooms)
-      // whether a saved roomCode/playerId pair is still valid, e.g. on page load.
       const mgr = roomManager.getRoom(roomCode);
       if (!mgr) return cb?.({ ok: false });
       const player = mgr.state.getPlayer(playerId);
       if (!player) return cb?.({ ok: false });
       cb?.({ ok: true });
+    });
+
+    // Explicit "I am leaving" - the only thing that permanently removes
+    // a player from a LOBBY-phase room. Distinct from a raw disconnect,
+    // which is ambiguous (reload vs. genuinely leaving).
+    socket.on('room:leave', () => {
+      const { roomCode, playerId } = socket.data;
+      if (!roomCode || !playerId) return;
+      const mgr = roomManager.getRoom(roomCode);
+      if (!mgr) return;
+      clearDisconnectTimer(roomCode, playerId);
+      if (mgr.state.phase === 'LOBBY') {
+        mgr.removePlayer(playerId);
+        roomManager.persist(roomCode);
+        io.to(roomCode).emit('game:state', roomStatePayload(mgr));
+        roomManager.cleanupEmptyRoom(roomCode);
+      } else {
+        mgr.markDisconnected(playerId);
+        roomManager.persist(roomCode);
+        io.to(roomCode).emit('game:state', roomStatePayload(mgr));
+      }
+      socket.leave(roomCode);
+      socket.data.roomCode = null;
+      socket.data.playerId = null;
     });
 
     socket.on('room:start', () => {
@@ -148,11 +196,6 @@ function registerSocketHandlers(io) {
         sendError(socket, err.message);
       }
     });
-
-    // ---------------- Gameplay intents ----------------
-    // Every handler follows the same shape: look up room, call the
-    // corresponding validated GameManager method, broadcast on success,
-    // send a private error on failure. No handler ever mutates state directly.
 
     const withGame = (handler) => (payload) => {
       const mgr = roomManager.getRoom(socket.data.roomCode);
@@ -183,7 +226,12 @@ function registerSocketHandlers(io) {
     socket.on('game:endTurn', withGame((mgr) => mgr.endTurn(socket.data.playerId)));
     socket.on('game:declareBankruptcy', withGame((mgr) => mgr.declareBankruptcy(socket.data.playerId)));
 
-    // ---------------- Chat ----------------
+    socket.on('game:proposeTrade', withGame((mgr, payload) => mgr.proposeTrade(socket.data.playerId, payload)));
+    socket.on('game:acceptTrade', withGame((mgr, { tradeId }) => mgr.acceptTrade(socket.data.playerId, tradeId)));
+    socket.on('game:declineTrade', withGame((mgr, { tradeId }) => mgr.declineTrade(socket.data.playerId, tradeId)));
+    socket.on('game:cancelTrade', withGame((mgr, { tradeId }) => mgr.cancelTrade(socket.data.playerId, tradeId)));
+
+    socket.on('game:setCustomPrice', withGame((mgr, { tileId, targetPlayerId, amount }) => mgr.setCustomPrice(socket.data.playerId, tileId, targetPlayerId, amount)));
 
     socket.on('chat:message', ({ text }) => {
       const mgr = roomManager.getRoom(socket.data.roomCode);
@@ -201,25 +249,16 @@ function registerSocketHandlers(io) {
       });
     });
 
-    // ---------------- Disconnect handling ----------------
-
     socket.on('disconnect', () => {
       const { roomCode, playerId } = socket.data;
       if (!roomCode || !playerId) return;
       const mgr = roomManager.getRoom(roomCode);
       if (!mgr) return;
 
-      if (mgr.state.phase === 'LOBBY') {
-        mgr.removePlayer(playerId);
-        roomManager.persist(roomCode);
-        io.to(roomCode).emit('game:state', roomStatePayload(mgr));
-        roomManager.cleanupEmptyRoom(roomCode);
-      } else {
-        mgr.markDisconnected(playerId);
-        roomManager.persist(roomCode);
-        io.to(roomCode).emit('game:state', roomStatePayload(mgr));
-        // If it's currently their turn, give them a grace period to come back
-        // before auto-skipping so the game doesn't stall forever.
+      mgr.markDisconnected(playerId);
+      roomManager.persist(roomCode);
+      io.to(roomCode).emit('game:state', roomStatePayload(mgr));
+      if (mgr.state.phase !== 'LOBBY') {
         const cp = mgr.state.currentPlayer;
         if (cp && cp.id === playerId) {
           scheduleAutoSkip(io, roomCode, playerId);

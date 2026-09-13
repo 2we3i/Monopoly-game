@@ -1,21 +1,8 @@
 // cards.js
-// Chance and Community Chest card decks.
-// Each card has a `type` the GameManager interprets, plus display `text`.
-// `text` is a { en, ru } object rather than a plain string, so the client
-// can render whichever language the viewing player has selected - the
-// server itself has no concept of language, it just carries both and lets
-// each browser pick.
-//
-// Types:
-//  MOVE_TO(tile)        - move to absolute tile id (collect GO if passed)
-//  MOVE_RELATIVE(steps) - move forward/back N steps
-//  COLLECT(amount)      - gain money from bank
-//  PAY(amount)          - pay money to bank
-//  PAY_EACH_PLAYER(amt) - pay every other player
-//  COLLECT_EACH_PLAYER  - collect from every other player
-//  GO_TO_JAIL            - send directly to jail
-//  GET_OUT_OF_JAIL        - grants a usable "get out of jail free" card
-//  REPAIRS(perHouse, perHotel) - pay based on houses/hotels owned
+// Chance and Community Chest card decks. Cards that move a player to a
+// SPECIFIC tile reference it by a symbolic ROLE via `roleTile` rather
+// than a literal numeric `tile` id, resolved through the active layout's
+// cardRoleTiles map.
 
 function shuffle(arr) {
   const a = [...arr];
@@ -27,9 +14,9 @@ function shuffle(arr) {
 }
 
 const CHANCE_TEMPLATE = [
-  { text: { en: 'Advance to Start. Collect $200.', ru: 'Дойдите до Старта. Получите $200.' }, type: 'MOVE_TO', tile: 0 },
-  { text: { en: 'Advance to Meridian Point.', ru: 'Дойдите до Meridian Point.' }, type: 'MOVE_TO', tile: 39 },
-  { text: { en: 'Advance to Aurora Avenue.', ru: 'Дойдите до Aurora Avenue.' }, type: 'MOVE_TO', tile: 37 },
+  { text: { en: 'Advance to Start. Collect $200.', ru: 'Дойдите до Старта. Получите $200.' }, type: 'MOVE_TO', roleTile: 'GO' },
+  { text: { en: 'Advance to a nearby landmark property.', ru: 'Дойдите до одного из известных владений.' }, type: 'MOVE_TO', roleTile: 'FAR_PROPERTY_2' },
+  { text: { en: 'Advance to a nearby landmark property.', ru: 'Дойдите до одного из известных владений.' }, type: 'MOVE_TO', roleTile: 'FAR_PROPERTY_1' },
   { text: { en: 'Advance to the nearest Railroad. Pay double rent if owned.', ru: 'Дойдите до ближайшей железной дороги. Если она занята, заплатите двойную аренду.' }, type: 'MOVE_TO_NEAREST_RAILROAD', doubleRent: true },
   { text: { en: 'Advance to the nearest Utility.', ru: 'Дойдите до ближайшей коммунальной службы.' }, type: 'MOVE_TO_NEAREST_UTILITY' },
   { text: { en: 'Bank pays you a dividend of $50.', ru: 'Банк выплачивает вам дивиденды в размере $50.' }, type: 'COLLECT', amount: 50 },
@@ -38,15 +25,15 @@ const CHANCE_TEMPLATE = [
   { text: { en: 'Go directly to Jail.', ru: 'Отправляйтесь прямо в тюрьму.' }, type: 'GO_TO_JAIL' },
   { text: { en: 'Make general repairs: $25 per house, $100 per hotel.', ru: 'Проведите ремонт: $25 за каждый дом, $100 за каждый отель.' }, type: 'REPAIRS', perHouse: 25, perHotel: 100 },
   { text: { en: 'Speeding fine: pay $15.', ru: 'Штраф за превышение скорости: заплатите $15.' }, type: 'PAY', amount: 15 },
-  { text: { en: 'Take a trip to West Station.', ru: 'Отправляйтесь на West Station.' }, type: 'MOVE_TO', tile: 35 },
+  { text: { en: 'Take a trip to a nearby Railroad.', ru: 'Отправляйтесь на ближайшую станцию.' }, type: 'MOVE_TO', roleTile: 'MID_RAILROAD' },
   { text: { en: 'You have been elected chairman. Pay each player $50.', ru: 'Вас избрали председателем. Заплатите каждому игроку по $50.' }, type: 'PAY_EACH_PLAYER', amount: 50 },
   { text: { en: 'Your building loan matures. Collect $150.', ru: 'Ваш строительный заём погашен. Получите $150.' }, type: 'COLLECT', amount: 150 },
   { text: { en: 'You win a crossword competition. Collect $100.', ru: 'Вы выиграли конкурс кроссвордов. Получите $100.' }, type: 'COLLECT', amount: 100 },
-  { text: { en: 'Advance to Jail / Just Visiting (do not pass GO).', ru: 'Отправляйтесь в тюрьму (Старт не проходите).' }, type: 'MOVE_TO', tile: 10, noGoCollect: true },
+  { text: { en: 'Advance to Jail / Just Visiting (do not pass GO).', ru: 'Отправляйтесь в тюрьму (Старт не проходите).' }, type: 'MOVE_TO', roleTile: 'JAIL', noGoCollect: true },
 ];
 
 const CHEST_TEMPLATE = [
-  { text: { en: 'Advance to Start. Collect $200.', ru: 'Дойдите до Старта. Получите $200.' }, type: 'MOVE_TO', tile: 0 },
+  { text: { en: 'Advance to Start. Collect $200.', ru: 'Дойдите до Старта. Получите $200.' }, type: 'MOVE_TO', roleTile: 'GO' },
   { text: { en: 'Bank error in your favor. Collect $200.', ru: 'Ошибка банка в вашу пользу. Получите $200.' }, type: 'COLLECT', amount: 200 },
   { text: { en: 'Doctor’s fee. Pay $50.', ru: 'Оплата услуг врача. Заплатите $50.' }, type: 'PAY', amount: 50 },
   { text: { en: 'From sale of stock you get $50.', ru: 'От продажи акций вы получаете $50.' }, type: 'COLLECT', amount: 50 },
@@ -81,7 +68,6 @@ class CardDeck {
     return card;
   }
 
-  // Serialize minimal state for persistence
   serialize() {
     return { order: this.deck.map((c) => c.id), pointer: this.pointer };
   }

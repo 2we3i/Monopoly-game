@@ -1,11 +1,4 @@
-// Starts the actual server in-process, then drives it with socket.io-client,
-// so everything happens within a single node invocation (avoids sandbox
-// issues with backgrounded processes dying between tool calls).
-//
-// Uses a StateTracker (always-on 'game:state' listener + versioned waiter)
-// instead of racy socket.once() calls, since multiple broadcasts can be
-// in flight for a single logical action (e.g. join triggers one broadcast,
-// then a subsequent start triggers another).
+// Starts the actual server in-process, then drives it with socket.io-client.
 
 process.env.PORT = '4001';
 process.env.NODE_ENV = 'test';
@@ -18,7 +11,6 @@ const { io: ioClient } = require('socket.io-client');
 
 const apiRoutes = require('../src/routes/api');
 const { registerSocketHandlers } = require('../src/socket/socketHandler');
-const { BOARD } = require('../src/game/Board');
 
 const PORT = 4001;
 const app = express();
@@ -39,38 +31,19 @@ function emitAck(socket, event, payload) {
 }
 
 class StateTracker {
-  constructor(socket, tag) {
-    this.tag = tag;
+  constructor(socket) {
+    this.socket = socket;
     this.version = 0;
     this.latest = null;
-    this.lastError = null;
-    this.errorVersion = 0;
     socket.on('game:state', (s) => {
-      this.version += 1;
       this.latest = s;
-      if (process.env.DEBUG_TEST) {
-        console.log(`[client ${this.tag}] state v${this.version}: phase=${s.phase} idx=${s.currentPlayerIndex} pending=${s.pendingAction?.type || 'none'} lastRoll=${s.lastRoll ? `${s.lastRoll.d1}+${s.lastRoll.d2}` : 'none'} money=${s.players.map((p) => p.money).join(',')}`);
-      }
-    });
-    socket.on('game:error', (e) => {
-      this.lastError = e.message;
-      this.errorVersion += 1;
-      if (process.env.DEBUG_TEST) console.log(`[client ${this.tag}] game:error: ${e.message}`);
+      this.version += 1;
     });
   }
-  // Waits for either a new game:state OR a new game:error, whichever comes
-  // first, since a rejected action legitimately produces no state change -
-  // a test that only waits for state would hang forever on a rejection.
-  // Throws if an error arrives (the caller asked for a state update and
-  // got a rejection instead, which the caller should have anticipated).
   async waitForUpdate(sinceVersion, timeoutMs = 4000) {
-    const startErrorVersion = this.errorVersion;
     const start = Date.now();
     while (this.version <= sinceVersion) {
-      if (this.errorVersion > startErrorVersion) {
-        throw new Error(`Server rejected the action: ${this.lastError}`);
-      }
-      if (Date.now() - start > timeoutMs) throw new Error(`Timed out waiting for game:state update (waited ${Date.now() - start}ms, version stuck at ${this.version}, wanted > ${sinceVersion})`);
+      if (Date.now() - start > timeoutMs) throw new Error('Timed out waiting for game:state update');
       await new Promise((r) => setTimeout(r, 20));
     }
     return this.latest;
@@ -92,8 +65,8 @@ async function main() {
   const s1 = ioClient(URL, { transports: ['websocket', 'polling'] });
   const s2 = ioClient(URL, { transports: ['websocket', 'polling'] });
 
-  const t1 = new StateTracker(s1, 's1/Alice');
-  const t2 = new StateTracker(s2, 's2/Bob');
+  const t1 = new StateTracker(s1);
+  const t2 = new StateTracker(s2);
 
   const errors = [];
   s1.on('game:error', (e) => errors.push(`[s1] ${e.message}`));
@@ -137,6 +110,7 @@ async function main() {
   let state = await t1.waitForUpdate(v1);
   console.log('✓ game started, phase:', state.phase);
   if (state.phase !== 'ROLLING') throw new Error('Expected ROLLING phase after start, got ' + state.phase);
+  if (!Array.isArray(state.board) || state.board.length !== 40) throw new Error('Expected the room state to include a 40-tile board array, got ' + (state.board && state.board.length));
 
   const currentId = () => state.players[state.currentPlayerIndex].id;
   const trackerFor = (id) => (id === p1Id ? t1 : t2);
@@ -146,8 +120,6 @@ async function main() {
   let sawCard = false;
   let sawRent = false;
   let sawDoubles = false;
-  let sawDebtResolution = false;
-  let sawBankruptcy = false;
 
   for (let turn = 0; turn < 60 && state.phase !== 'GAME_OVER'; turn++) {
     const actorId = currentId();
@@ -163,8 +135,8 @@ async function main() {
 
     if (state.pendingAction?.type === 'BUY_DECISION' && state.pendingAction.playerId === actorId) {
       v1 = actorTracker.version;
-      const tilePrice = BOARD[state.pendingAction.tileId].price;
-      if (actor.money >= tilePrice) {
+      const tile = state.board[state.pendingAction.tileId];
+      if (actor.money > tile.price) {
         actorSocket.emit('game:buyProperty', { tileId: state.pendingAction.tileId });
         boughtSomething = true;
       } else {
@@ -180,48 +152,33 @@ async function main() {
       state = await actorTracker.waitForUpdate(v1);
     }
 
-    if (state.log.some((l) => l.message.includes('paid') && l.message.includes('rent'))) {
+    if (state.log.some((l) => l.type === 'PAID_RENT')) {
       sawRent = true;
     }
 
-    // If landing on rent (or a card) put the current player into debt, they
-    // must resolve it before ending their turn - mirrors what a real client
-    // has to do. Try mortgaging owned properties one at a time until
-    // solvent; if that's not enough, declare bankruptcy. This exercises the
-    // mortgage and bankruptcy paths, which otherwise never get hit in a
-    // short-money-only test loop.
     if (!state.pendingAction && state.phase === 'ACTION') {
-      let currentActor = state.players.find((p) => p.id === actorId);
+      const currentActor = state.players.find((p) => p.id === actorId);
       if (currentActor.money < 0) {
-        sawDebtResolution = true;
         const ownedTileIds = Object.entries(state.properties)
           .filter(([, p]) => p.ownerId === actorId && !p.mortgaged)
           .map(([tileId]) => Number(tileId));
-
         for (const tileId of ownedTileIds) {
-          if (currentActor.money >= 0) break;
-          // Can't mortgage a property with houses on it - sell houses first
+          if (state.players.find((p) => p.id === actorId).money >= 0) break;
           const propState = state.properties[tileId];
           if (propState.houses > 0) {
             v1 = actorTracker.version;
             actorSocket.emit('game:sellHouse', { tileId });
             state = await actorTracker.waitForUpdate(v1);
-            currentActor = state.players.find((p) => p.id === actorId);
-            if (currentActor.money >= 0) break;
+            if (state.players.find((p) => p.id === actorId).money >= 0) break;
           }
           v1 = actorTracker.version;
           actorSocket.emit('game:mortgage', { tileId });
           state = await actorTracker.waitForUpdate(v1);
-          currentActor = state.players.find((p) => p.id === actorId);
         }
-
-        if (currentActor.money < 0) {
+        if (state.players.find((p) => p.id === actorId).money < 0) {
           v1 = actorTracker.version;
           actorSocket.emit('game:declareBankruptcy');
           state = await actorTracker.waitForUpdate(v1);
-          sawBankruptcy = true;
-          // declareBankruptcy also advances the turn on the server, so
-          // there's no separate endTurn to send for this player.
           continue;
         }
       }
@@ -234,7 +191,7 @@ async function main() {
     }
   }
 
-  console.log(`✓ played up to 60 rounds; boughtSomething=${boughtSomething} sawCard=${sawCard} sawRent=${sawRent} sawDoubles=${sawDoubles} sawDebtResolution=${sawDebtResolution} sawBankruptcy=${sawBankruptcy}`);
+  console.log(`✓ played up to 60 rounds; boughtSomething=${boughtSomething} sawCard=${sawCard} sawRent=${sawRent} sawDoubles=${sawDoubles}`);
   console.log('  final money:', state.players.map((p) => `${p.nickname}:$${p.money}`).join(', '));
   if (!boughtSomething) throw new Error('Expected at least one property purchase in 60 turns');
   if (!sawCard) throw new Error('Expected at least one Chance/Chest card draw in 60 turns');

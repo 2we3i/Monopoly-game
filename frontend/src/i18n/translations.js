@@ -1,14 +1,5 @@
 // translations.js
-// Flat key -> string dictionaries per language. Keys are grouped by
-// component/screen via a dot-prefix purely for human readability when
-// scanning this file; there's no nested-object lookup, just flat keys, to
-// keep the lookup function trivial and avoid a runtime dependency.
-//
-// English (`en`) is the source of truth: every key that exists anywhere in
-// the app MUST have an English entry. Russian (`ru`) mirrors the same key
-// set - see the completeness check at the bottom of this file (throws in
-// dev if a key is missing from `ru`, so a translation can never silently
-// fall through to a blank string).
+// Flat key -> string dictionaries per language.
 
 export const LANGUAGES = {
   en: { label: 'English', nativeLabel: 'English' },
@@ -18,7 +9,6 @@ export const LANGUAGES = {
 export const DEFAULT_LANGUAGE = 'en';
 
 const en = {
-  // --- App chrome ---
   'app.title': 'Landmark',
   'app.tagline': 'Trade properties, collect rent, and bankrupt your friends — live, in the browser, with up to 10 players.',
   'app.feature.realtime': 'Real-time',
@@ -29,7 +19,6 @@ const en = {
   'app.reconnecting': 'Reconnecting…',
   'app.connectionIssue': 'Connection issue: {error}.',
 
-  // --- Landing screen ---
   'landing.hostGame': 'Host a new game',
   'landing.hostGameSub': 'Get a room code to share',
   'landing.joinGame': 'Join with a code',
@@ -39,6 +28,7 @@ const en = {
   'landing.nicknamePlaceholder': 'e.g. Sasha',
   'landing.roomCode': 'Room code',
   'landing.roomCodePlaceholder': 'e.g. K7QXM',
+  'landing.gameMode': 'Game mode',
   'landing.createRoom': 'Create room',
   'landing.creatingRoom': 'Creating room…',
   'landing.createRoomHint': "You'll get a room code to share with up to 9 friends.",
@@ -46,8 +36,8 @@ const en = {
   'landing.joiningRoom': 'Joining…',
   'landing.errorNicknameRequired': 'Enter a nickname first.',
   'landing.errorRoomCodeRequired': 'Enter a room code.',
+  'landing.tiles': '{count} tiles',
 
-  // --- Waiting room ---
   'waiting.roomCode': 'Room code',
   'waiting.copy': 'Copy',
   'waiting.copied': 'Copied ✓',
@@ -64,8 +54,8 @@ const en = {
   'waiting.ready': 'Ready',
   'waiting.offline': 'offline',
   'waiting.you': 'you',
+  'waiting.gameMode': 'Mode: {mode}',
 
-  // --- In-game: turn / action panel ---
   'game.yourTurn': 'Your turn',
   'game.nameTurn': "{name}'s turn",
   'game.rollDice': 'Roll dice',
@@ -76,22 +66,21 @@ const en = {
   'game.endTurn': 'End turn',
   'game.declareBankruptcy': 'Declare bankruptcy',
   'game.inDebt': "You're ${amount} in debt. Mortgage or sell properties, or declare bankruptcy.",
-  'game.freeParking': 'Free Parking: {amount}',
   'game.freeParkingLabel': 'Free Parking:',
   'game.doubles': 'Doubles!',
+  'game.zoomIn': 'Zoom in',
+  'game.zoomOut': 'Zoom out',
+  'game.resetZoom': 'Reset zoom',
 
-  // --- Buy prompt ---
   'buy.landedOnUnowned': 'Landed on unowned property',
   'buy.buyFor': 'Buy for ${price}? You have ${money}.',
   'buy.pass': 'Pass',
   'buy.buyForPrice': 'Buy for ${price}',
 
-  // --- Card reveal ---
   'card.chance': 'Chance',
   'card.communityChest': 'Community Chest',
   'card.continue': 'Continue',
 
-  // --- Game over ---
   'gameOver.title': 'Game over',
   'gameOver.youWon': 'You won! 🎉',
   'gameOver.nameWins': '{name} wins!',
@@ -99,7 +88,6 @@ const en = {
   'gameOver.subtitleLost': 'Everyone else went bankrupt. Better luck next time.',
   'gameOver.backToLobby': 'Back to lobby',
 
-  // --- Sidebar ---
   'sidebar.players': 'Players',
   'sidebar.chat': 'Chat',
   'sidebar.property': '{count} property',
@@ -109,12 +97,10 @@ const en = {
   'sidebar.disconnected': 'Disconnected',
   'sidebar.you': '(you)',
 
-  // --- Chat ---
   'chat.noMessages': 'No messages yet. Say hi!',
   'chat.placeholder': 'Type a message…',
   'chat.send': 'Send',
 
-  // --- Property modal ---
   'property.ownedBy': 'Owned by {name}',
   'property.mortgaged': 'Mortgaged',
   'property.unowned': 'Unowned · ${price} to purchase',
@@ -125,27 +111,204 @@ const en = {
   'property.railroadRentTable': '1 owned: $25 · 2 owned: $50 · 3 owned: $100 · 4 owned: $200',
   'property.utilityRentTable': '1 owned: 4× dice roll · Both owned: 10× dice roll',
   'property.build': 'Build (${cost})',
-  'property.sellHouse': 'Sell house',
+  'property.sellHouse': 'Sell house (+${amount})',
   'property.payOffMortgage': 'Pay off mortgage (${cost})',
   'property.mortgageFor': 'Mortgage for ${amount}',
   'property.turnOnlyHint': 'You can only manage properties on your turn.',
 
-  // --- Board special tiles ---
-  'tile.go': 'Start',
-  'tile.jail': 'Jail',
-  'tile.freeParking': 'Free Parking',
-  'tile.goToJail': 'Go To Jail',
-  'tile.chance': 'Chance',
-  'tile.communityChest': 'Community Chest',
-  'tile.incomeTax': 'Income Tax',
-  'tile.luxuryTax': 'Luxury Tax',
-
-  // --- Language switcher ---
   'language.label': 'Language',
+
+  'auth.welcomeTitle': 'Welcome',
+  'auth.continueAsGuest': 'Continue as guest',
+  'auth.continueAsGuestSub': 'Jump in with just a nickname, no account needed',
+  'auth.login': 'Log in',
+  'auth.loginSub': 'Use your existing account',
+  'auth.register': 'Create account',
+  'auth.registerSub': 'Save your nickname, password, and avatar',
+  'auth.nickname': 'Nickname',
+  'auth.password': 'Password',
+  'auth.confirmPassword': 'Confirm password',
+  'auth.loginButton': 'Log in',
+  'auth.registerButton': 'Create account',
+  'auth.loggingIn': 'Logging in…',
+  'auth.registering': 'Creating account…',
+  'auth.switchToRegister': "Don't have an account? Create one",
+  'auth.switchToLogin': 'Already have an account? Log in',
+  'auth.passwordMismatch': 'Passwords do not match.',
+  'auth.loggedInAs': 'Logged in as {name}',
+  'auth.logOut': 'Log out',
+  'auth.changeAvatar': 'Change avatar',
+  'auth.uploadingAvatar': 'Uploading…',
+  'auth.playAsGuestInstead': 'Play as guest instead',
+
+  'trade.propose': 'Propose trade',
+  'trade.withName': 'Trade with {name}',
+  'trade.yourOffer': 'You offer',
+  'trade.theirOffer': '{name} gives',
+  'trade.properties': 'Properties',
+  'trade.money': 'Money',
+  'trade.noTradableProperties': 'No tradable properties',
+  'trade.send': 'Send trade offer',
+  'trade.sending': 'Sending…',
+  'trade.cancel': 'Cancel',
+  'trade.incomingFrom': '{name} wants to trade',
+  'trade.outgoingTo': 'Waiting on {name}',
+  'trade.youGive': 'You give:',
+  'trade.youGet': 'You get:',
+  'trade.theyGive': '{name} gives:',
+  'trade.theyGet': '{name} gets:',
+  'trade.accept': 'Accept',
+  'trade.decline': 'Decline',
+  'trade.cancelOffer': 'Cancel offer',
+  'trade.nothing': 'nothing',
+  'trade.pendingTrades': 'Trades',
+  'trade.noPendingTrades': 'No pending trades',
+  'trade.tradeWith': 'Trade',
+  'trade.selectProperty': 'Select properties to include',
+  'trade.moneyAmount': 'Amount',
+  'trade.invalidEmpty': 'Add at least one property or amount of money to each side, or to one side.',
+  'trade.mustSelectPlayer': 'Choose who to trade with first.',
+
+  'customPrice.title': 'For the Family',
+  'customPrice.subtitle': 'Set a special rent price for specific players on this property.',
+  'customPrice.normalRent': 'Normal rent',
+  'customPrice.placeholder': 'Normal',
+  'customPrice.save': 'Save',
+  'customPrice.saving': 'Saving…',
+  'customPrice.clear': 'Reset to normal',
+  'customPrice.invalidAmount': 'Enter a valid amount, or leave blank for normal rent.',
+
+  'profile.changeAvatar': 'Change avatar',
+  'profile.uploadingAvatar': 'Uploading…',
+  'profile.avatarTypeError': 'Please choose a PNG, JPEG, WEBP, or GIF image.',
+  'profile.avatarSizeError': 'That image is too large (max 3MB).',
+
+  'tileType.GO': 'Start',
+  'tileType.PROPERTY': 'Property',
+  'tileType.RAILROAD': 'Station',
+  'tileType.UTILITY': 'Utility',
+  'tileType.TAX': 'Tax',
+  'tileType.CHANCE': 'Chance',
+  'tileType.CHEST': 'Community Chest',
+  'tileType.JAIL': 'Jail · Just visiting',
+  'tileType.GO_TO_JAIL': 'Go to Jail',
+  'tileType.FREE_PARKING': 'Free Parking',
+
+  'tooltip.price': 'Price',
+  'tooltip.rentNow': 'Rent now',
+  'tooltip.owner': 'Owner',
+  'tooltip.available': 'Available',
+  'tooltip.buildings': 'Buildings',
+  'tooltip.diceRoll': 'dice roll',
+  'tooltip.clickForDetails': 'Click for the full title deed',
+
+  'game.fitBoard': 'Fit the whole board',
+
+  'log.title': 'Activity',
+  'log.expand': 'Show full history',
+  'log.collapse': 'Show less',
+  'log.hide': 'Minimize',
+  'log.show': 'Show activity',
+
+  'sidebar.netWorth': 'Net worth',
+  'sidebar.showProperties': 'Show properties',
+
+  'buy.balanceAfter': '${price} · you would have {rest} left',
+  'buy.cantAfford': 'Not enough money',
+
+  'dock.rollHint': 'Roll to move — or press Space',
+  'dock.jailHint': 'Roll doubles to get out, or pay the fine',
+  'dock.endTurnHint': 'Build or trade first if you want to',
+  'dock.settleDebtFirst': 'Settle your debt before ending the turn',
+  'dock.decidePurchase': 'Awaiting your decision',
+  'dock.decidePurchaseHint': 'Buy it or pass — see the card below',
+  'dock.yourMove': "It's your move",
+  'dock.waiting': 'Waiting for their move',
+  'dock.waitingFor': 'Waiting for {name}',
+  'dock.myProperties': 'Properties',
+  'dock.trade': 'Trade',
+
+  'property.titleDeed': 'Title deed',
+  'property.mortgageValue': 'Mortgage',
+  'property.houseCost': 'House cost',
+  'property.mortgagedShort': 'MTG',
+  'property.noBuildings': 'No buildings',
+  'property.manage': 'Manage this property',
+  'property.monopolyHint': 'Base rent doubles when you own the whole color group.',
+  'property.stationsOwned': '{count} station(s) owned',
+  'property.utilityOne': 'One utility owned: 4× the dice roll',
+  'property.utilityBoth': 'Both utilities owned: 10× the dice roll',
+  'property.buildHotel': 'Build hotel (${cost})',
+  'property.blockedMortgaged': 'Pay off the mortgage before building.',
+  'property.blockedNoMonopoly': 'You need the full color group before you can build.',
+  'property.blockedHotel': 'This property already has a hotel.',
+  'property.blockedUneven': 'Build evenly — put a house on the other properties in this group first.',
+
+  'manage.title': 'My properties',
+  'manage.subtitle': 'Build, sell and mortgage everything you own, in one place.',
+  'manage.cash': 'Cash',
+  'manage.deeds': 'Deeds',
+  'manage.monopoly': 'Monopoly',
+  'manage.empty': "You don't own anything yet. Land on a property and buy it.",
+
+  'trade.tradeWithLabel': 'Trade with',
+  'trade.composerHint': 'Pick what each side puts on the table, then send the offer.',
+  'trade.yourSide': 'You give',
+  'trade.theirSide': '{name} gives',
+  'trade.total': 'Total',
+  'trade.available': 'Has',
+  'trade.max': 'All',
+  'trade.search': 'Search…',
+  'trade.estimatedValue': 'Value:',
+  'trade.youGiveShort': 'You give',
+  'trade.youGetShort': 'You get',
+  'trade.evenDeal': 'Even deal',
+  'trade.inYourFavor': '{amount} in your favor',
+  'trade.againstYou': '{amount} against you',
+  'trade.new': 'New',
+  'trade.incoming': 'Waiting on you',
+  'trade.outgoing': 'Sent by you',
+  'trade.awaitingYou': 'Accept or decline this offer',
+  'trade.awaitingThem': 'Waiting for their answer',
+  'trade.emptyHint': 'Offer properties and money to another player — they decide whether to accept.',
+  'trade.blockedHouses': 'Sell the houses first',
+  'trade.blockedMortgaged': 'Pay off the mortgage first',
+
+  'settings.title': 'Settings',
+  'settings.subtitle': 'How the game looks on your screen.',
+  'settings.language': 'Language',
+  'settings.boardSection': 'Board',
+  'settings.interfaceSection': 'Interface',
+  'settings.tileLabels': 'Tile labels',
+  'settings.tileLabelsHint': 'Auto hides names once they get too small to read.',
+  'settings.tooltips': 'Hover details',
+  'settings.tooltipsHint': "Show a tile's price, rent and owner on hover.",
+  'settings.largeTokens': 'Large player tokens',
+  'settings.largeTokensHint': 'Easier to spot when the whole board is in view.',
+  'settings.zoomSpeed': 'Zoom speed',
+  'settings.zoomSpeedHint': 'How fast the scroll wheel zooms the board.',
+  'settings.activityLog': 'Activity log',
+  'settings.activityLogHint': 'The floating event feed over the board.',
+  'settings.animations': 'Animations',
+  'settings.animationsHint': 'Token movement and dice rolls.',
+  'settings.auto': 'Auto',
+  'settings.always': 'Always',
+  'settings.never': 'Never',
+  'settings.slow': 'Slow',
+  'settings.normal': 'Normal',
+  'settings.fast': 'Fast',
+  'settings.reset': 'Reset to defaults',
+  'settings.done': 'Done',
+  'settings.localOnly': 'These settings only affect your own screen — other players see no change.',
+  'settings.open': 'Settings',
+
+  'game.freeParkingPot': 'Free Parking pot',
+  'game.ownedOfTotal': 'Bought',
+  'game.mode': 'Mode',
+  'game.snapshot': 'This game',
 };
 
 const ru = {
-  // --- App chrome ---
   'app.title': 'Landmark',
   'app.tagline': 'Покупайте недвижимость, собирайте арендную плату и разоряйте друзей — в реальном времени, прямо в браузере, до 10 игроков.',
   'app.feature.realtime': 'В реальном времени',
@@ -156,7 +319,6 @@ const ru = {
   'app.reconnecting': 'Переподключение…',
   'app.connectionIssue': 'Проблема с соединением: {error}.',
 
-  // --- Landing screen ---
   'landing.hostGame': 'Создать игру',
   'landing.hostGameSub': 'Получите код комнаты, чтобы поделиться',
   'landing.joinGame': 'Войти по коду',
@@ -166,6 +328,7 @@ const ru = {
   'landing.nicknamePlaceholder': 'например, Саша',
   'landing.roomCode': 'Код комнаты',
   'landing.roomCodePlaceholder': 'например, K7QXM',
+  'landing.gameMode': 'Режим игры',
   'landing.createRoom': 'Создать комнату',
   'landing.creatingRoom': 'Создаём комнату…',
   'landing.createRoomHint': 'Вы получите код комнаты, которым можно поделиться с 9 друзьями.',
@@ -173,8 +336,8 @@ const ru = {
   'landing.joiningRoom': 'Подключение…',
   'landing.errorNicknameRequired': 'Сначала введите никнейм.',
   'landing.errorRoomCodeRequired': 'Введите код комнаты.',
+  'landing.tiles': '{count} клеток',
 
-  // --- Waiting room ---
   'waiting.roomCode': 'Код комнаты',
   'waiting.copy': 'Копировать',
   'waiting.copied': 'Скопировано ✓',
@@ -191,8 +354,8 @@ const ru = {
   'waiting.ready': 'Готов',
   'waiting.offline': 'не в сети',
   'waiting.you': 'вы',
+  'waiting.gameMode': 'Режим: {mode}',
 
-  // --- In-game: turn / action panel ---
   'game.yourTurn': 'Ваш ход',
   'game.nameTurn': 'Ход игрока {name}',
   'game.rollDice': 'Бросить кубики',
@@ -203,22 +366,21 @@ const ru = {
   'game.endTurn': 'Закончить ход',
   'game.declareBankruptcy': 'Объявить банкротство',
   'game.inDebt': 'Вы должны ${amount}. Заложите или продайте имущество, либо объявите банкротство.',
-  'game.freeParking': 'Бесплатная парковка: {amount}',
   'game.freeParkingLabel': 'Бесплатная парковка:',
   'game.doubles': 'Дубль!',
+  'game.zoomIn': 'Приблизить',
+  'game.zoomOut': 'Отдалить',
+  'game.resetZoom': 'Сбросить масштаб',
 
-  // --- Buy prompt ---
   'buy.landedOnUnowned': 'Вы попали на свободную собственность',
   'buy.buyFor': 'Купить за ${price}? У вас ${money}.',
   'buy.pass': 'Пропустить',
   'buy.buyForPrice': 'Купить за ${price}',
 
-  // --- Card reveal ---
   'card.chance': 'Шанс',
   'card.communityChest': 'Общественная казна',
   'card.continue': 'Продолжить',
 
-  // --- Game over ---
   'gameOver.title': 'Игра окончена',
   'gameOver.youWon': 'Вы победили! 🎉',
   'gameOver.nameWins': 'Победитель — {name}!',
@@ -226,7 +388,6 @@ const ru = {
   'gameOver.subtitleLost': 'Все остальные обанкротились. Повезёт в следующий раз.',
   'gameOver.backToLobby': 'Вернуться в лобби',
 
-  // --- Sidebar ---
   'sidebar.players': 'Игроки',
   'sidebar.chat': 'Чат',
   'sidebar.property': '{count} объект',
@@ -236,47 +397,219 @@ const ru = {
   'sidebar.disconnected': 'Не в сети',
   'sidebar.you': '(вы)',
 
-  // --- Chat ---
   'chat.noMessages': 'Сообщений пока нет. Поздоровайтесь!',
   'chat.placeholder': 'Введите сообщение…',
   'chat.send': 'Отправить',
 
-  // --- Property modal ---
   'property.ownedBy': 'Владелец: {name}',
   'property.mortgaged': 'Заложено',
   'property.unowned': 'Свободно · ${price} за покупку',
   'property.baseRent': 'Базовая аренда',
   'property.houseCount': '{count} дом',
-  'property.housesCount': '{count} дома(ов)',
+  'property.housesCount': '{count} дома',
   'property.hotel': 'Отель',
   'property.railroadRentTable': '1 в собственности: $25 · 2: $50 · 3: $100 · 4: $200',
   'property.utilityRentTable': '1 в собственности: 4× бросок кубиков · Обе: 10× бросок кубиков',
   'property.build': 'Построить (${cost})',
-  'property.sellHouse': 'Продать дом',
+  'property.sellHouse': 'Продать дом (+${amount})',
   'property.payOffMortgage': 'Погасить залог (${cost})',
   'property.mortgageFor': 'Заложить за ${amount}',
   'property.turnOnlyHint': 'Управлять недвижимостью можно только в свой ход.',
 
-  // --- Board special tiles ---
-  'tile.go': 'Старт',
-  'tile.jail': 'Тюрьма',
-  'tile.freeParking': 'Бесплатная парковка',
-  'tile.goToJail': 'В тюрьму',
-  'tile.chance': 'Шанс',
-  'tile.communityChest': 'Казна',
-  'tile.incomeTax': 'Подоходный налог',
-  'tile.luxuryTax': 'Налог на роскошь',
-
-  // --- Language switcher ---
   'language.label': 'Язык',
+
+  'auth.welcomeTitle': 'Добро пожаловать',
+  'auth.continueAsGuest': 'Продолжить как гость',
+  'auth.continueAsGuestSub': 'Начните игру, указав только никнейм — аккаунт не нужен',
+  'auth.login': 'Войти',
+  'auth.loginSub': 'Используйте существующий аккаунт',
+  'auth.register': 'Создать аккаунт',
+  'auth.registerSub': 'Сохраните никнейм, пароль и аватар',
+  'auth.nickname': 'Никнейм',
+  'auth.password': 'Пароль',
+  'auth.confirmPassword': 'Подтвердите пароль',
+  'auth.loginButton': 'Войти',
+  'auth.registerButton': 'Создать аккаунт',
+  'auth.loggingIn': 'Вход…',
+  'auth.registering': 'Создание аккаунта…',
+  'auth.switchToRegister': 'Нет аккаунта? Создать',
+  'auth.switchToLogin': 'Уже есть аккаунт? Войти',
+  'auth.passwordMismatch': 'Пароли не совпадают.',
+  'auth.loggedInAs': 'Вы вошли как {name}',
+  'auth.logOut': 'Выйти',
+  'auth.changeAvatar': 'Сменить аватар',
+  'auth.uploadingAvatar': 'Загрузка…',
+  'auth.playAsGuestInstead': 'Играть как гость',
+
+  'trade.propose': 'Предложить сделку',
+  'trade.withName': 'Сделка с {name}',
+  'trade.yourOffer': 'Вы предлагаете',
+  'trade.theirOffer': '{name} отдаёт',
+  'trade.properties': 'Недвижимость',
+  'trade.money': 'Деньги',
+  'trade.noTradableProperties': 'Нет недвижимости для обмена',
+  'trade.send': 'Отправить предложение',
+  'trade.sending': 'Отправка…',
+  'trade.cancel': 'Отмена',
+  'trade.incomingFrom': '{name} предлагает сделку',
+  'trade.outgoingTo': 'Ожидание ответа от {name}',
+  'trade.youGive': 'Вы отдаёте:',
+  'trade.youGet': 'Вы получаете:',
+  'trade.theyGive': '{name} отдаёт:',
+  'trade.theyGet': '{name} получает:',
+  'trade.accept': 'Принять',
+  'trade.decline': 'Отклонить',
+  'trade.cancelOffer': 'Отменить предложение',
+  'trade.nothing': 'ничего',
+  'trade.pendingTrades': 'Сделки',
+  'trade.noPendingTrades': 'Нет активных сделок',
+  'trade.tradeWith': 'Сделка',
+  'trade.selectProperty': 'Выберите недвижимость для обмена',
+  'trade.moneyAmount': 'Сумма',
+  'trade.invalidEmpty': 'Добавьте хотя бы одну недвижимость или сумму денег с одной из сторон.',
+  'trade.mustSelectPlayer': 'Сначала выберите, с кем торговать.',
+
+  'customPrice.title': 'Для своих',
+  'customPrice.subtitle': 'Установите особую арендную плату для конкретных игроков на этой клетке.',
+  'customPrice.normalRent': 'Обычная аренда',
+  'customPrice.placeholder': 'Обычная',
+  'customPrice.save': 'Сохранить',
+  'customPrice.saving': 'Сохранение…',
+  'customPrice.clear': 'Сбросить до обычной',
+  'customPrice.invalidAmount': 'Введите корректную сумму или оставьте пустым для обычной аренды.',
+
+  'profile.changeAvatar': 'Сменить аватар',
+  'profile.uploadingAvatar': 'Загрузка…',
+  'profile.avatarTypeError': 'Выберите изображение в формате PNG, JPEG, WEBP или GIF.',
+  'profile.avatarSizeError': 'Файл слишком большой (максимум 3 МБ).',
+
+  'tileType.GO': 'Старт',
+  'tileType.PROPERTY': 'Недвижимость',
+  'tileType.RAILROAD': 'Вокзал',
+  'tileType.UTILITY': 'Коммунальные услуги',
+  'tileType.TAX': 'Налог',
+  'tileType.CHANCE': 'Шанс',
+  'tileType.CHEST': 'Общественная казна',
+  'tileType.JAIL': 'Тюрьма · просто посещение',
+  'tileType.GO_TO_JAIL': 'В тюрьму',
+  'tileType.FREE_PARKING': 'Бесплатная парковка',
+
+  'tooltip.price': 'Цена',
+  'tooltip.rentNow': 'Аренда сейчас',
+  'tooltip.owner': 'Владелец',
+  'tooltip.available': 'Свободно',
+  'tooltip.buildings': 'Постройки',
+  'tooltip.diceRoll': 'бросок кубиков',
+  'tooltip.clickForDetails': 'Нажмите, чтобы открыть карточку',
+
+  'game.fitBoard': 'Показать всё поле',
+
+  'log.title': 'События',
+  'log.expand': 'Показать всю историю',
+  'log.collapse': 'Показать меньше',
+  'log.hide': 'Свернуть',
+  'log.show': 'Показать события',
+
+  'sidebar.netWorth': 'Состояние',
+  'sidebar.showProperties': 'Показать недвижимость',
+
+  'buy.balanceAfter': '${price} · останется {rest}',
+  'buy.cantAfford': 'Недостаточно денег',
+
+  'dock.rollHint': 'Бросьте кубики — или нажмите пробел',
+  'dock.jailHint': 'Выбросьте дубль или заплатите штраф',
+  'dock.endTurnHint': 'Можно построить дома или предложить сделку',
+  'dock.settleDebtFirst': 'Сначала погасите долг',
+  'dock.decidePurchase': 'Нужно ваше решение',
+  'dock.decidePurchaseHint': 'Купить или пропустить — карточка ниже',
+  'dock.yourMove': 'Ваш ход',
+  'dock.waiting': 'Ожидаем ход соперника',
+  'dock.waitingFor': 'Ожидание: {name}',
+  'dock.myProperties': 'Имущество',
+  'dock.trade': 'Сделка',
+
+  'property.titleDeed': 'Карточка собственности',
+  'property.mortgageValue': 'Залог',
+  'property.houseCost': 'Цена дома',
+  'property.mortgagedShort': 'ЗАЛОГ',
+  'property.noBuildings': 'Построек нет',
+  'property.manage': 'Управление объектом',
+  'property.monopolyHint': 'Базовая аренда удваивается, если вам принадлежит вся цветовая группа.',
+  'property.stationsOwned': 'Вокзалов в собственности: {count}',
+  'property.utilityOne': 'Один объект: 4× бросок кубиков',
+  'property.utilityBoth': 'Оба объекта: 10× бросок кубиков',
+  'property.buildHotel': 'Построить отель (${cost})',
+  'property.blockedMortgaged': 'Сначала погасите залог.',
+  'property.blockedNoMonopoly': 'Нужна вся цветовая группа, чтобы строить.',
+  'property.blockedHotel': 'Здесь уже стоит отель.',
+  'property.blockedUneven': 'Стройте равномерно — сначала постройте дом на других объектах группы.',
+
+  'manage.title': 'Моя недвижимость',
+  'manage.subtitle': 'Стройте, продавайте и закладывайте — всё в одном месте.',
+  'manage.cash': 'Наличные',
+  'manage.deeds': 'Объектов',
+  'manage.monopoly': 'Монополия',
+  'manage.empty': 'У вас пока ничего нет. Попадите на свободную клетку и купите её.',
+
+  'trade.tradeWithLabel': 'Сделка с',
+  'trade.composerHint': 'Выберите, что кладёт на стол каждая сторона, и отправьте предложение.',
+  'trade.yourSide': 'Вы отдаёте',
+  'trade.theirSide': '{name} отдаёт',
+  'trade.total': 'Итого',
+  'trade.available': 'Есть',
+  'trade.max': 'Всё',
+  'trade.search': 'Поиск…',
+  'trade.estimatedValue': 'Ценность:',
+  'trade.youGiveShort': 'Вы отдаёте',
+  'trade.youGetShort': 'Вы получаете',
+  'trade.evenDeal': 'Равный обмен',
+  'trade.inYourFavor': '{amount} в вашу пользу',
+  'trade.againstYou': '{amount} не в вашу пользу',
+  'trade.new': 'Новое',
+  'trade.incoming': 'Ждут вашего ответа',
+  'trade.outgoing': 'Отправлено вами',
+  'trade.awaitingYou': 'Примите или отклоните предложение',
+  'trade.awaitingThem': 'Ожидаем ответа',
+  'trade.emptyHint': 'Предложите другому игроку недвижимость и деньги — он решит, принимать ли сделку.',
+  'trade.blockedHouses': 'Сначала продайте дома',
+  'trade.blockedMortgaged': 'Сначала погасите залог',
+
+  'settings.title': 'Настройки',
+  'settings.subtitle': 'Как игра выглядит на вашем экране.',
+  'settings.language': 'Язык',
+  'settings.boardSection': 'Игровое поле',
+  'settings.interfaceSection': 'Интерфейс',
+  'settings.tileLabels': 'Названия клеток',
+  'settings.tileLabelsHint': '«Авто» скрывает названия, когда они становятся нечитаемыми.',
+  'settings.tooltips': 'Подсказки при наведении',
+  'settings.tooltipsHint': 'Цена, аренда и владелец клетки.',
+  'settings.largeTokens': 'Крупные фишки',
+  'settings.largeTokensHint': 'Заметнее, когда видно всё поле.',
+  'settings.zoomSpeed': 'Скорость зума',
+  'settings.zoomSpeedHint': 'Как быстро колесо мыши меняет масштаб.',
+  'settings.activityLog': 'Журнал событий',
+  'settings.activityLogHint': 'Плавающая лента событий над полем.',
+  'settings.animations': 'Анимации',
+  'settings.animationsHint': 'Движение фишек и бросок кубиков.',
+  'settings.auto': 'Авто',
+  'settings.always': 'Всегда',
+  'settings.never': 'Никогда',
+  'settings.slow': 'Медленно',
+  'settings.normal': 'Обычно',
+  'settings.fast': 'Быстро',
+  'settings.reset': 'Сбросить',
+  'settings.done': 'Готово',
+  'settings.localOnly': 'Эти настройки влияют только на ваш экран — у других игроков ничего не меняется.',
+  'settings.open': 'Настройки',
+
+  'game.freeParkingPot': 'Банк парковки',
+  'game.ownedOfTotal': 'Куплено',
+  'game.mode': 'Режим',
+  'game.snapshot': 'О партии',
 };
 
 export const TRANSLATIONS = { en, ru };
 
-// Completeness check: every key in `en` must exist in every other
-// language. This runs once at module load - cheap, and it fails loudly
-// and immediately (rather than silently rendering blank/undefined text)
-// if a translation is ever added to one language and forgotten in another.
 if (import.meta.env.DEV) {
   const enKeys = Object.keys(en);
   Object.entries(TRANSLATIONS).forEach(([lang, dict]) => {

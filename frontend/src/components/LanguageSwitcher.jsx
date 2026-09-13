@@ -1,8 +1,4 @@
 // LanguageSwitcher.jsx
-// A small dropdown for picking the UI language. This is a personal,
-// per-browser preference (see LanguageContext) - it never affects what
-// other players in the same room see.
-
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../i18n/LanguageContext';
 
@@ -38,7 +34,7 @@ export default function LanguageSwitcher({ variant = 'light' }) {
         aria-expanded={open}
         className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
           isDark
-            ? 'border-board-tile/25 text-board-tile/80 hover:border-brass/60 hover:text-board-tile'
+            ? 'border-board/25 text-board/80 hover:border-brass/60 hover:text-board'
             : 'border-ink/15 text-ink-soft hover:border-brass/50 hover:text-ink'
         }`}
       >
@@ -55,7 +51,7 @@ export default function LanguageSwitcher({ variant = 'light' }) {
       {open && (
         <div
           role="listbox"
-          className="absolute right-0 top-full z-30 mt-1.5 min-w-[140px] overflow-hidden rounded-xl border border-brass/20 bg-board shadow-panel texture-parchment"
+          className="absolute right-0 top-full z-[60] mt-1.5 min-w-[140px] overflow-hidden rounded-xl border border-brass/20 bg-board shadow-panel"
         >
           {Object.entries(languages).map(([code, meta]) => (
             <button

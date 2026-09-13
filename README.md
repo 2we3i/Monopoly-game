@@ -1,204 +1,117 @@
-# Landmark — Online Multiplayer Property Trading Game
+# Landmark
 
-A real-time, browser-based, Monopoly-style board game for up to 10 players. You host the server (on your own computer or a VPS), share a room code or link, and everyone plays together from their browser — desktop or phone.
+A real-time, browser-based property-trading board game for up to 10 players — a Monopoly-style game with a couple of twists: a choice of board sizes, per-player trading with server-enforced anti-fraud checks, and "For the Family" custom rent pricing between specific players.
 
-Built with **React + TailwindCSS** on the frontend and **Node.js + Express + Socket.io + SQLite** on the backend. The server is fully authoritative: it validates every dice roll, purchase, and payment, so clients can't cheat by tampering with their own money or position.
+## Features
 
-> **A note on naming and design:** this project uses original tile names, an original color palette, and the name "Landmark" rather than "Monopoly." The rules (buying property, paying rent, jail, bankruptcy, etc.) are the same well-known mechanics of the classic property-trading genre, but no Hasbro trademarks, board artwork, or copy have been used.
+- **Real-time multiplayer** over Socket.io, up to 10 players per room, with reconnect support (a dropped connection gets a 10-minute grace period before the game auto-skips that player's turn).
+- **Two game modes**: Classic (the familiar 40-tile board) and Metropolis (an 84-tile board with 20 property groups). New modes are added on the backend by registering a new board layout — the frontend picks them up automatically with no changes required.
+- **Player accounts** (optional): register with just a nickname and password — no email, no personal information — or play as a guest with a temporary identity that only exists for that session. Registered accounts can upload an avatar photo.
+- **Trading**: propose a trade with any other player (properties, money, or both, in either direction). Trades use an offer/accept model — nothing changes hands until the recipient explicitly accepts, and the server re-validates the whole trade at acceptance time, so a property that got mortgaged, sold, or traded away in the interim can't be used to defraud the other party.
+- **For the Family**: a property owner can set a specific, fixed rent price for a specific other player, overriding the normal computed rent for that pairing only.
+- **A board you can actually read**: the board is drawn at a fixed design size and shown through a free zoom/pan viewport — scroll to zoom at the cursor, drag to pan, pinch on touch, with a zoom readout and a fit-to-screen control. Zoom is per-player and local; it never touches game state. Tiles simplify themselves as you zoom out (a tile whose name would render smaller than it is readable shows its color group, its owner and its buildings instead), and hovering any tile gives its full details.
+- **One place to act**: an action dock under the board always shows whatever the game is waiting for — roll, buy, end turn, jail options — plus the portfolio and trade screens, so no action has to be hunted for. Space or Enter fires the current primary action.
+- Live chat and an in-game activity log — both in English and Russian.
 
----
+## Project layout
 
-## Quick start (Docker — recommended)
-
-This is the fastest way to get a server running for you and your friends.
-
-**Requirements:** [Docker](https://docs.docker.com/get-docker/) and Docker Compose (bundled with Docker Desktop; on Linux, install the `docker-compose-plugin` package).
-
-```bash
-git clone <this-repo>
-cd monopoly-game
-docker compose up --build -d
+```
+landmark/
+├── backend/            Node/Express + Socket.io game server (source of truth for all game rules)
+│   ├── src/
+│   │   ├── game/         GameManager (rules engine), GameState, board layouts, cards
+│   │   ├── auth/         Session token signing/verification
+│   │   ├── db/           SQLite persistence (rooms + accounts, separate databases)
+│   │   ├── routes/       REST API (health, game modes, auth)
+│   │   └── socket/       Socket.io event handlers
+│   └── test/             9 test files: unit tests for the rules engine, plus real
+│                         Socket.io integration tests that boot an actual server
+├── frontend/            React + Vite + Tailwind client
+│   └── src/
+│       ├── components/   UI components (Board + BoardTile, ActionDock, TradeComposer,
+│       │                  PropertyModal, ManagePropertiesModal, PlayerCard, ...)
+│       ├── boardData.js  Board geometry + derived game facts (pure, layout-agnostic)
+│       ├── hooks/        useSocket (game connection), useAuth (account session)
+│       └── i18n/         Translations (en/ru) and related helpers
+├── Dockerfile           Multi-stage build producing a single runtime image
+├── docker-compose.yml   Local/production deployment with a persistent data volume
+└── .env.example         Required environment variables for Docker Compose
 ```
 
-That's it. Once it's up:
+## Running locally (without Docker)
 
-- **You (the host)** open `http://localhost:8080`
-- **Friends on your network** open `http://<your-computer's-LAN-IP>:8080` (e.g. `http://192.168.1.42:8080`)
-- **Friends over the internet** (if you're hosting on a VPS, or you've port-forwarded 8080 on your home router) open `http://<your-public-IP-or-domain>:8080`
-
-To stop the server: `docker compose down` (your active games are preserved — see [Persistence](#persistence--reconnecting) below). To stop it and **wipe all saved game data**: `docker compose down -v`.
-
-To view logs: `docker compose logs -f`. To rebuild after pulling code changes: `docker compose up --build -d` again.
-
----
-
-## Quick start (without Docker)
-
-Useful for local development, or if you'd rather not use Docker at all.
-
-**Requirements:** Node.js 18 or newer, npm.
-
-### 1. Start the backend
+Requires Node.js 18+.
 
 ```bash
+# Backend
 cd backend
 npm install
-npm start
-```
+npm test        # optional but recommended - runs the full test suite
+npm run dev      # starts the game server on :4000 (nodemon, auto-restarts on change)
 
-The backend listens on port `4000` by default (`http://localhost:4000/api/health` should return `{"ok":true,...}`).
-
-### 2. Start the frontend
-
-In a second terminal:
-
-```bash
+# Frontend, in a second terminal
 cd frontend
 npm install
-npm run dev
+npm run dev      # starts the Vite dev server on :5173, proxying /api, /avatars,
+                  # and /socket.io to the backend on :4000
 ```
 
-The frontend dev server runs on port `5173` and proxies API/Socket.io requests to `localhost:4000` automatically (see `vite.config.js`). Open `http://localhost:5173`.
+Then open `http://localhost:5173`. The dev server's proxy (see `frontend/vite.config.js`) is what lets the browser talk to a single origin during development even though two separate processes are running.
 
-### 3. Playing with friends without Docker
-
-For friends on your LAN to join, they need to reach your backend's actual address, not `localhost`. Two ways to do this:
-
-- **Simplest:** build the frontend for production and point it at your LAN IP:
-  ```bash
-  cd frontend
-  VITE_SERVER_URL=http://<your-LAN-IP>:4000 npm run build
-  npm run preview -- --host
-  ```
-  Friends then open `http://<your-LAN-IP>:4173`.
-- **Or:** just use Docker Compose instead — it handles this automatically via nginx proxying, which is why it's the recommended path above.
-
----
-
-## How to actually host a game for friends
-
-1. Start the server (Docker Compose, or the manual steps above).
-2. Find your machine's address:
-   - **Same WiFi/LAN as your friends:** your local IP, e.g. `192.168.1.42`. On Windows, run `ipconfig`; on macOS/Linux, run `ifconfig` or `ip addr`.
-   - **Hosting on a VPS, or want friends to join over the internet:** your VPS's public IP or domain name. If hosting from your home network, you'll need to forward port `8080` (Docker) on your router to your machine.
-3. Open `http://<that-address>:8080` yourself, click **"Host a new game"**, enter a nickname, and you'll get a 5-character room code and a shareable invite link.
-4. Send the room code (or the link, which pre-fills the code) to up to 9 friends. They open the same address, click **"Join with a code"**, and enter it.
-5. Once everyone's in the lobby (2–10 players), the host clicks **"Start game."**
-
----
-
-## Gameplay features
-
-- Real-time sync over WebSocket (Socket.io) — every action (dice roll, purchase, rent payment, trade of turn) appears instantly for all players.
-- Full rule set: buying properties/railroads/utilities, rent (including monopoly double-rent and railroad/utility scaling), building houses and hotels with the even-building rule, mortgaging, Chance and Community Chest decks, Jail (pay, roll doubles, or use a card), bankruptcy, and a last-player-standing win condition.
-- Server-side validation on every action — the client can only ever request an action ("I want to buy this tile"), never directly set its own money or position.
-- Room system: create a room, get a code, wait for players, host-only game start. Scales cleanly from 2 up to a full 10 players — the player sidebar uses the actual available layout space rather than a fixed height, so it never clips players in a full room.
-- Player chat, nicknames, and per-player colors, with an unread-message badge and a distinct notification sound when a message arrives while you're not looking at the Chat tab.
-- **Multi-language interface (English / Русский):** each player picks their own language independently — it's a personal, per-browser preference, not a room-wide setting, so people can play the same game in different languages simultaneously. See [Localization](#localization) below.
-- Animated dice rolls and player token movement around the board (smooth continuous sliding, not a snap-to-tile jump).
-- Synthesized sound effects (dice, purchase, collecting/paying money, bankruptcy, new chat message) — generated with the Web Audio API, so there are no external audio files to license or fetch.
-- **Reconnection:** if you close the tab, lose WiFi, or refresh the page mid-game, reopening the same URL automatically rejoins your seat with your money and properties intact. If it's your turn when you disconnect, the game waits up to 10 minutes before auto-skipping you so it doesn't stall for everyone else.
-- **Persistence:** game state is saved to a SQLite database on every change, so an active game survives a server restart (see below).
-- Responsive layout — playable on a phone as well as a desktop.
-
----
-
-## Localization
-
-Landmark's interface is available in English and Russian. Switch languages using the globe icon in the top corner of the landing screen, waiting room, or in-game header.
-
-**This is a personal preference, not a room setting.** Each browser remembers its own choice (stored locally, not on the server), so two people in the same game can each see the interface in their own language — the underlying game state is identical for everyone; only the display text differs per viewer. Player nicknames and chat messages are never translated or altered, since they're what a person actually typed, not app text.
-
-If your browser's language is already set to Russian, Landmark picks that automatically on first visit; otherwise it defaults to English. The choice is remembered for next time.
-
-Everything is localized: the lobby, all 40 board tile names, the buy/card/jail prompts, the property detail panel, the activity log, and system chat notices. (Server-side validation error messages — e.g. "Not enough money" if you try an action the server rejects — are currently English-only in both languages, since these are rare edge cases rather than everyday text.)
-
-Adding another language means adding one more entry to `frontend/src/i18n/translations.js` (UI strings), `frontend/src/boardData.js` (tile names), and `backend/src/game/cards.js` (Chance/Community Chest card text) — the dictionary structure is the same shape for every language, and a dev-mode check will flag any string that's missing a translation.
-
----
-
-## Persistence & reconnecting
-
-Every room is saved to a SQLite database (`backend/data/monopoly.db`, or the `landmark-data` Docker volume) after every state change, including an immediate WAL checkpoint — this means active games survive not just a graceful restart, but also a hard crash or `docker kill`, without needing a clean shutdown to happen first.
-
-If you restart the server (`docker compose restart`, or just re-running `npm start`), any in-progress rooms are reloaded from disk. Players who had that room's URL/local storage can simply reopen it and their seat is restored automatically.
-
----
-
-## Project structure
-
-```
-monopoly-game/
-├── backend/
-│   ├── src/
-│   │   ├── game/
-│   │   │   ├── Board.js          # 40-tile board layout, rents, groups
-│   │   │   ├── cards.js          # Chance / Community Chest decks
-│   │   │   ├── GameState.js      # Serializable game state container
-│   │   │   ├── GameManager.js    # All game rules, fully server-validated
-│   │   │   └── RoomManager.js    # Tracks active rooms, syncs to DB
-│   │   ├── db/database.js        # SQLite persistence layer
-│   │   ├── socket/socketHandler.js  # Real-time event layer (Socket.io)
-│   │   ├── routes/api.js         # REST: health check, room lookup
-│   │   └── index.js              # Server entry point
-│   ├── test/                     # Automated test suite (see below)
-│   ├── package.json
-│   └── Dockerfile
-├── frontend/
-│   ├── src/
-│   │   ├── components/           # Board, Dice, Chat, Lobby, GameUI, etc.
-│   │   ├── hooks/useSocket.js    # Connection, identity, reconnection logic
-│   │   ├── boardData.js          # Client-side board display data
-│   │   ├── sounds.js             # Web Audio API sound effects
-│   │   └── App.jsx
-│   ├── package.json
-│   ├── vite.config.js
-│   ├── tailwind.config.js
-│   ├── nginx.conf                # Used by the Docker build to serve + proxy
-│   └── Dockerfile
-├── docker-compose.yml
-└── README.md
-```
-
----
-
-## Running the test suite
-
-The backend has an automated test suite covering the full rules engine, real-time sync, 10-player capacity, and persistence:
+## Running with Docker
 
 ```bash
-cd backend
-npm install
-npm test
+cp .env.example .env
+# edit .env and set SESSION_SECRET (generate one with: openssl rand -hex 32)
+
+docker compose up --build
 ```
 
-This runs three suites:
-- `test/integration.test.js` — two simulated players play a full game via real Socket.io connections: room creation/joining, host-only start, dice rolling, buying, rent, Chance/Community Chest, debt resolution via mortgaging, bankruptcy, chat, and reconnection.
-- `test/capacity.test.js` — verifies exactly 10 players can join a room, would-be 11th player is rejected, and a full 10-player game plays correctly through real turn-order wraparound.
-- `test/bankruptcy.test.js` — deterministic checks of bankruptcy, mortgage/unmortgage pricing, and win-condition logic.
+This builds a single image (the frontend is built first, then its output is copied into the backend's `public/` directory, which the backend already serves as static files alongside its API and Socket.io endpoint) and runs one container on port 4000. Game rooms, accounts, and uploaded avatars persist in a named Docker volume (`landmark-data`) across restarts and rebuilds.
 
----
+**A note on verification**: Docker itself was not available in the environment this project was built in, so the `docker build`/`docker compose up` commands above have not been run end-to-end. What has been verified directly is the exact runtime configuration the image produces — a single Node process, `NODE_ENV=production`, the frontend's build output copied into `backend/public/`, serving the SPA, static assets, the API, and handling a real registration — all through manual simulation of those same steps outside a container. If the actual `docker build` surfaces an issue, it's most likely to be in the Dockerfile's own syntax or the native-module build step for `better-sqlite3`, not in the application code itself, which is exercised by the rest of this README's setup and the test suite.
 
-## Configuration reference
+## Deploying to Railway
 
-### Backend environment variables
+This repo is not yet a git repository — initialize one and push it to GitHub first (`git init`, commit, create a repo on GitHub, push), since Railway deploys from a connected GitHub repo (or via its CLI directly from a local checkout).
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `PORT` | `4000` | Port the backend listens on |
-| `NODE_ENV` | `development` | `production` disables verbose dev logging |
-| `CLIENT_ORIGIN` | `*` | CORS origin allowed to connect (set to your frontend's exact URL in a stricter deployment) |
+1. On [railway.app](https://railway.app), create a new project and choose "Deploy from GitHub repo" (or run `railway up` from the CLI inside this project's root directory).
+2. Railway detects the `Dockerfile` at the repo root automatically and builds from it - no separate configuration file is needed for that part.
+3. In the service's **Variables** tab, set `SESSION_SECRET` (generate one locally with `openssl rand -hex 32` and paste the value in - don't reuse the one in your local `.env`, generate a fresh one for production). `CLIENT_ORIGIN` can usually stay unset for a single Railway service serving both frontend and backend from the same domain.
+4. **Do not set `PORT` yourself.** Railway assigns its own value for `PORT` at runtime and expects the container to bind to it - this project's server already does this correctly (`process.env.PORT || 4000` in `backend/src/index.js`), so nothing needs to change here, just don't override it with a fixed value in the Railway dashboard.
+5. Add a **Volume** mounted at `/app/backend/data` so game rooms, accounts, and uploaded avatars survive redeploys - without this, Railway's filesystem is ephemeral per-deploy and the SQLite databases would silently reset every time you ship a change.
+6. Once deployed, Railway gives the service a public URL automatically; the health check endpoint (`/api/health`) is already wired into the Dockerfile's `HEALTHCHECK` and dynamically checks whatever port the server actually bound to, so it stays correct regardless of which port Railway assigns.
 
-### Frontend build-time variable
+### Environment variables
 
-| Variable | Default | Purpose |
-|---|---|---|
-| `VITE_SERVER_URL` | same-origin | Set this if the frontend is served from a different host/port than the backend (not needed with the Docker Compose setup, since nginx proxies same-origin) |
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `SESSION_SECRET` | Yes, in Docker Compose | none | Signs login session tokens. Set this explicitly for any deployment that should survive a restart without logging everyone out — left unset, the server generates a random secret on every startup. |
+| `PORT` | No | `4000` | Port the server listens on. |
+| `CLIENT_ORIGIN` | No | `*` | Restricts CORS and Socket.io to a specific origin. Set this to your real domain for a public deployment. |
+| `NODE_ENV` | No | `development` | Standard Node environment flag. |
+| `VITE_SERVER_URL` | No (frontend build-time only) | same origin | Only needed if the built frontend is ever served from a different origin than the backend API — not the case in the Docker setup above. |
 
----
+Running the backend directly with `node src/index.js` (outside Docker Compose) does not require `SESSION_SECRET` to be set — it falls back to a random per-startup secret, fine for local development.
 
-## Architecture notes
+## Testing
 
-- **Server-authoritative by design.** Every gameplay action is a Socket.io event carrying only an *intent* (e.g. `game:buyProperty` with a `tileId`). `GameManager` on the backend is the only code that ever mutates money, position, or ownership, and it re-validates the full legality of the action (whose turn it is, whether the tile is actually purchasable, whether there's enough money, whether it's actually the pending decision) before doing so. The client only renders whatever authoritative state the server broadcasts back.
-- **Full-state broadcast, not diffs.** After any successful action, the server sends the entire current game state to everyone in the room. For a 40-tile board with up to 10 players this stays a few KB, so this keeps the sync logic simple and avoids an entire class of "client state drifted from server state" bugs that incremental patching can introduce.
-- **Reconnection identity.** Each browser generates a persistent random ID (stored in `localStorage`) the first time it's used. Rejoining a room with the same ID — whether from a dropped connection, a page reload, or reopening the tab later — is treated by the server as the same seat, not a new player.
+The backend test suite (`cd backend && npm test`) runs 9 files covering:
+- Board layout structural validation (every registered game mode)
+- Full simulated games on both Classic and Metropolis boards (hundreds of turns)
+- Bankruptcy, mortgage, and win-condition logic
+- Movement/animation-path correctness
+- 10-player room capacity
+- Account registration/login and anti-spoofing (a logged-in player's identity can't be forged via the socket payload)
+- Trading: both fraud-prevention unit tests and a real Socket.io integration test
+- Custom pricing ("For the Family")
+
+Several of these boot an actual Socket.io server and drive it with `socket.io-client`, rather than only testing the rules engine in isolation.
+
+There is no automated frontend test suite checked into the repository; the frontend was verified throughout development using real-browser end-to-end tests (Playwright), but those scripts were development tools rather than a maintained suite.
+
+## Extending the game
+
+**Adding a new board layout / game mode**: create a new file in `backend/src/game/boardLayouts/` following the shape of `classic.js` or `metropolis.js` (a `board` array, a `sideLength`, and a `cardRoleTiles` map for how Chance/Community Chest cards resolve to specific tiles on that board), then register it in `backend/src/game/boardLayouts/index.js`. Nothing else needs to change — the frontend fetches the list of available modes from `/api/game-modes` at runtime and renders whatever comes back.
+
+**Adding a new game action**: add a method to `GameManager` (the single source of truth for rules validation), a corresponding `game:*` event in `backend/src/socket/socketHandler.js`, and wire the client side through `frontend/src/hooks/useSocket.js`. Every existing action follows this same three-piece pattern.

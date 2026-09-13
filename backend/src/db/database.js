@@ -1,7 +1,5 @@
 // database.js
 // Lightweight SQLite persistence so game rooms survive a server restart.
-// Uses better-sqlite3 for simple synchronous access (fine for this workload -
-// writes are infrequent relative to a typical web request rate).
 
 const path = require('path');
 const fs = require('fs');
@@ -15,9 +13,6 @@ if (!fs.existsSync(DATA_DIR)) {
 const DB_PATH = path.join(DATA_DIR, 'monopoly.db');
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
-// synchronous=NORMAL is the recommended pairing with WAL: still durable
-// across app/OS crashes (only a rare power-loss window is at risk), while
-// avoiding the write-latency cost of the stricter FULL setting.
 db.pragma('synchronous = NORMAL');
 
 db.exec(`
@@ -43,24 +38,6 @@ const getAllStmt = db.prepare('SELECT * FROM rooms');
 const deleteStmt = db.prepare('DELETE FROM rooms WHERE room_code = ?');
 const deleteOldStmt = db.prepare('DELETE FROM rooms WHERE updated_at < ?');
 
-function saveRoom(roomCode, hostId, stateObj) {
-  upsertStmt.run({
-    roomCode,
-    hostId,
-    stateJson: JSON.stringify(stateObj),
-    updatedAt: Date.now(),
-  });
-  checkpoint();
-}
-
-// Docker containers are frequently stopped with SIGKILL (e.g. `docker kill`,
-// OOM, or a forced `docker compose down`) rather than a graceful SIGTERM, so
-// we can't always rely on an orderly db.close() to happen. WAL mode is
-// crash-safe by design (the WAL replays on next open), but to keep the
-// window of "data only in the WAL, not yet in the main file" as small as
-// possible, we checkpoint after every write. This is cheap for a
-// low-frequency workload like game-state saves (at most a few per second
-// even with 10 players actively playing).
 function checkpoint() {
   try {
     db.pragma('wal_checkpoint(TRUNCATE)');
@@ -78,6 +55,16 @@ function close() {
     // eslint-disable-next-line no-console
     console.error('Error closing database:', err.message);
   }
+}
+
+function saveRoom(roomCode, hostId, stateObj) {
+  upsertStmt.run({
+    roomCode,
+    hostId,
+    stateJson: JSON.stringify(stateObj),
+    updatedAt: Date.now(),
+  });
+  checkpoint();
 }
 
 function loadRoom(roomCode) {

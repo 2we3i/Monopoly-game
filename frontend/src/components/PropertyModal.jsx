@@ -1,139 +1,244 @@
 // PropertyModal.jsx
-// Detail view for a single tile, opened by clicking any tile on the board.
-// Shows rent table (properties), current owner, and - if the viewer owns
-// it and it's their turn - build/sell house and mortgage/unmortgage
-// actions. All actions are still validated server-side; this UI just
-// avoids showing buttons for actions that would obviously fail.
+// The title deed for one tile: what it costs, what it charges, who owns
+// it, and every action its owner can take on it.
 
-import { GROUP_COLORS, TILE_TYPES, getTileName } from '../boardData';
+import {
+  TILE_TYPES, currentRent, getTileName, groupTileIds, mortgageValue,
+  railroadOwnedCount, tileAccentColor, unmortgageCost, utilityMultiplier,
+} from '../boardData';
 import { useTranslation } from '../i18n/LanguageContext';
+import CustomPricingSection from './CustomPricingSection';
+import Modal from './Modal';
+import PlayerAvatar from './PlayerAvatar';
+import { hexToRgba, isLightColor } from '../colorUtils';
+import Icon from './icons';
+
+const RENT_ROW_KEYS = ['property.baseRent', 'property.houseCount', 'property.housesCount', 'property.housesCount', 'property.housesCount', 'property.hotel'];
+const RENT_ROW_COUNTS = [null, 1, 2, 3, 4, null];
+
+function Stat({ label, value, tone }) {
+  return (
+    <div className="rounded-lg border border-ink/10 bg-ink/[0.04] px-2.5 py-1.5">
+      <p className="text-[9.5px] font-bold uppercase tracking-wide text-ink-faint">{label}</p>
+      <p className={`text-[14px] font-bold tnum ${tone === 'rent' ? 'text-rent' : 'text-ink'}`}>{value}</p>
+    </div>
+  );
+}
 
 export default function PropertyModal({
-  tile, properties, players, myPlayerId, isMyTurn, onClose,
-  onBuildHouse, onSellHouse, onMortgage, onUnmortgage,
+  tile, gameState, myPlayerId, isMyTurn, onClose, onBuildHouse, onSellHouse, onMortgage, onUnmortgage, onSetCustomPrice,
 }) {
   const { t, language } = useTranslation();
   if (!tile) return null;
+
+  const { board, properties, players } = gameState;
   const propState = properties[tile.id];
   const owner = propState?.ownerId ? players.find((p) => p.id === propState.ownerId) : null;
   const isOwner = propState?.ownerId === myPlayerId;
-  const isPurchasable = [TILE_TYPES.PROPERTY, TILE_TYPES.RAILROAD, TILE_TYPES.UTILITY].includes(tile.type);
-  const rentLabelKeys = ['property.baseRent', 'property.houseCount', 'property.housesCount', 'property.housesCount', 'property.housesCount', 'property.hotel'];
-  const rentLabelCounts = [null, 1, 2, 3, 4, null];
+  const accent = tileAccentColor(tile);
+  const ownable = !!propState;
+  const rentNow = currentRent(tile, propState, board, properties);
+
+  const groupIds = tile.type === TILE_TYPES.PROPERTY ? groupTileIds(board, tile.group) : [];
+  const groupOwnedByMe = groupIds.length > 0 && groupIds.every((id) => properties[id]?.ownerId === myPlayerId);
+  const minHousesInGroup = groupIds.length > 0 ? Math.min(...groupIds.map((id) => properties[id]?.houses || 0)) : 0;
+  const maxHousesInGroup = groupIds.length > 0 ? Math.max(...groupIds.map((id) => properties[id]?.houses || 0)) : 0;
+
+  const canBuild = isOwner && tile.type === TILE_TYPES.PROPERTY && !propState.mortgaged
+    && groupOwnedByMe && propState.houses < 5 && propState.houses <= minHousesInGroup;
+  const canSell = isOwner && tile.type === TILE_TYPES.PROPERTY && propState.houses > 0 && propState.houses >= maxHousesInGroup;
+
+  const buildBlockReason = !isOwner || tile.type !== TILE_TYPES.PROPERTY ? null
+    : propState.mortgaged ? t('property.blockedMortgaged')
+      : !groupOwnedByMe ? t('property.blockedNoMonopoly')
+        : propState.houses >= 5 ? t('property.blockedHotel')
+          : propState.houses > minHousesInGroup ? t('property.blockedUneven')
+            : null;
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-end justify-center bg-ink/55 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
+    <Modal
+      onClose={onClose}
+      widthClass="max-w-md"
+      accent={`linear-gradient(90deg, ${accent}, ${hexToRgba(accent, 0.55)})`}
+      title={getTileName(tile, language)}
+      subtitle={t(`tileType.${tile.type}`)}
+      icon={<span className="h-5 w-5 rounded-md" style={{ backgroundColor: accent }} />}
     >
-      <div
-        className="max-h-[85vh] w-full max-w-sm overflow-y-auto scrollbar-thin rounded-t-2xl border border-brass/25 bg-board shadow-board texture-parchment sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {tile.group && <div className="h-4 w-full" style={{ backgroundColor: GROUP_COLORS[tile.group], boxShadow: 'inset 0 -2px 4px rgba(0,0,0,0.15)' }} />}
+      {/* The deed itself, on the same parchment as the board. */}
+      <div className="overflow-hidden rounded-xl bg-board shadow-deed">
+        <div
+          className="flex items-center justify-between px-4 py-2"
+          style={{ backgroundColor: accent, color: isLightColor(accent) ? '#1f2417' : '#fff' }}
+        >
+          <span className="text-[11px] font-black uppercase tracking-[0.16em]">{t('property.titleDeed')}</span>
+          {tile.type === TILE_TYPES.PROPERTY && (
+            <span className="text-[11px] font-bold uppercase tracking-wide opacity-80">{tile.group}</span>
+          )}
+        </div>
 
-        <div className="p-5">
-          <div className="mb-1 flex items-start justify-between gap-3">
-            <h3 className="font-display text-2xl font-bold text-ink">{getTileName(tile, language)}</h3>
-            <button type="button" onClick={onClose} className="shrink-0 rounded-full p-1.5 text-ink-faint transition-colors hover:bg-ink/5 hover:text-ink">
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M6 6l12 12M18 6L6 18" />
-              </svg>
-            </button>
+        <div className="p-4">
+          <h3 className="mb-3 text-center font-display text-xl font-black leading-tight text-ink">
+            {getTileName(tile, language)}
+          </h3>
+
+          <div className="mb-3 grid grid-cols-3 gap-1.5">
+            <Stat label={t('tooltip.price')} value={`$${tile.price}`} />
+            {rentNow != null && <Stat label={t('tooltip.rentNow')} value={`$${rentNow}`} tone="rent" />}
+            {tile.type === TILE_TYPES.UTILITY && (
+              <Stat label={t('tooltip.rentNow')} value={`${utilityMultiplier(owner?.id, board, properties)}×`} tone="rent" />
+            )}
+            <Stat label={t('property.mortgageValue')} value={`$${mortgageValue(tile)}`} />
+            {tile.type === TILE_TYPES.PROPERTY && <Stat label={t('property.houseCost')} value={`$${tile.houseCost}`} />}
           </div>
 
-          {owner ? (
-            <div className="mb-4 flex items-center gap-2 text-sm text-ink-soft">
-              <span className="h-3 w-3 rounded-full shadow-token ring-1 ring-white/60" style={{ backgroundColor: owner.color }} />
-              {t('property.ownedBy', { name: owner.nickname })}
-              {propState.mortgaged && <span className="rounded bg-ink/10 px-1.5 py-0.5 text-xs font-semibold">{t('property.mortgaged')}</span>}
-            </div>
-          ) : isPurchasable ? (
-            <p className="mb-4 text-sm text-ink-faint">{t('property.unowned', { price: tile.price })}</p>
-          ) : null}
-
           {tile.type === TILE_TYPES.PROPERTY && (
-            <div className="mb-4 overflow-hidden rounded-lg border border-board-line">
-              {tile.rent.map((amount, i) => (
-                <div
-                  key={i}
-                  className={`flex items-center justify-between px-3 py-1.5 text-sm ${
-                    propState?.houses === i ? 'bg-brass/15 font-semibold text-ink' : 'text-ink-soft'
-                  } ${i > 0 ? 'border-t border-board-line' : ''}`}
-                >
-                  <span>{t(rentLabelKeys[i], rentLabelCounts[i] != null ? { count: rentLabelCounts[i] } : undefined)}</span>
-                  <span className="font-display">${amount}</span>
-                </div>
-              ))}
+            <div className="overflow-hidden rounded-lg border border-ink/12">
+              {tile.rent.map((amount, i) => {
+                const active = propState?.ownerId && propState.houses === i;
+                return (
+                  <div
+                    key={i}
+                    className={`flex items-center justify-between px-3 py-1.5 text-[12.5px] ${i > 0 ? 'border-t border-ink/10' : ''} ${
+                      active ? 'bg-brass/25 font-bold text-ink' : 'text-ink-soft'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {i > 0 && i < 5 && Array.from({ length: i }).map((_, h) => <Icon.home key={h} className="h-3 w-3 text-go" />)}
+                      {i === 5 && <Icon.hotel className="h-3.5 w-3.5 text-rent" />}
+                      {t(RENT_ROW_KEYS[i], RENT_ROW_COUNTS[i] != null ? { count: RENT_ROW_COUNTS[i] } : undefined)}
+                    </span>
+                    <span className="font-display font-bold tnum">${amount}</span>
+                  </div>
+                );
+              })}
+              <p className="border-t border-ink/10 bg-ink/[0.04] px-3 py-1.5 text-[11px] text-ink-faint">
+                {t('property.monopolyHint')}
+              </p>
             </div>
           )}
 
           {tile.type === TILE_TYPES.RAILROAD && (
-            <div className="mb-4 overflow-hidden rounded-lg border border-board-line text-sm text-ink-soft">
-              <p className="px-3 py-2">{t('property.railroadRentTable')}</p>
+            <div className="overflow-hidden rounded-lg border border-ink/12">
+              {(tile.rent || []).map((amount, i) => {
+                const active = owner && railroadOwnedCount(owner.id, board, properties) === i + 1;
+                return (
+                  <div
+                    key={i}
+                    className={`flex items-center justify-between px-3 py-1.5 text-[12.5px] ${i > 0 ? 'border-t border-ink/10' : ''} ${
+                      active ? 'bg-brass/25 font-bold text-ink' : 'text-ink-soft'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Icon.train className="h-3.5 w-3.5" />
+                      {t('property.stationsOwned', { count: i + 1 })}
+                    </span>
+                    <span className="font-display font-bold tnum">${amount}</span>
+                  </div>
+                );
+              })}
             </div>
           )}
 
           {tile.type === TILE_TYPES.UTILITY && (
-            <div className="mb-4 overflow-hidden rounded-lg border border-board-line text-sm text-ink-soft">
-              <p className="px-3 py-2">{t('property.utilityRentTable')}</p>
+            <div className="overflow-hidden rounded-lg border border-ink/12 text-[12.5px] text-ink-soft">
+              <p className="px-3 py-1.5">{t('property.utilityOne')}</p>
+              <p className="border-t border-ink/10 px-3 py-1.5">{t('property.utilityBoth')}</p>
             </div>
           )}
 
-          {isOwner && (
-            <div className="flex flex-col gap-2 border-t border-board-line pt-4">
-              {tile.type === TILE_TYPES.PROPERTY && !propState.mortgaged && (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    disabled={!isMyTurn}
-                    onClick={() => onBuildHouse(tile.id)}
-                    className="flex-1 rounded-lg bg-gradient-to-b from-go to-go-deep px-3 py-2 text-sm font-semibold text-white shadow-tile transition-transform active:scale-95 disabled:opacity-40"
-                  >
-                    {t('property.build', { cost: tile.houseCost })}
-                  </button>
-                  {propState.houses > 0 && (
-                    <button
-                      type="button"
-                      disabled={!isMyTurn}
-                      onClick={() => onSellHouse(tile.id)}
-                      className="flex-1 rounded-lg border-2 border-rent px-3 py-2 text-sm font-semibold text-rent transition-transform active:scale-95 disabled:opacity-40"
-                    >
-                      {t('property.sellHouse')}
-                    </button>
-                  )}
-                </div>
-              )}
-              {propState.mortgaged ? (
-                <button
-                  type="button"
-                  disabled={!isMyTurn}
-                  onClick={() => onUnmortgage(tile.id)}
-                  className="rounded-lg bg-gradient-to-b from-brass-bright to-brass px-3 py-2 text-sm font-semibold text-brass-ink shadow-tile transition-transform active:scale-95 disabled:opacity-40"
-                >
-                  {t('property.payOffMortgage', { cost: Math.ceil((tile.price / 2) * 1.1) })}
-                </button>
-              ) : (
-                (propState.houses === 0 || tile.type !== TILE_TYPES.PROPERTY) && (
-                  <button
-                    type="button"
-                    disabled={!isMyTurn}
-                    onClick={() => onMortgage(tile.id)}
-                    className="rounded-lg border-2 border-ink/15 px-3 py-2 text-sm font-semibold text-ink-soft transition-transform hover:border-ink/30 active:scale-95 disabled:opacity-40"
-                  >
-                    {t('property.mortgageFor', { amount: Math.floor(tile.price / 2) })}
-                  </button>
-                )
-              )}
-              {!isMyTurn && (
-                <p className="text-center text-xs text-ink-faint">{t('property.turnOnlyHint')}</p>
-              )}
-            </div>
+          {!ownable && tile.amount != null && (
+            <p className="rounded-lg bg-rent/10 px-3 py-2 text-center text-[13px] font-semibold text-rent tnum">
+              -${tile.amount}
+            </p>
           )}
         </div>
       </div>
-    </div>
+
+      {/* Ownership */}
+      {ownable && (
+        <div className="mt-3 flex items-center gap-2.5 rounded-xl border border-white/[0.08] bg-white/[0.03] p-2.5">
+          {owner ? (
+            <>
+              <PlayerAvatar player={owner} sizeClassName="h-8 w-8" ringClassName="ring-2 ring-white/20" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[12.5px] font-bold text-parch">{t('property.ownedBy', { name: owner.nickname })}</p>
+                <p className="text-[11px] text-parch/40">
+                  {propState.houses === 5
+                    ? t('property.hotel')
+                    : propState.houses > 0
+                      ? t('property.housesCount', { count: propState.houses })
+                      : t('property.noBuildings')}
+                </p>
+              </div>
+              {propState.mortgaged && <span className="pill bg-rent/25 text-rent-light"><Icon.lock className="h-3 w-3" />{t('property.mortgaged')}</span>}
+            </>
+          ) : (
+            <>
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-go/20 text-go-light">
+                <Icon.flag className="h-4 w-4" />
+              </span>
+              <p className="text-[12.5px] font-semibold text-go-light">{t('property.unowned', { price: tile.price })}</p>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Owner actions */}
+      {isOwner && (
+        <div className="mt-3 flex flex-col gap-2">
+          <p className="section-label">{t('property.manage')}</p>
+          {tile.type === TILE_TYPES.PROPERTY && !propState.mortgaged && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={!canBuild || !isMyTurn}
+                onClick={() => onBuildHouse(tile.id)}
+                className="btn-success flex-1"
+              >
+                <Icon.home className="h-4 w-4" />
+                {propState.houses === 4 ? t('property.buildHotel', { cost: tile.houseCost }) : t('property.build', { cost: tile.houseCost })}
+              </button>
+              {propState.houses > 0 && (
+                <button
+                  type="button"
+                  disabled={!canSell || !isMyTurn}
+                  onClick={() => onSellHouse(tile.id)}
+                  className="btn-danger flex-1"
+                >
+                  {t('property.sellHouse', { amount: Math.floor(tile.houseCost / 2) })}
+                </button>
+              )}
+            </div>
+          )}
+          {buildBlockReason && (
+            <p className="flex items-start gap-1.5 rounded-lg bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] text-parch/50">
+              <Icon.warning className="mt-px h-3.5 w-3.5 shrink-0 text-brass/70" />
+              {buildBlockReason}
+            </p>
+          )}
+          {propState.mortgaged ? (
+            <button type="button" disabled={!isMyTurn} onClick={() => onUnmortgage(tile.id)} className="btn-primary">
+              {t('property.payOffMortgage', { cost: unmortgageCost(tile) })}
+            </button>
+          ) : (
+            (propState.houses === 0 || tile.type !== TILE_TYPES.PROPERTY) && (
+              <button type="button" disabled={!isMyTurn} onClick={() => onMortgage(tile.id)} className="btn-ghost">
+                <Icon.lock className="h-4 w-4" />
+                {t('property.mortgageFor', { amount: mortgageValue(tile) })}
+              </button>
+            )
+          )}
+          {!isMyTurn && <p className="text-center text-[11px] text-parch/35">{t('property.turnOnlyHint')}</p>}
+
+          <CustomPricingSection
+            tile={tile}
+            propState={propState}
+            players={players}
+            myPlayerId={myPlayerId}
+            onSetCustomPrice={onSetCustomPrice}
+          />
+        </div>
+      )}
+    </Modal>
   );
 }

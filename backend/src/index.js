@@ -1,7 +1,5 @@
 // index.js
-// Main server entry point. Serves the REST API and upgrades to Socket.io
-// for real-time gameplay. In production mode it also serves the built
-// frontend static files, so the whole app can run from one process/port.
+// Main server entry point.
 
 const path = require('path');
 const http = require('http');
@@ -10,8 +8,10 @@ const cors = require('cors');
 const { Server } = require('socket.io');
 
 const apiRoutes = require('./routes/api');
+const { router: authRoutes, AVATAR_DIR } = require('./routes/authRoutes');
 const { registerSocketHandlers } = require('./socket/socketHandler');
 const db = require('./db/database');
+const accountsDb = require('./db/accounts');
 
 const PORT = process.env.PORT || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
@@ -21,26 +21,25 @@ const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-  cors: {
-    origin: CLIENT_ORIGIN,
-    methods: ['GET', 'POST'],
-  },
-  // Reasonable timeouts so a flaky phone connection isn't instantly dropped,
-  // while still detecting genuinely dead sockets in a reasonable time.
+  cors: { origin: CLIENT_ORIGIN, methods: ['GET', 'POST'] },
   pingInterval: 10000,
   pingTimeout: 15000,
 });
 
 app.use(cors({ origin: CLIENT_ORIGIN }));
 app.use(express.json());
-
 app.use('/api', apiRoutes);
+app.use('/api/auth', authRoutes);
+// Uploaded avatars served as static files under /avatars - the path
+// stored on an account is already the exact URL a client requests. This
+// route existing on the BACKEND is what the frontend dev-server proxy
+// and any production reverse proxy both need to forward /avatars to.
+app.use('/avatars', express.static(AVATAR_DIR));
 
-// Serve built frontend in production (see frontend Dockerfile / docker-compose)
 const FRONTEND_DIST = path.join(__dirname, '..', 'public');
 app.use(express.static(FRONTEND_DIST));
 app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api')) return next();
+  if (req.path.startsWith('/api') || req.path.startsWith('/avatars')) return next();
   res.sendFile(path.join(FRONTEND_DIST, 'index.html'), (err) => {
     if (err) next();
   });
@@ -55,19 +54,17 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Health check: http://localhost:${PORT}/api/health`);
 });
 
-// Close the DB (with a final WAL checkpoint) on graceful shutdown. Note:
-// saveRoom() also checkpoints after every write (see db/database.js), so
-// room data survives even an ungraceful SIGKILL - this handler just makes
-// the orderly-shutdown path clean too, and releases the file handle.
 process.on('SIGTERM', () => {
   server.close(() => {
     db.close();
+    accountsDb.close();
     process.exit(0);
   });
 });
 process.on('SIGINT', () => {
   server.close(() => {
     db.close();
+    accountsDb.close();
     process.exit(0);
   });
 });

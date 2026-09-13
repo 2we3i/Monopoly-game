@@ -1,25 +1,16 @@
 // Chat.jsx
-// Simple scrolling chat log + input. System messages (joins/leaves) render
-// distinctly from player messages. Auto-scrolls to the latest message.
-//
-// Note: actual chat message TEXT (msg.text for non-system messages) is
-// genuine user-typed content and is never run through the translation
-// system - only the UI chrome (placeholder, empty state, Send button) and
-// system notices are localized.
-
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../i18n/LanguageContext';
 import { formatLogEntry } from '../i18n/logFormatter';
+import Icon from './icons';
 
-export default function Chat({ messages, onSend, playerId }) {
+export default function Chat({ messages, onSend, playerId, board }) {
   const { t, language } = useTranslation();
   const [text, setText] = useState('');
   const scrollRef = useRef(null);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length]);
 
   const submit = (e) => {
@@ -31,27 +22,32 @@ export default function Chat({ messages, onSend, playerId }) {
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <div ref={scrollRef} className="flex-1 space-y-2 overflow-y-auto scrollbar-thin px-3.5 py-3">
+    <div className="flex h-full min-h-0 w-full flex-col">
+      <div ref={scrollRef} className="scrollbar-thin flex-1 space-y-2.5 overflow-y-auto px-3 py-3">
         {messages.length === 0 && (
-          <p className="mt-4 text-center text-sm text-ink-faint">{t('chat.noMessages')}</p>
+          <div className="mt-8 flex flex-col items-center gap-2 text-center">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/5">
+              <Icon.chat className="h-5 w-5 text-parch/25" />
+            </span>
+            <p className="text-[12.5px] text-parch/40">{t('chat.noMessages')}</p>
+          </div>
         )}
         {messages.map((msg, i) =>
           msg.system ? (
-            <p key={i} className="text-center text-xs italic text-ink-faint">
-              {formatLogEntry(msg, t, language)}
+            <p key={i} className="text-center text-[11px] italic text-parch/30">
+              {formatLogEntry(msg, t, language, board)}
             </p>
           ) : (
             <div key={i} className={`flex flex-col ${msg.playerId === playerId ? 'items-end' : 'items-start'}`}>
-              <span className="mb-0.5 flex items-center gap-1.5 px-1 text-[11px] font-medium text-ink-faint">
+              <span className="mb-0.5 flex items-center gap-1.5 px-1 text-[10.5px] font-semibold text-parch/40">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: msg.color }} />
                 {msg.nickname}
               </span>
               <span
-                className={`max-w-[85%] break-words rounded-2xl px-3 py-1.5 text-sm ${
+                className={`max-w-[85%] break-words rounded-2xl px-3 py-1.5 text-[13px] leading-snug ${
                   msg.playerId === playerId
-                    ? 'rounded-tr-sm bg-brass text-ink'
-                    : 'rounded-tl-sm bg-board-tile text-ink'
+                    ? 'rounded-br-sm bg-brass text-ink'
+                    : 'rounded-bl-sm bg-white/[0.07] text-parch'
                 }`}
               >
                 {msg.text}
@@ -60,20 +56,17 @@ export default function Chat({ messages, onSend, playerId }) {
           ),
         )}
       </div>
-      <form onSubmit={submit} className="flex gap-2 border-t border-board-line/60 p-3">
+      <form onSubmit={submit} className="flex shrink-0 gap-2 border-t border-white/[0.08] p-2.5">
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           maxLength={300}
           placeholder={t('chat.placeholder')}
-          className="min-w-0 flex-1 rounded-lg border border-board-line bg-board-tile px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-brass"
+          className="field min-w-0 flex-1 py-2"
         />
-        <button
-          type="submit"
-          disabled={!text.trim()}
-          className="shrink-0 rounded-lg bg-brass px-3.5 py-2 text-sm font-semibold text-ink transition-transform active:scale-95 disabled:opacity-40"
-        >
-          {t('chat.send')}
+        <button type="submit" disabled={!text.trim()} className="btn-primary shrink-0 px-3 py-2">
+          <Icon.chevronRight className="h-4 w-4" />
+          <span className="sr-only">{t('chat.send')}</span>
         </button>
       </form>
     </div>

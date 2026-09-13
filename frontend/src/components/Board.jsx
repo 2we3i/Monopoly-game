@@ -1,321 +1,137 @@
 // Board.jsx
-// Renders the 40-tile board as an 11x11 CSS grid (corners + 9 tiles per
-// side), with player tokens that step through the server-provided path of
-// intermediate tiles for each move (see useAnimatedTokenPosition below),
-// so a token visibly hops along the board's perimeter tile by tile
-// instead of sliding in a straight line through the middle of the board.
+// The board viewport: a fixed-size board drawn in design pixels, wrapped
+// in a free zoom/pan surface (wheel to zoom at the cursor, drag to pan,
+// pinch on touch). Zoom is purely local UI state and never touches the
+// game state.
 
-import { useEffect, useRef, useState } from 'react';
-import { BOARD, GROUP_COLORS, TILE_TYPES, tileGridPosition, getTileName } from '../boardData';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  TILE_TYPES, TILE_W, boardInnerRect, boardPixelSize, computeGroupOwners, currentRent,
+  getTileName, tileAccentColor, tileCenter, tileOrientation, tileRect, utilityMultiplier,
+} from '../boardData';
 import { useTranslation } from '../i18n/LanguageContext';
+import { useSettings } from '../settings/SettingsContext';
+import BoardTile from './BoardTile';
+import { hexToRgba } from '../colorUtils';
+import PlayerAvatar from './PlayerAvatar';
+import Icon from './icons';
 
-function ownerColor(tileId, properties, players) {
-  const p = properties[tileId];
-  if (!p?.ownerId) return null;
-  const owner = players.find((pl) => pl.id === p.ownerId);
-  return owner?.color || null;
-}
-
-function HouseIndicator({ houses }) {
-  if (!houses) return null;
-  if (houses === 5) {
-    return (
-      <div className="absolute left-1/2 top-0.5 -translate-x-1/2 rounded-sm bg-rent px-1 py-px text-[7px] font-bold tracking-wide text-white shadow-sm sm:text-[8px]">
-        HOTEL
-      </div>
-    );
-  }
-  return (
-    <div className="absolute left-1/2 top-0.5 flex -translate-x-1/2 gap-0.5">
-      {Array.from({ length: houses }).map((_, i) => (
-        <span key={i} className="h-1.5 w-1.5 rounded-[1px] bg-go shadow-sm ring-1 ring-white/40" />
-      ))}
-    </div>
-  );
-}
-
-function PropertyTile({ tile, properties, players, orientation, onSelect }) {
-  const { language } = useTranslation();
-  const propState = properties[tile.id];
-  const owner = propState?.ownerId ? players.find((p) => p.id === propState.ownerId) : null;
-  const groupColor = GROUP_COLORS[tile.group];
-
-  const barClasses = {
-    bottom: 'order-2 h-[22%] w-full',
-    top: 'order-0 h-[22%] w-full',
-    left: 'order-0 h-full w-[22%]',
-    right: 'order-2 h-full w-[22%]',
-  }[orientation];
-
-  const isVertical = orientation === 'left' || orientation === 'right';
-
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(tile.id)}
-      className={`group relative flex ${isVertical ? 'flex-row' : 'flex-col'} h-full w-full overflow-hidden border border-board-line/70 bg-board-tile text-left transition-colors hover:bg-brass/10 focus-visible:z-10`}
-    >
-      <div className={`${barClasses} shadow-[inset_0_-1px_2px_rgba(0,0,0,0.15)]`} style={{ backgroundColor: groupColor }} />
-      <div className="order-1 flex flex-1 flex-col items-center justify-center gap-0.5 p-0.5 text-center">
-        <p className="line-clamp-2 text-[6.5px] font-semibold leading-tight text-ink sm:text-[7.5px]">
-          {getTileName(tile, language)}
-        </p>
-        <p className="text-[6px] font-medium text-ink-faint sm:text-[7px]">${tile.price}</p>
-        {propState?.mortgaged && (
-          <span className="rounded-sm bg-ink/70 px-1 text-[6px] font-bold text-white">MTG</span>
-        )}
-      </div>
-      <HouseIndicator houses={propState?.houses} />
-      {owner && (
-        <span
-          className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full shadow-token ring-1 ring-white/80"
-          style={{ backgroundColor: owner.color }}
-        />
-      )}
-    </button>
-  );
-}
-
-function RailroadTile({ tile, properties, players, onSelect }) {
-  const { language } = useTranslation();
-  const propState = properties[tile.id];
-  const owner = propState?.ownerId ? players.find((p) => p.id === propState.ownerId) : null;
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(tile.id)}
-      className="relative flex h-full w-full flex-col items-center justify-center gap-0.5 border border-board-line/70 bg-board-tile p-0.5 text-center transition-colors hover:bg-brass/10"
-    >
-      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-ink-soft sm:h-4 sm:w-4" fill="none" stroke="currentColor" strokeWidth="1.7">
-        <path d="M4 17h16M6 17V7a2 2 0 012-2h8a2 2 0 012 2v10M8 21l-2-4M16 21l2-4" />
-        <circle cx="8.5" cy="14" r="1" fill="currentColor" />
-        <circle cx="15.5" cy="14" r="1" fill="currentColor" />
-      </svg>
-      <p className="line-clamp-2 text-[6.5px] font-semibold leading-tight text-ink sm:text-[7.5px]">{getTileName(tile, language)}</p>
-      <p className="text-[6px] font-medium text-ink-faint sm:text-[7px]">${tile.price}</p>
-      {owner && (
-        <span className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full shadow-token ring-1 ring-white/80" style={{ backgroundColor: owner.color }} />
-      )}
-    </button>
-  );
-}
-
-function UtilityTile({ tile, properties, players, onSelect }) {
-  const { language } = useTranslation();
-  const propState = properties[tile.id];
-  const owner = propState?.ownerId ? players.find((p) => p.id === propState.ownerId) : null;
-  // id 12 = Power Plant, id 28 = Water Works (see boardData.js) - checked
-  // by id rather than name text, since name text is now localized and an
-  // id is stable regardless of language or any future wording tweak.
-  const isPower = tile.id === 12;
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect?.(tile.id)}
-      className="relative flex h-full w-full flex-col items-center justify-center gap-0.5 border border-board-line/70 bg-board-tile p-0.5 text-center transition-colors hover:bg-brass/10"
-    >
-      {isPower ? (
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-brass-deep sm:h-4 sm:w-4" fill="currentColor">
-          <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
-        </svg>
-      ) : (
-        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-blue-600 sm:h-4 sm:w-4" fill="currentColor">
-          <path d="M12 2C8 8 5 11.5 5 15a7 7 0 0014 0c0-3.5-3-7-7-13z" />
-        </svg>
-      )}
-      <p className="line-clamp-2 text-[6.5px] font-semibold leading-tight text-ink sm:text-[7.5px]">{getTileName(tile, language)}</p>
-      <p className="text-[6px] font-medium text-ink-faint sm:text-[7px]">${tile.price}</p>
-      {owner && (
-        <span className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full shadow-token ring-1 ring-white/80" style={{ backgroundColor: owner.color }} />
-      )}
-    </button>
-  );
-}
-
-const CORNER_TYPES = new Set([TILE_TYPES.GO, TILE_TYPES.JAIL, TILE_TYPES.FREE_PARKING, TILE_TYPES.GO_TO_JAIL]);
-
-function SpecialTile({ tile }) {
-  const { language } = useTranslation();
-  const isCorner = CORNER_TYPES.has(tile.type);
-  const icons = {
-    [TILE_TYPES.GO]: (
-      <svg viewBox="0 0 24 24" className={isCorner ? 'h-7 w-7 sm:h-9 sm:w-9' : 'h-5 w-5 sm:h-6 sm:w-6'} fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M5 12h14M13 6l6 6-6 6" />
-      </svg>
-    ),
-    [TILE_TYPES.JAIL]: (
-      <svg viewBox="0 0 24 24" className={isCorner ? 'h-7 w-7 sm:h-9 sm:w-9' : 'h-5 w-5 sm:h-6 sm:w-6'} fill="none" stroke="currentColor" strokeWidth="1.6">
-        <rect x="4" y="4" width="16" height="16" rx="2" />
-        <path d="M9 4v16M15 4v16M4 9h16M4 15h16" strokeOpacity="0.45" />
-      </svg>
-    ),
-    [TILE_TYPES.FREE_PARKING]: (
-      <svg viewBox="0 0 24 24" className={isCorner ? 'h-7 w-7 sm:h-9 sm:w-9' : 'h-5 w-5 sm:h-6 sm:w-6'} fill="none" stroke="currentColor" strokeWidth="1.6">
-        <circle cx="12" cy="12" r="9" />
-        <path d="M10 16V8h3a2.5 2.5 0 010 5h-3" />
-      </svg>
-    ),
-    [TILE_TYPES.GO_TO_JAIL]: (
-      <svg viewBox="0 0 24 24" className={isCorner ? 'h-7 w-7 sm:h-9 sm:w-9' : 'h-5 w-5 sm:h-6 sm:w-6'} fill="none" stroke="currentColor" strokeWidth="1.6">
-        <path d="M12 3l3 5.5-1 8.5H10l-1-8.5L12 3z" />
-        <path d="M7 21h10" />
-      </svg>
-    ),
-    [TILE_TYPES.CHANCE]: (
-      <span className={`font-display font-bold text-brass ${isCorner ? 'text-3xl' : 'text-lg sm:text-xl'}`}>?</span>
-    ),
-    [TILE_TYPES.CHEST]: (
-      <svg viewBox="0 0 24 24" className={isCorner ? 'h-7 w-7 sm:h-9 sm:w-9' : 'h-5 w-5 sm:h-6 sm:w-6'} fill="none" stroke="currentColor" strokeWidth="1.6">
-        <rect x="3" y="9" width="18" height="11" rx="1" />
-        <path d="M3 9l2-5h14l2 5M12 13v4M9 13h6" />
-      </svg>
-    ),
-    [TILE_TYPES.TAX]: (
-      <svg viewBox="0 0 24 24" className={isCorner ? 'h-7 w-7 sm:h-9 sm:w-9' : 'h-5 w-5 sm:h-6 sm:w-6'} fill="none" stroke="currentColor" strokeWidth="1.6">
-        <path d="M12 2v20M17 6H9.5a2.5 2.5 0 000 5H14a2.5 2.5 0 010 5H7" />
-      </svg>
-    ),
-  };
-  const tint = {
-    [TILE_TYPES.GO]: 'text-go bg-go/10',
-    [TILE_TYPES.JAIL]: 'text-rent bg-rent/[0.07]',
-    [TILE_TYPES.FREE_PARKING]: 'text-brass-deep bg-brass/10',
-    [TILE_TYPES.GO_TO_JAIL]: 'text-rent bg-rent/[0.07]',
-    [TILE_TYPES.CHANCE]: 'text-brass-deep',
-    [TILE_TYPES.CHEST]: 'text-go',
-    [TILE_TYPES.TAX]: 'text-ink-soft',
-  }[tile.type];
-
-  if (isCorner) {
-    return (
-      <div className={`flex h-full w-full flex-col items-center justify-center gap-1 border-2 border-board-line bg-board-tile p-1 text-center ${tint}`}>
-        {icons[tile.type]}
-        <p className="font-display text-[8px] font-bold uppercase leading-tight tracking-wide text-ink sm:text-[10px]">
-          {getTileName(tile, language)}
-        </p>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`flex h-full w-full flex-col items-center justify-center gap-0.5 border border-board-line/70 bg-board-tile p-1 text-center ${tint}`}>
-      {icons[tile.type]}
-      <p className="line-clamp-2 text-[6.5px] font-semibold leading-tight text-ink sm:text-[7.5px]">{getTileName(tile, language)}</p>
-      {tile.amount && <p className="text-[6px] font-medium text-ink-faint sm:text-[7px]">${tile.amount}</p>}
-    </div>
-  );
-}
-
-function TileRenderer({ tile, properties, players, onSelect }) {
-  const pos = tileGridPosition(tile.id);
-  const orientation = pos.row === 11 ? 'bottom' : pos.row === 1 ? 'top' : pos.col === 1 ? 'left' : 'right';
-
-  if (tile.type === TILE_TYPES.PROPERTY) {
-    return <PropertyTile tile={tile} properties={properties} players={players} orientation={orientation} onSelect={onSelect} />;
-  }
-  if (tile.type === TILE_TYPES.RAILROAD) {
-    return <RailroadTile tile={tile} properties={properties} players={players} onSelect={onSelect} />;
-  }
-  if (tile.type === TILE_TYPES.UTILITY) {
-    return <UtilityTile tile={tile} properties={properties} players={players} onSelect={onSelect} />;
-  }
-  return <SpecialTile tile={tile} />;
-}
-
-// Position tokens within a tile: if multiple players share a tile, arrange
-// them in a small cluster so they don't fully overlap.
-function tokenOffset(indexInStack, totalOnTile) {
-  if (totalOnTile <= 1) return { x: 0, y: 0 };
-  const positions = [
-    [-9, -9], [9, -9], [-9, 9], [9, 9], [0, -9], [0, 9], [-9, 0], [9, 0], [0, 0], [4, 4],
-  ];
-  return { x: positions[indexInStack]?.[0] ?? 0, y: positions[indexInStack]?.[1] ?? 0 };
-}
-
-// CSS Grid line placement (gridRow/gridColumn) is a discrete property -
-// browsers cannot smoothly interpolate between grid lines, so animating it
-// via a CSS transition just snaps instantly despite the transition class
-// being present. To get an actual sliding token, every token is placed in
-// the SAME grid cell (the full 11x11 area, top-left aligned) and moved
-// with a `transform: translate()` computed in percentages of the board's
-// own size - translate is a continuous property and animates properly.
-function tokenTranslatePercent(tileId) {
-  const pos = tileGridPosition(tileId);
-  // Each grid line step is 1/11th of the board. Center the token within
-  // its cell by adding half a cell (50/11 %) to both axes.
-  const stepPct = 100 / 11;
-  const xPct = (pos.col - 1) * stepPct + stepPct / 2;
-  const yPct = (pos.row - 1) * stepPct + stepPct / 2;
-  return { xPct, yPct };
-}
-
-// A single continuous transform between two arbitrary tiles cuts a
-// straight line across the board (through the middle, through walls -
-// exactly the "teleporting" look this hook exists to fix), because CSS
-// only knows the start and end points, not the board's perimeter shape.
-// This hook instead steps the *displayed* tile id through every
-// intermediate tile in `path` one at a time, each hop getting its own
-// short CSS transition - so a 6-tile move plays as six small hops tracing
-// the actual edge of the board, corners included, rather than one long
-// diagonal slide.
-//
-// `path` (from the server's state.lastMove) is the ordered list of tile
-// ids to visit, NOT including the starting tile. `teleport` skips the
-// stepping entirely (used for Jail sends, which the real game doesn't
-// animate as a walk).
+const SCALE_MAX = 3.2;
+const SCALE_FLOOR = 0.12;
+const PAD = 28;
 const HOP_DURATION_MS = 220;
 
-function useAnimatedTokenPosition(serverPosition, moveDescriptor) {
+// Thresholds are in EFFECTIVE screen pixels per tile, not in zoom
+// percent: text that renders below ~6px is visual noise rather than
+// information, so a tile drops its label entirely and leans on color,
+// ownership and the hover card instead of pretending to be readable.
+function detailFor(scale) {
+  const px = TILE_W * scale;
+  if (px < 40) return 'min';
+  if (px < 62) return 'mid';
+  return 'full';
+}
+
+// --- The board surface (memoized: it only re-renders on real changes) ---
+
+const BoardSurface = memo(function BoardSurface({
+  board, properties, players, sideLength, detail, selectedTileId, onSelectTile, onHoverTile, language,
+}) {
+  const size = boardPixelSize(sideLength);
+  const inner = boardInnerRect(sideLength);
+  const groupOwners = useMemo(() => computeGroupOwners(board, properties), [board, properties]);
+  const playerById = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p])), [players]);
+
+  return (
+    <div
+      className="absolute left-0 top-0 rounded-[18px]"
+      style={{
+        width: size,
+        height: size,
+        background: 'radial-gradient(ellipse at 50% 35%, #f7efdd 0%, #eee2c8 70%, #e6d7b9 100%)',
+        boxShadow: '0 0 0 1px rgba(31,36,23,0.25), 0 40px 90px -30px rgba(0,0,0,0.85)',
+      }}
+    >
+      {/* Inner playfield well - gives the middle of the board a subtle
+          recess so the ring of tiles reads as a raised frame. */}
+      <div
+        className="pointer-events-none absolute rounded-[10px]"
+        style={{
+          left: inner.x, top: inner.y, width: inner.w, height: inner.h,
+          background: 'linear-gradient(160deg, rgba(31,36,23,0.05), rgba(31,36,23,0.015))',
+          boxShadow: 'inset 0 1px 3px rgba(31,36,23,0.12)',
+        }}
+      />
+
+      {board.map((tile) => {
+        const propState = properties[tile.id];
+        const owner = propState?.ownerId ? playerById[propState.ownerId] : null;
+        return (
+          <BoardTile
+            key={tile.id}
+            tile={tile}
+            propState={propState}
+            owner={owner}
+            monopoly={tile.type === TILE_TYPES.PROPERTY && !!groupOwners[tile.group]}
+            orientation={tileOrientation(tile.id, sideLength)}
+            rect={tileRect(tile.id, sideLength)}
+            detail={detail}
+            selected={selectedTileId === tile.id}
+            onSelect={() => onSelectTile(tile.id)}
+            onHover={(el) => onHoverTile(tile.id, el)}
+            language={language}
+          />
+        );
+      })}
+    </div>
+  );
+});
+
+// --- Tokens ---------------------------------------------------------
+
+function moveSignature(moveDescriptor) {
+  if (!moveDescriptor) return null;
+  return `${moveDescriptor.playerId}|${moveDescriptor.teleport ? 'T' : 'W'}|${moveDescriptor.path.join(',')}`;
+}
+
+// A move is uniquely identified by WHO moved, WHERE the hop ends up, and
+// HOW it got there - not by object identity. Every game:state broadcast
+// has gone through a JSON round-trip, so the same logical move arrives as
+// a brand new object repeatedly; a content signature is what lets this
+// tell "new move" apart from "same move, freshly deserialized" (the
+// latter used to restart the hop animation and look like a token jumping
+// backward on the board).
+function useAnimatedTokenPosition(serverPosition, moveDescriptor, animate = true) {
   const [displayedPosition, setDisplayedPosition] = useState(serverPosition);
   const hopTimeoutRef = useRef(null);
-  // Dedupe by moveId (a stable value from the server), not by object
-  // identity. gameState.lastMove is rebuilt from JSON on every socket
-  // broadcast, so a plain `!==` reference check is true on EVERY broadcast
-  // - including ones unrelated to movement (e.g. a purchase or chat event
-  // that just happens to arrive while the last move is still the newest
-  // one) - which replayed the hop animation repeatedly. Comparing moveId
-  // instead only treats it as "new" when the server actually produced a
-  // new move.
-  const appliedMoveIdRef = useRef(null);
+  const appliedSignatureRef = useRef(null);
 
   useEffect(() => {
-    const isNewMove = moveDescriptor && moveDescriptor.moveId !== appliedMoveIdRef.current;
+    const signature = moveSignature(moveDescriptor);
+    const isNewMove = signature && signature !== appliedSignatureRef.current;
 
     if (isNewMove) {
-      appliedMoveIdRef.current = moveDescriptor.moveId;
-
+      appliedSignatureRef.current = signature;
+      if (!animate) {
+        setDisplayedPosition(moveDescriptor.path[moveDescriptor.path.length - 1]);
+        return undefined;
+      }
       if (moveDescriptor.teleport) {
         setDisplayedPosition(moveDescriptor.path[moveDescriptor.path.length - 1]);
         return undefined;
       }
-
-      // Step through the path one hop at a time. Each setTimeout schedules
-      // the next hop; clearing hopTimeoutRef on cleanup/re-trigger stops a
-      // stale sequence from continuing to fire after a newer move arrives.
       let i = 0;
       const stepToNext = () => {
         if (i >= moveDescriptor.path.length) return;
         setDisplayedPosition(moveDescriptor.path[i]);
         i += 1;
-        if (i < moveDescriptor.path.length) {
-          hopTimeoutRef.current = setTimeout(stepToNext, HOP_DURATION_MS);
-        }
+        if (i < moveDescriptor.path.length) hopTimeoutRef.current = setTimeout(stepToNext, HOP_DURATION_MS);
       };
       stepToNext();
-
-      return () => {
-        if (hopTimeoutRef.current) clearTimeout(hopTimeoutRef.current);
-      };
+      return () => { if (hopTimeoutRef.current) clearTimeout(hopTimeoutRef.current); };
     }
 
-    // No new move to animate, but the server's authoritative position
-    // still doesn't match what we're showing (first render, reconnect, or
-    // a position change that for any reason arrived without a matching
-    // lastMove) - snap straight there rather than leaving the token
-    // stranded on a stale tile.
-    if (!moveDescriptor && displayedPosition !== serverPosition) {
-      setDisplayedPosition(serverPosition);
-    }
+    if (!moveDescriptor && displayedPosition !== serverPosition) setDisplayedPosition(serverPosition);
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moveDescriptor, serverPosition]);
@@ -323,150 +139,584 @@ function useAnimatedTokenPosition(serverPosition, moveDescriptor) {
   return displayedPosition;
 }
 
-function PlayerTokens({ players, lastMove }) {
-  const active = players.filter((p) => !p.bankrupt);
+// Where a token sits inside its tile when several players share it,
+// expressed as a UNIT vector that is later multiplied by the token's own
+// size. Tying the spread to the token (rather than to a fixed pixel
+// count) is what keeps a stack inside its own square at every zoom
+// level - a fixed offset that looks right at 100% throws tokens onto the
+// neighbouring tiles once the board is zoomed out.
+function stackUnit(index, total) {
+  if (total <= 1) return { x: 0, y: 0 };
+  if (total === 2) return { x: index === 0 ? -0.5 : 0.5, y: 0 };
+  if (total === 3) return [{ x: 0, y: -0.5 }, { x: -0.48, y: 0.4 }, { x: 0.48, y: 0.4 }][index];
+  if (total === 4) {
+    return [{ x: -0.48, y: -0.48 }, { x: 0.48, y: -0.48 }, { x: -0.48, y: 0.48 }, { x: 0.48, y: 0.48 }][index];
+  }
+  const angle = (index / total) * Math.PI * 2 - Math.PI / 2;
+  return { x: Math.cos(angle) * 0.62, y: Math.sin(angle) * 0.62 };
+}
+
+function Token({ player, moveDescriptor, activePlayers, sideLength, isCurrent, animate }) {
+  const position = useAnimatedTokenPosition(player.position, moveDescriptor, animate);
+  const { x, y } = tileCenter(position, sideLength);
+  const sameTile = activePlayers.filter((p) => (p.id === player.id ? true : p.position === position));
+  const index = sameTile.findIndex((p) => p.id === player.id);
+  const total = sameTile.length;
+  const unit = stackUnit(index, total);
+  // --tok / --tok-stack are maintained by the viewport in BOARD design
+  // pixels, so a token is always drawn at a sane fraction of a tile no
+  // matter how far the board is zoomed in or out.
+  const sizeVar = total > 1 ? 'var(--tok-stack, 30px)' : 'var(--tok, 30px)';
+
   return (
-    <div className="pointer-events-none absolute inset-0 z-20">
-      {active.map((player) => (
-        <AnimatedToken
-          key={player.id}
+    <div
+      className={`pointer-events-none absolute z-30 ${animate ? 'transition-[left,top] ease-[cubic-bezier(0.34,1.2,0.44,1)]' : ''}`}
+      style={{ left: x, top: y, transitionDuration: animate ? `${HOP_DURATION_MS}ms` : undefined }}
+    >
+      <div
+        className="relative"
+        style={{
+          width: sizeVar,
+          height: sizeVar,
+          transform: `translate(-50%, -50%) translate(calc(${sizeVar} * ${unit.x.toFixed(3)}), calc(${sizeVar} * ${unit.y.toFixed(3)}))`,
+        }}
+      >
+        {isCurrent && (
+          <span
+            className={`absolute inset-[-12%] rounded-full ${animate ? 'animate-turn-ring' : ''}`}
+            style={{ boxShadow: `0 0 0 2px ${hexToRgba(player.color, 0.9)}` }}
+          />
+        )}
+        <PlayerAvatar
           player={player}
-          isMoving={lastMove?.playerId === player.id}
-          moveDescriptor={lastMove?.playerId === player.id ? lastMove : null}
-          allActivePlayers={active}
+          title={player.nickname}
+          sizeClassName="h-full w-full"
+          ringClassName="ring-[3px] ring-white/95"
         />
-      ))}
+      </div>
     </div>
   );
 }
 
-function AnimatedToken({ player, moveDescriptor, allActivePlayers }) {
-  const displayedPosition = useAnimatedTokenPosition(player.position, moveDescriptor);
-  const { xPct, yPct } = tokenTranslatePercent(displayedPosition);
-
-  // Clustering offset is computed against OTHER tokens' current displayed
-  // (not server) positions too, so two tokens animating past each other
-  // mid-hop don't briefly overlap at full opacity - each still offsets
-  // from whoever else currently visually shares its tile.
-  const sameTilePlayers = allActivePlayers.filter((p) => {
-    if (p.id === player.id) return true;
-    // Other tokens not currently mid-move are simply at their server
-    // position for this comparison; a token that IS mid-move but isn't
-    // `player` can't happen simultaneously today (moves are strictly
-    // sequential - only the current turn's player ever moves), but this
-    // stays correct even if that ever changes.
-    return p.position === displayedPosition;
-  });
-  const indexInStack = sameTilePlayers.findIndex((p) => p.id === player.id);
-  const offset = tokenOffset(indexInStack, sameTilePlayers.length);
-
-  return (
-    // `left`/`top` as percentages correctly resolve against the PARENT's
-    // size (the full board), which is what we want. This is the fix for a
-    // real bug: `transform: translate(X%, ...)` resolves percentages
-    // against the TRANSFORMED ELEMENT'S OWN size, not its container - on a
-    // zero-size wrapper (the previous approach) every percentage
-    // component silently resolved to 0, so tokens rendered pinned to the
-    // top-left corner regardless of their actual tile. left/top percent
-    // positioning doesn't have that problem, so it's used for the
-    // continuous per-tile movement, while the transform here only ever
-    // carries fixed, non-percentage values (self-centering and the small
-    // px clustering offset), which are safe regardless of element size.
-    <div
-      className="absolute transition-[left,top] ease-[cubic-bezier(0.4,0,0.2,1)]"
-      style={{
-        left: `${xPct}%`,
-        top: `${yPct}%`,
-        transitionDuration: `${HOP_DURATION_MS}ms`,
-        transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
-      }}
-    >
-      <span
-        className="block h-4 w-4 rounded-full ring-[2.5px] ring-white shadow-token sm:h-[18px] sm:w-[18px]"
-        style={{ backgroundColor: player.color, boxShadow: `0 2px 6px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,0,0,0.15)` }}
-        title={player.nickname}
-      />
-    </div>
-  );
+function PlayerTokens({ players, lastMove, sideLength, currentPlayerId, animate }) {
+  const active = players.filter((p) => !p.bankrupt);
+  return active.map((player) => (
+    <Token
+      key={player.id}
+      player={player}
+      moveDescriptor={lastMove?.playerId === player.id ? lastMove : null}
+      activePlayers={active}
+      sideLength={sideLength}
+      isCurrent={player.id === currentPlayerId}
+      animate={animate}
+    />
+  ));
 }
 
-// The board's center used to be a near-empty watermark - the single
-// biggest wasted area on the whole screen. It now hosts the actual turn
-// status and dice, which is both a better use of the space (the eye
-// already goes there) and a stronger signature moment for the dice roll
-// than tucking it into a corner of a separate panel.
-function BoardCenter({ gameState, me, isMyTurn, onRollDice, diceSlot }) {
-  const { t } = useTranslation();
-  const { freeParkingPot, phase, pendingAction } = gameState;
-  const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+// --- Board centre ---------------------------------------------------
 
+function BoardCenter({ sideLength, freeParkingPot, diceSlot, currentPlayer, isMyTurn, t }) {
+  const inner = boardInnerRect(sideLength);
   return (
     <div
-      className="relative flex flex-col items-center justify-center gap-3 overflow-hidden rounded-xl sm:gap-4"
-      style={{ gridRow: '2 / 11', gridColumn: '2 / 11' }}
+      className="pointer-events-none absolute flex flex-col items-center justify-center"
+      style={{ left: inner.x, top: inner.y, width: inner.w, height: inner.h }}
     >
-      <p className="pointer-events-none absolute font-display text-[clamp(1.75rem,6vw,3.5rem)] font-bold tracking-tight text-ink/[0.06]">
+      <p
+        className="absolute font-display font-black tracking-tight text-ink/[0.055]"
+        style={{ fontSize: Math.min(inner.w * 0.16, 150), transform: 'rotate(-4deg)' }}
+      >
         LANDMARK
       </p>
 
-      <div className="relative flex flex-col items-center gap-1">
-        <p
-          className="flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide sm:text-xs"
-          style={{ color: currentPlayer?.color, backgroundColor: `${currentPlayer?.color}18` }}
+      {/* Counter-scaled: the dice and the turn banner are information, not
+          board art, so they hold a constant size on screen instead of
+          shrinking into illegibility as the board zooms out. */}
+      <div
+        className="flex flex-col items-center justify-center gap-4"
+        style={{ transform: 'scale(var(--hud-scale, 1))' }}
+      >
+
+      {currentPlayer && (
+        <div
+          className="flex items-center gap-2 rounded-full px-4 py-1.5 shadow-sm"
+          style={{ backgroundColor: hexToRgba(currentPlayer.color, 0.16), border: `1px solid ${hexToRgba(currentPlayer.color, 0.45)}` }}
         >
-          <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: currentPlayer?.color }} />
-          {isMyTurn ? t('game.yourTurn') : t('game.nameTurn', { name: currentPlayer?.nickname })}
-        </p>
-      </div>
+          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: currentPlayer.color }} />
+          <span className="text-[15px] font-bold tracking-tight" style={{ color: currentPlayer.color }}>
+            {isMyTurn ? t('game.yourTurn') : t('game.nameTurn', { name: currentPlayer.nickname })}
+          </span>
+        </div>
+      )}
 
       {diceSlot}
 
-      {isMyTurn && phase === 'ROLLING' && !pendingAction && (
-        <button
-          type="button"
-          onClick={onRollDice}
-          className="shimmer-sweep relative rounded-full bg-gradient-to-b from-brass-bright to-brass px-6 py-2.5 text-sm font-bold text-brass-ink shadow-tile transition-transform active:scale-95 sm:px-7 sm:py-3 sm:text-base"
-        >
-          {me?.inJail ? t('game.tryForDoubles') : t('game.rollDice')}
-        </button>
-      )}
-
       {freeParkingPot > 0 && (
-        <div className="relative rounded-full border-2 border-dashed border-brass/50 bg-brass/10 px-3 py-1 sm:px-4 sm:py-1.5">
-          <p className="text-[10px] font-medium text-brass-deep sm:text-xs">
-            {t('game.freeParkingLabel')} <span className="font-display font-bold">${freeParkingPot}</span>
-          </p>
-        </div>
+          <div className="flex items-center gap-2 rounded-full border-2 border-dashed border-brass/50 bg-brass/10 px-4 py-1.5">
+            <Icon.parking className="h-4 w-4 text-brass-deep" />
+            <span className="text-[13px] font-semibold text-brass-deep">
+              {t('game.freeParkingLabel')} <span className="font-display font-black tnum">${freeParkingPot}</span>
+            </span>
+          </div>
       )}
+      </div>
     </div>
   );
 }
 
-export default function Board({ gameState, onSelectTile, me, isMyTurn, onRollDice, diceSlot }) {
-  const { properties, players } = gameState;
+// --- Hover tooltip --------------------------------------------------
+
+function TileTooltip({ hover, gameState, language, t }) {
+  if (!hover) return null;
+  const tile = gameState.board[hover.tileId];
+  if (!tile) return null;
+  const propState = gameState.properties[tile.id];
+  const owner = propState?.ownerId ? gameState.players.find((p) => p.id === propState.ownerId) : null;
+  const rent = currentRent(tile, propState, gameState.board, gameState.properties);
+  const ownable = !!propState;
 
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-[720px] rounded-2xl border border-brass/15 bg-board p-2 shadow-board texture-parchment sm:p-3">
-      <div
-        className="relative grid h-full w-full"
-        style={{
-          gridTemplateColumns: 'repeat(11, 1fr)',
-          gridTemplateRows: 'repeat(11, 1fr)',
-        }}
-      >
-        {BOARD.map((tile) => {
-          const pos = tileGridPosition(tile.id);
-          return (
-            <div key={tile.id} style={{ gridRow: pos.row, gridColumn: pos.col }} className="relative">
-              <TileRenderer tile={tile} properties={properties} players={players} onSelect={onSelectTile} />
-            </div>
-          );
-        })}
-
-        <PlayerTokens players={players} lastMove={gameState.lastMove} />
-
-        <BoardCenter gameState={gameState} me={me} isMyTurn={isMyTurn} onRollDice={onRollDice} diceSlot={diceSlot} />
+    <div
+      className="pointer-events-none fixed z-40 w-56 animate-fade-in rounded-xl border border-white/12 bg-felt-800/95 p-3 shadow-deep backdrop-blur-md"
+      style={{ left: hover.x, top: hover.y, transform: hover.below ? 'translate(-50%, 0)' : 'translate(-50%, -100%)' }}
+    >
+      <div className="mb-1.5 flex items-center gap-2">
+        <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: hover.accent }} />
+        <p className="truncate text-sm font-bold text-parch">{getTileName(tile, language)}</p>
       </div>
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-parch/40">
+        {t(`tileType.${tile.type}`)}
+      </p>
+      {ownable && (
+        <dl className="space-y-1 text-[12px]">
+          <div className="flex justify-between gap-3">
+            <dt className="text-parch/50">{t('tooltip.price')}</dt>
+            <dd className="font-semibold text-parch tnum">${tile.price}</dd>
+          </div>
+          {rent != null && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-parch/50">{t('tooltip.rentNow')}</dt>
+              <dd className="font-semibold text-brass-light tnum">${rent}</dd>
+            </div>
+          )}
+          {tile.type === TILE_TYPES.UTILITY && owner && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-parch/50">{t('tooltip.rentNow')}</dt>
+              <dd className="font-semibold text-brass-light">
+                {utilityMultiplier(owner.id, gameState.board, gameState.properties)}× {t('tooltip.diceRoll')}
+              </dd>
+            </div>
+          )}
+          <div className="flex justify-between gap-3">
+            <dt className="text-parch/50">{t('tooltip.owner')}</dt>
+            <dd className="flex items-center gap-1.5 font-semibold text-parch">
+              {owner ? (
+                <>
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: owner.color }} />
+                  <span className="max-w-[90px] truncate">{owner.nickname}</span>
+                </>
+              ) : (
+                <span className="text-go-light">{t('tooltip.available')}</span>
+              )}
+            </dd>
+          </div>
+          {propState?.houses > 0 && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-parch/50">{t('tooltip.buildings')}</dt>
+              <dd className="font-semibold text-parch">
+                {propState.houses === 5 ? t('property.hotel') : t('property.housesCount', { count: propState.houses })}
+              </dd>
+            </div>
+          )}
+          {propState?.mortgaged && (
+            <p className="mt-1 rounded bg-rent/20 px-2 py-1 text-center text-[11px] font-bold uppercase text-rent-light">
+              {t('property.mortgaged')}
+            </p>
+          )}
+        </dl>
+      )}
+      {!ownable && tile.amount != null && (
+        <p className="text-[12px] font-semibold text-rent-light tnum">-${tile.amount}</p>
+      )}
+      <p className="mt-2 border-t border-white/10 pt-1.5 text-[10.5px] text-parch/35">{t('tooltip.clickForDetails')}</p>
+    </div>
+  );
+}
+
+// --- Zoom / pan viewport --------------------------------------------
+
+export default function Board({
+  gameState, onSelectTile, selectedTileId, isMyTurn, diceSlot, overlay,
+}) {
+  const { language, t } = useTranslation();
+  const { settings } = useSettings();
+  const { properties, players, board, sideLength, lastMove } = gameState;
+  const size = boardPixelSize(sideLength);
+  // Settings are read through refs inside the imperative zoom path,
+  // which runs outside React's render cycle and would otherwise close
+  // over whatever value was current when the handler was created.
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+
+  const viewportRef = useRef(null);
+  const stageRef = useRef(null);
+  const view = useRef({ scale: 1, x: 0, y: 0 });
+  const pointers = useRef(new Map());
+  const gesture = useRef(null);
+  const draggedRef = useRef(false);
+  const suppressClickRef = useRef(false);
+  const touchedRef = useRef(false);
+
+  const [zoomPct, setZoomPct] = useState(100);
+  const [detail, setDetail] = useState('full');
+  const [hover, setHover] = useState(null);
+  const [isPanning, setIsPanning] = useState(false);
+
+  const fitScale = useCallback(() => {
+    const el = viewportRef.current;
+    if (!el) return 1;
+    return Math.min((el.clientWidth - PAD * 2) / size, (el.clientHeight - PAD * 2) / size);
+  }, [size]);
+
+  const clampPosition = useCallback((x, y, scale) => {
+    const el = viewportRef.current;
+    if (!el) return { x, y };
+    const vw = el.clientWidth;
+    const vh = el.clientHeight;
+    const cw = size * scale;
+    const ch = size * scale;
+    const nx = cw + PAD * 2 <= vw ? (vw - cw) / 2 : Math.min(PAD, Math.max(vw - cw - PAD, x));
+    const ny = ch + PAD * 2 <= vh ? (vh - ch) / 2 : Math.min(PAD, Math.max(vh - ch - PAD, y));
+    return { x: nx, y: ny };
+  }, [size]);
+
+  // Written straight to the DOM rather than through React state: a pan
+  // gesture fires pointermove at screen refresh rate, and re-rendering
+  // dozens of tiles on each one is what makes a board feel heavy. Only
+  // the zoom readout and the detail level (which changes rarely) go
+  // through state.
+  const commit = useCallback(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const { scale, x, y } = view.current;
+    stage.style.transform = `translate3d(${x}px, ${y}px, 0) scale(${scale})`;
+    stage.style.setProperty('--board-scale', String(scale));
+
+    // Token size is derived from how big a TILE currently is on screen,
+    // then converted back into board design pixels. A token therefore
+    // stays a fixed fraction of its own square at every zoom level
+    // (with a floor so it never vanishes), instead of growing until it
+    // covers the neighbouring tiles when the board is zoomed out.
+    const tileOnScreen = TILE_W * scale;
+    const floor = settingsRef.current.largeTokens ? 20 : 15;
+    const single = Math.min(34, Math.max(floor, tileOnScreen * 0.46));
+    // Two tokens side by side span exactly 2x their own width, so
+    // holding that below the tile width is what keeps a shared square
+    // from bleeding onto its neighbours.
+    const stacked = Math.max(9, Math.min(single, tileOnScreen * 0.42));
+    stage.style.setProperty('--tok', `${(single / scale).toFixed(2)}px`);
+    stage.style.setProperty('--tok-stack', `${(stacked / scale).toFixed(2)}px`);
+
+    // The middle of the board carries information (dice, whose turn),
+    // so it counter-scales to hold a constant on-screen size.
+    stage.style.setProperty('--hud-scale', String(Math.min(3.4, Math.max(0.55, 1 / scale))));
+
+    setZoomPct(Math.round(scale * 100));
+    setDetail((prev) => {
+      const next = detailFor(scale);
+      return next === prev ? prev : next;
+    });
+  }, []);
+
+  const setView = useCallback((scale, x, y, animate = false) => {
+    const stage = stageRef.current;
+    const min = Math.max(SCALE_FLOOR, fitScale() * 0.55);
+    const s = Math.min(SCALE_MAX, Math.max(min, scale));
+    const pos = clampPosition(x, y, s);
+    view.current = { scale: s, x: pos.x, y: pos.y };
+    if (stage) stage.style.transition = animate ? 'transform 220ms cubic-bezier(0.22,1,0.36,1)' : 'none';
+    commit();
+  }, [clampPosition, commit, fitScale]);
+
+  const fit = useCallback((animate = true) => {
+    const el = viewportRef.current;
+    if (!el) return;
+    const s = fitScale();
+    setView(s, (el.clientWidth - size * s) / 2, (el.clientHeight - size * s) / 2, animate);
+  }, [fitScale, setView, size]);
+
+  // Zoom around a fixed viewport point, so the thing under the cursor
+  // (or the middle of the screen, for the buttons) stays put.
+  const zoomAt = useCallback((nextScale, px, py, animate = false) => {
+    const { scale, x, y } = view.current;
+    const min = Math.max(SCALE_FLOOR, fitScale() * 0.55);
+    const s = Math.min(SCALE_MAX, Math.max(min, nextScale));
+    const k = s / scale;
+    setView(s, px - (px - x) * k, py - (py - y) * k, animate);
+  }, [fitScale, setView]);
+
+  const zoomByStep = useCallback((factor) => {
+    const el = viewportRef.current;
+    if (!el) return;
+    zoomAt(view.current.scale * factor, el.clientWidth / 2, el.clientHeight / 2, true);
+  }, [zoomAt]);
+
+  useLayoutEffect(() => {
+    fit(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sideLength]);
+
+  // Token size is written straight to the DOM by commit(), which only
+  // runs on zoom/pan - a settings change has to ask for a fresh one or
+  // it would not show up until the next time the board moved.
+  useEffect(() => {
+    commit();
+  }, [settings.largeTokens, commit]);
+
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return undefined;
+    const ro = new ResizeObserver(() => {
+      if (touchedRef.current) {
+        const { scale, x, y } = view.current;
+        setView(scale, x, y, false);
+      } else {
+        fit(false);
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fit, setView]);
+
+  // Wheel zoom. Registered natively (not via React's onWheel) because the
+  // listener must be non-passive to preventDefault the page scroll.
+  useEffect(() => {
+    const el = viewportRef.current;
+    if (!el) return undefined;
+    const onWheel = (e) => {
+      e.preventDefault();
+      touchedRef.current = true;
+      const rect = el.getBoundingClientRect();
+      // Trackpad pinch arrives as ctrl+wheel with much smaller deltas -
+      // a single exponential curve handles both without a mode switch.
+      const intensity = (e.ctrlKey ? 0.012 : 0.0022) * (settingsRef.current.zoomSpeed || 1);
+      const factor = Math.exp(-e.deltaY * intensity);
+      zoomAt(view.current.scale * factor, e.clientX - rect.left, e.clientY - rect.top);
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [zoomAt]);
+
+  const onPointerDown = (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    // Deliberately NOT capturing the pointer here. While a capture is
+    // active, the browser retargets the eventual click to the capturing
+    // element, which would swallow every tile click - the board would
+    // pan beautifully and open nothing. Capture is taken only once a
+    // real drag starts (below), where it is actually needed to keep
+    // receiving moves that leave the viewport.
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    draggedRef.current = false;
+    if (pointers.current.size === 1) {
+      gesture.current = { mode: 'pan', startX: e.clientX, startY: e.clientY, originX: view.current.x, originY: view.current.y };
+    } else if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      gesture.current = {
+        mode: 'pinch',
+        startDist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+        startScale: view.current.scale,
+      };
+    }
+  };
+
+  const onPointerMove = (e) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gesture.current;
+    if (!g) return;
+    const el = viewportRef.current;
+    const rect = el.getBoundingClientRect();
+
+    if (g.mode === 'pinch' && pointers.current.size >= 2) {
+      const [a, b] = [...pointers.current.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      const mid = { x: (a.x + b.x) / 2 - rect.left, y: (a.y + b.y) / 2 - rect.top };
+      draggedRef.current = true;
+      touchedRef.current = true;
+      zoomAt(g.startScale * (dist / g.startDist), mid.x, mid.y);
+      return;
+    }
+
+    if (g.mode === 'pan') {
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY;
+      if (!draggedRef.current && Math.hypot(dx, dy) < 4) return;
+      if (!draggedRef.current) {
+        draggedRef.current = true;
+        touchedRef.current = true;
+        try { el.setPointerCapture(e.pointerId); } catch { /* pointer already gone */ }
+        setIsPanning(true);
+        setHover(null);
+      }
+      setView(view.current.scale, g.originX + dx, g.originY + dy);
+    }
+  };
+
+  const endPointer = (e) => {
+    pointers.current.delete(e.pointerId);
+    // The click that closes a drag has to be swallowed, but only that
+    // one: a flag left standing would eat the next genuine tile click.
+    // Clearing it from a macrotask is precise, because pointerup ->
+    // mouseup -> click all run in the same task.
+    if (draggedRef.current) {
+      suppressClickRef.current = true;
+      setTimeout(() => { suppressClickRef.current = false; }, 0);
+    }
+    draggedRef.current = false;
+    if (pointers.current.size === 0) {
+      gesture.current = null;
+      setIsPanning(false);
+    } else if (pointers.current.size === 1) {
+      const [only] = [...pointers.current.values()];
+      gesture.current = { mode: 'pan', startX: only.x, startY: only.y, originX: view.current.x, originY: view.current.y };
+    }
+  };
+
+  // A pan that ends over a tile must not also "click" that tile.
+  const onClickCapture = (e) => {
+    if (suppressClickRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      suppressClickRef.current = false;
+    }
+  };
+
+  // Double-click zooms, but only on empty board surface: over a tile a
+  // double click is just two clicks, and that already opens its deed -
+  // zooming as well would fight the player's own intent.
+  const onDoubleClick = (e) => {
+    if (e.target.closest('button')) return;
+    const rect = viewportRef.current.getBoundingClientRect();
+    touchedRef.current = true;
+    zoomAt(view.current.scale * 1.8, e.clientX - rect.left, e.clientY - rect.top, true);
+  };
+
+  const handleHoverTile = useCallback((tileId, el) => {
+    if (!el || !settingsRef.current.showTooltips) {
+      setHover(null);
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    // Near the top of the window there is no room for a card above the
+    // tile, so it flips below rather than being clipped by the header.
+    const below = r.top < 230;
+    setHover({
+      tileId,
+      x: Math.min(Math.max(r.left + r.width / 2, 120), window.innerWidth - 120),
+      y: below ? r.bottom + 10 : r.top - 10,
+      below,
+      accent: tileAccentColor(gameState.board[tileId]),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameState.board]);
+
+  const currentPlayer = players[gameState.currentPlayerIndex];
+  // 'auto' lets the zoom level decide; the other two are the player
+  // saying they would rather have the names (or the clean board art)
+  // whatever the zoom is doing.
+  const effectiveDetail = settings.tileLabels === 'always' ? 'full'
+    : settings.tileLabels === 'never' ? 'min'
+      : detail;
+  const atMin = zoomPct / 100 <= Math.max(SCALE_FLOOR, fitScale() * 0.55) + 0.001;
+
+  return (
+    <div className="relative h-full min-h-0 w-full overflow-hidden rounded-2xl border border-white/10 bg-felt-900/60 shadow-[inset_0_2px_30px_rgba(0,0,0,0.6)]">
+      <div
+        ref={viewportRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endPointer}
+        onPointerCancel={endPointer}
+        onClickCapture={onClickCapture}
+        onDoubleClick={onDoubleClick}
+        className={`no-drag absolute inset-0 overflow-hidden ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+      >
+        <div ref={stageRef} data-board-stage className="absolute left-0 top-0 origin-top-left will-change-transform" style={{ width: size, height: size }}>
+          <BoardSurface
+            board={board}
+            properties={properties}
+            players={players}
+            sideLength={sideLength}
+            detail={effectiveDetail}
+            selectedTileId={selectedTileId}
+            onSelectTile={onSelectTile}
+            onHoverTile={handleHoverTile}
+            language={language}
+          />
+          <BoardCenter
+            sideLength={sideLength}
+            freeParkingPot={gameState.freeParkingPot}
+            diceSlot={diceSlot}
+            currentPlayer={currentPlayer}
+            isMyTurn={isMyTurn}
+            t={t}
+          />
+          <PlayerTokens
+            players={players}
+            lastMove={lastMove}
+            sideLength={sideLength}
+            currentPlayerId={currentPlayer?.id}
+            animate={settings.animations}
+          />
+        </div>
+      </div>
+
+      {/* Overlays sit outside the transformed stage, so they keep a
+          constant size and can never be panned off screen. */}
+      {overlay}
+
+      <div className="absolute bottom-3 right-3 z-30 flex items-center gap-1 rounded-full border border-white/12 bg-felt-800/90 p-1 shadow-lift backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => zoomByStep(1 / 1.35)}
+          disabled={atMin}
+          title={t('game.zoomOut')}
+          aria-label={t('game.zoomOut')}
+          className="flex h-8 w-8 items-center justify-center rounded-full text-parch/70 transition-colors hover:bg-white/10 hover:text-parch disabled:opacity-25"
+        >
+          <Icon.minus className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => fit(true)}
+          title={t('game.resetZoom')}
+          className="flex min-w-[3.6rem] items-center justify-center gap-1 rounded-full px-2 py-1 text-[12px] font-bold text-parch/80 transition-colors hover:bg-white/10 hover:text-parch tnum"
+        >
+          {zoomPct}%
+        </button>
+        <button
+          type="button"
+          onClick={() => zoomByStep(1.35)}
+          disabled={zoomPct / 100 >= SCALE_MAX - 0.001}
+          title={t('game.zoomIn')}
+          aria-label={t('game.zoomIn')}
+          className="flex h-8 w-8 items-center justify-center rounded-full text-parch/70 transition-colors hover:bg-white/10 hover:text-parch disabled:opacity-25"
+        >
+          <Icon.plus className="h-4 w-4" />
+        </button>
+        <span className="mx-0.5 h-5 w-px bg-white/10" />
+        <button
+          type="button"
+          onClick={() => fit(true)}
+          title={t('game.fitBoard')}
+          aria-label={t('game.fitBoard')}
+          className="flex h-8 w-8 items-center justify-center rounded-full text-parch/70 transition-colors hover:bg-white/10 hover:text-parch"
+        >
+          <Icon.fit className="h-4 w-4" />
+        </button>
+      </div>
+
+      {!isPanning && <TileTooltip hover={hover} gameState={gameState} language={language} t={t} />}
     </div>
   );
 }

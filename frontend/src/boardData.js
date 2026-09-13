@@ -1,8 +1,6 @@
 // boardData.js
-// Client-side mirror of the backend's board layout, for rendering only.
-// The server is the sole source of truth for game logic; this file never
-// computes rent, ownership, or legality - it only maps tile ids to display
-// info (name, color, price) so the board can be drawn.
+// Pure helpers for rendering a board - NONE of these hardcode a tile
+// count, side length, or specific board content.
 
 export const TILE_TYPES = {
   GO: 'GO',
@@ -17,80 +15,199 @@ export const TILE_TYPES = {
   FREE_PARKING: 'FREE_PARKING',
 };
 
-export const BOARD = [
-  { id: 0, type: TILE_TYPES.GO, name: 'Start', nameRu: 'Старт' },
-  { id: 1, type: TILE_TYPES.PROPERTY, name: 'Elm Street', nameRu: 'улица Вязов', group: 'brown', price: 60, houseCost: 50, rent: [2, 10, 30, 90, 160, 250] },
-  { id: 2, type: TILE_TYPES.CHEST, name: 'Community Chest', nameRu: 'Общественная казна' },
-  { id: 3, type: TILE_TYPES.PROPERTY, name: 'Oak Avenue', nameRu: 'проспект Дубовый', group: 'brown', price: 60, houseCost: 50, rent: [4, 20, 60, 180, 320, 450] },
-  { id: 4, type: TILE_TYPES.TAX, name: 'Income Tax', nameRu: 'Подоходный налог', amount: 200 },
-  { id: 5, type: TILE_TYPES.RAILROAD, name: 'North Station', nameRu: 'Северный вокзал', price: 200, rent: [25, 50, 100, 200] },
-  { id: 6, type: TILE_TYPES.PROPERTY, name: 'Maple Road', nameRu: 'дорога Кленовая', group: 'lightblue', price: 100, houseCost: 50, rent: [6, 30, 90, 270, 400, 550] },
-  { id: 7, type: TILE_TYPES.CHANCE, name: 'Chance', nameRu: 'Шанс' },
-  { id: 8, type: TILE_TYPES.PROPERTY, name: 'Birch Lane', nameRu: 'переулок Берёзовый', group: 'lightblue', price: 100, houseCost: 50, rent: [6, 30, 90, 270, 400, 550] },
-  { id: 9, type: TILE_TYPES.PROPERTY, name: 'Cedar Court', nameRu: 'тупик Кедровый', group: 'lightblue', price: 120, houseCost: 50, rent: [8, 40, 100, 300, 450, 600] },
-  { id: 10, type: TILE_TYPES.JAIL, name: 'Jail', nameRu: 'Тюрьма' },
-  { id: 11, type: TILE_TYPES.PROPERTY, name: 'Willow Way', nameRu: 'аллея Ивовая', group: 'pink', price: 140, houseCost: 100, rent: [10, 50, 150, 450, 625, 750] },
-  { id: 12, type: TILE_TYPES.UTILITY, name: 'Power Plant', nameRu: 'Электростанция', price: 150 },
-  { id: 13, type: TILE_TYPES.PROPERTY, name: 'Aspen Street', nameRu: 'улица Осиновая', group: 'pink', price: 140, houseCost: 100, rent: [10, 50, 150, 450, 625, 750] },
-  { id: 14, type: TILE_TYPES.PROPERTY, name: 'Poplar Place', nameRu: 'площадь Тополиная', group: 'pink', price: 160, houseCost: 100, rent: [12, 60, 180, 500, 700, 900] },
-  { id: 15, type: TILE_TYPES.RAILROAD, name: 'East Station', nameRu: 'Восточный вокзал', price: 200, rent: [25, 50, 100, 200] },
-  { id: 16, type: TILE_TYPES.PROPERTY, name: 'Chestnut Ave', nameRu: 'проспект Каштановый', group: 'orange', price: 180, houseCost: 100, rent: [14, 70, 200, 550, 750, 950] },
-  { id: 17, type: TILE_TYPES.CHEST, name: 'Community Chest', nameRu: 'Общественная казна' },
-  { id: 18, type: TILE_TYPES.PROPERTY, name: 'Sycamore St', nameRu: 'улица Платановая', group: 'orange', price: 180, houseCost: 100, rent: [14, 70, 200, 550, 750, 950] },
-  { id: 19, type: TILE_TYPES.PROPERTY, name: 'Magnolia Blvd', nameRu: 'бульвар Магнолий', group: 'orange', price: 200, houseCost: 100, rent: [16, 80, 220, 600, 800, 1000] },
-  { id: 20, type: TILE_TYPES.FREE_PARKING, name: 'Free Parking', nameRu: 'Бесплатная парковка' },
-  { id: 21, type: TILE_TYPES.PROPERTY, name: 'Redwood Rd', nameRu: 'дорога Секвойная', group: 'red', price: 220, houseCost: 150, rent: [18, 90, 250, 700, 875, 1050] },
-  { id: 22, type: TILE_TYPES.CHANCE, name: 'Chance', nameRu: 'Шанс' },
-  { id: 23, type: TILE_TYPES.PROPERTY, name: 'Sequoia St', nameRu: 'улица Секвойя', group: 'red', price: 220, houseCost: 150, rent: [18, 90, 250, 700, 875, 1050] },
-  { id: 24, type: TILE_TYPES.PROPERTY, name: 'Cypress Ave', nameRu: 'проспект Кипарисовый', group: 'red', price: 240, houseCost: 150, rent: [20, 100, 300, 750, 925, 1100] },
-  { id: 25, type: TILE_TYPES.RAILROAD, name: 'South Station', nameRu: 'Южный вокзал', price: 200, rent: [25, 50, 100, 200] },
-  { id: 26, type: TILE_TYPES.PROPERTY, name: 'Palm Drive', nameRu: 'проезд Пальмовый', group: 'yellow', price: 260, houseCost: 150, rent: [22, 110, 330, 800, 975, 1150] },
-  { id: 27, type: TILE_TYPES.PROPERTY, name: 'Juniper Way', nameRu: 'аллея Можжевеловая', group: 'yellow', price: 260, houseCost: 150, rent: [22, 110, 330, 800, 975, 1150] },
-  { id: 28, type: TILE_TYPES.UTILITY, name: 'Water Works', nameRu: 'Водоканал', price: 150 },
-  { id: 29, type: TILE_TYPES.PROPERTY, name: 'Spruce Circle', nameRu: 'площадь Еловая', group: 'yellow', price: 280, houseCost: 150, rent: [24, 120, 360, 850, 1025, 1200] },
-  { id: 30, type: TILE_TYPES.GO_TO_JAIL, name: 'Go To Jail', nameRu: 'В тюрьму' },
-  { id: 31, type: TILE_TYPES.PROPERTY, name: 'Hemlock Ave', nameRu: 'проспект Тсуговый', group: 'green', price: 300, houseCost: 200, rent: [26, 130, 390, 900, 1100, 1275] },
-  { id: 32, type: TILE_TYPES.PROPERTY, name: 'Fir Street', nameRu: 'улица Пихтовая', group: 'green', price: 300, houseCost: 200, rent: [26, 130, 390, 900, 1100, 1275] },
-  { id: 33, type: TILE_TYPES.CHEST, name: 'Community Chest', nameRu: 'Общественная казна' },
-  { id: 34, type: TILE_TYPES.PROPERTY, name: 'Larch Blvd', nameRu: 'бульвар Лиственничный', group: 'green', price: 320, houseCost: 200, rent: [28, 150, 450, 1000, 1200, 1400] },
-  { id: 35, type: TILE_TYPES.RAILROAD, name: 'West Station', nameRu: 'Западный вокзал', price: 200, rent: [25, 50, 100, 200] },
-  { id: 36, type: TILE_TYPES.CHANCE, name: 'Chance', nameRu: 'Шанс' },
-  { id: 37, type: TILE_TYPES.PROPERTY, name: 'Aurora Ave', nameRu: 'проспект Аврора', group: 'blue', price: 350, houseCost: 200, rent: [35, 175, 500, 1100, 1300, 1500] },
-  { id: 38, type: TILE_TYPES.TAX, name: 'Luxury Tax', nameRu: 'Налог на роскошь', amount: 100 },
-  { id: 39, type: TILE_TYPES.PROPERTY, name: 'Meridian Point', nameRu: 'Меридиан-Пойнт', group: 'blue', price: 400, houseCost: 200, rent: [50, 200, 600, 1400, 1700, 2000] },
-];
+export const GROUP_COLORS = {
+  brown: '#7a5230', copper: '#7a5230', lightblue: '#a3d0e8', teal: '#3fa9a6',
+  pink: '#d888b0', magenta: '#c14e9a', orange: '#e08a3c', amber: '#e0a83c',
+  red: '#c4453a', crimson: '#a32d3f', yellow: '#e8cf4a', gold: '#d4af37',
+  green: '#3f9463', emerald: '#2e8b57', blue: '#3a6ea8', indigo: '#4b5fa8',
+  violet: '#7a5fb8', rose: '#c1567c', slate: '#5a6b7a', obsidian: '#3a3f47',
+};
 
-// Returns the tile's display name in the given language, falling back to
-// English if a translation is somehow missing (defensive - every tile
-// above does have a nameRu, but this keeps a bad edit from ever rendering
-// `undefined` on screen).
+// Non-property ownables still need a stable accent color so the board,
+// the trade screen and the deed card can all speak the same visual
+// language ("this swatch identifies the asset") regardless of type.
+export const RAILROAD_COLOR = '#37474f';
+export const UTILITY_COLOR = '#5f8a99';
+
+export function tileAccentColor(tile) {
+  if (!tile) return '#8a8b76';
+  if (tile.type === TILE_TYPES.RAILROAD) return RAILROAD_COLOR;
+  if (tile.type === TILE_TYPES.UTILITY) return UTILITY_COLOR;
+  return GROUP_COLORS[tile.group] || '#8a8b76';
+}
+
+// --- Board geometry ------------------------------------------------
+//
+// The board is laid out at a FIXED intrinsic pixel size and then scaled
+// as a whole by the viewport's zoom transform. Laying out in real pixels
+// (rather than percentage grid tracks whose meaning changes with the
+// container) is what makes tile content predictable: a tile is always
+// TILE_W x TILE_H CSS pixels of design space, so type sizes, paddings
+// and icons are tuned once and simply scale, instead of re-flowing into
+// unreadable slivers on a large board (Metropolis is 84 tiles).
+export const TILE_W = 80;
+export const CORNER = 118;
+export const BOARD_PAD = 16;
+
+export function boardLines(sideLength) {
+  return sideLength + 1;
+}
+
+export function boardPixelSize(sideLength) {
+  return CORNER * 2 + (sideLength - 1) * TILE_W + BOARD_PAD * 2;
+}
+
+// Given a tile id and the room's actual sideLength, returns { row, col }
+// in a (sideLength+1) x (sideLength+1) grid. id 0 is the bottom-right
+// corner, increasing counter-clockwise - matches the backend's
+// layoutBuilder.js exactly.
+export function tileGridPosition(id, sideLength) {
+  const lines = boardLines(sideLength);
+  if (id <= sideLength) return { row: lines, col: lines - id };
+  if (id <= sideLength * 2) return { row: lines - (id - sideLength), col: 1 };
+  if (id <= sideLength * 3) return { row: 1, col: 1 + (id - sideLength * 2) };
+  return { row: 1 + (id - sideLength * 3), col: lines };
+}
+
+// Which board edge a tile sits on. Side tiles put their color band on
+// the edge facing the middle of the board, the way a physical board
+// does, so a whole color group reads as one continuous stripe.
+export function tileOrientation(id, sideLength) {
+  const { row, col } = tileGridPosition(id, sideLength);
+  const lines = boardLines(sideLength);
+  const isCorner = (row === 1 || row === lines) && (col === 1 || col === lines);
+  if (isCorner) return 'corner';
+  if (row === lines) return 'bottom';
+  if (row === 1) return 'top';
+  if (col === 1) return 'left';
+  return 'right';
+}
+
+// Start offset (in board pixels) of a 1-based grid track. The first and
+// last tracks are the wider corner tracks.
+function trackStart(index, lines) {
+  if (index <= 1) return BOARD_PAD;
+  if (index >= lines) return BOARD_PAD + CORNER + (lines - 2) * TILE_W;
+  return BOARD_PAD + CORNER + (index - 2) * TILE_W;
+}
+
+// Pixel rect of a tile inside the board's own coordinate space.
+export function tileRect(id, sideLength) {
+  const { row, col } = tileGridPosition(id, sideLength);
+  const lines = boardLines(sideLength);
+  const edge = (i) => (i === 1 || i === lines ? CORNER : TILE_W);
+  return {
+    x: trackStart(col, lines),
+    y: trackStart(row, lines),
+    w: edge(col),
+    h: edge(row),
+  };
+}
+
+export function tileCenter(id, sideLength) {
+  const r = tileRect(id, sideLength);
+  return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+}
+
+// The open middle of the board, in board pixels.
+export function boardInnerRect(sideLength) {
+  const start = BOARD_PAD + CORNER;
+  const size = (boardLines(sideLength) - 2) * TILE_W;
+  return { x: start, y: start, w: size, h: size };
+}
+
 export function getTileName(tile, language) {
   if (!tile) return '';
   if (language === 'ru' && tile.nameRu) return tile.nameRu;
   return tile.name;
 }
 
-export const GROUP_COLORS = {
-  brown: '#7a5230',
-  lightblue: '#a3d0e8',
-  pink: '#d888b0',
-  orange: '#e08a3c',
-  red: '#c4453a',
-  yellow: '#e8cf4a',
-  green: '#3f9463',
-  blue: '#3a6ea8',
-};
+// --- Derived game facts --------------------------------------------
 
-export function getTile(id) {
-  return BOARD[id];
+// Maps every color group to the player who owns ALL of its tiles (a
+// monopoly), or null. Callers use it to flag "this group is complete",
+// which is what makes building possible and doubles the base rent.
+export function computeGroupOwners(board, properties) {
+  const byGroup = {};
+  board.forEach((tile) => {
+    if (tile.type !== TILE_TYPES.PROPERTY) return;
+    if (!byGroup[tile.group]) byGroup[tile.group] = [];
+    byGroup[tile.group].push(tile.id);
+  });
+  const owners = {};
+  Object.entries(byGroup).forEach(([group, ids]) => {
+    const first = properties[ids[0]]?.ownerId || null;
+    owners[group] = first && ids.every((id) => properties[id]?.ownerId === first) ? first : null;
+  });
+  return owners;
 }
 
-// Board tiles arranged around a square: this returns { row, col } in an
-// 11x11 css-grid for a given tile id (0 = bottom-right corner GO, going
-// counter-clockwise, matching classic board orientation).
-export function tileGridPosition(id) {
-  if (id <= 10) return { row: 11, col: 11 - id }; // bottom row, right-to-left
-  if (id <= 20) return { row: 11 - (id - 10), col: 1 }; // left column, bottom-to-top
-  if (id <= 30) return { row: 1, col: 1 + (id - 20) }; // top row, left-to-right
-  return { row: 1 + (id - 30), col: 11 }; // right column, top-to-bottom
+export function groupTileIds(board, group) {
+  return board.filter((t) => t.type === TILE_TYPES.PROPERTY && t.group === group).map((t) => t.id);
+}
+
+export function ownedTileIds(playerId, properties) {
+  return Object.entries(properties)
+    .filter(([, p]) => p.ownerId === playerId)
+    .map(([tileId]) => Number(tileId));
+}
+
+export function mortgageValue(tile) {
+  return Math.floor((tile?.price || 0) / 2);
+}
+
+export function unmortgageCost(tile) {
+  return Math.ceil(((tile?.price || 0) / 2) * 1.1);
+}
+
+// Cash-out worth of a single asset: a mortgaged deed is only worth its
+// redemption value, and houses sell back at half price. Used by the
+// trade screen's value summary and by net worth.
+export function assetValue(tile, propState) {
+  if (!tile) return 0;
+  const base = propState?.mortgaged ? mortgageValue(tile) : tile.price || 0;
+  const houses = (propState?.houses || 0) * Math.floor((tile.houseCost || 0) / 2);
+  return base + houses;
+}
+
+export function netWorth(player, board, properties) {
+  return ownedTileIds(player.id, properties)
+    .reduce((sum, tileId) => sum + assetValue(board[tileId], properties[tileId]), player.money);
+}
+
+// Rent the owner would currently charge, mirroring the server's
+// _computeRent for the cases that can be shown statically. Utilities
+// depend on a live dice roll, so they report null here and the UI shows
+// their multiplier instead.
+export function currentRent(tile, propState, board, properties) {
+  if (!tile || !propState?.ownerId) return null;
+  if (tile.type === TILE_TYPES.PROPERTY) {
+    const ids = groupTileIds(board, tile.group);
+    const monopoly = ids.every((id) => properties[id]?.ownerId === propState.ownerId);
+    if (propState.houses === 0) return monopoly ? tile.rent[0] * 2 : tile.rent[0];
+    return tile.rent[propState.houses];
+  }
+  if (tile.type === TILE_TYPES.RAILROAD) {
+    const owned = board.filter((t) => t.type === TILE_TYPES.RAILROAD && properties[t.id]?.ownerId === propState.ownerId).length;
+    const table = tile.rent || [];
+    if (table.length === 0) return null;
+    return table[Math.min(Math.max(owned - 1, 0), table.length - 1)];
+  }
+  return null;
+}
+
+export function railroadOwnedCount(ownerId, board, properties) {
+  return board.filter((t) => t.type === TILE_TYPES.RAILROAD && properties[t.id]?.ownerId === ownerId).length;
+}
+
+export function utilityMultiplier(ownerId, board, properties) {
+  if (!ownerId) return 4;
+  const owned = board.filter((t) => t.type === TILE_TYPES.UTILITY && properties[t.id]?.ownerId === ownerId).length;
+  return owned >= 2 ? 10 : 4;
+}
+
+export function formatMoney(amount) {
+  const n = Number(amount) || 0;
+  const sign = n < 0 ? '-' : '';
+  return `${sign}$${Math.abs(n).toLocaleString('en-US')}`;
 }

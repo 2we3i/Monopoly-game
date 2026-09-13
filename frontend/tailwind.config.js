@@ -4,120 +4,85 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Deep felt-green table the board sits on - a genuine dark-to-light
-        // range so a radial "spotlight" behind the board is possible, not
-        // just a flat color with a barely-visible vignette.
-        table: {
-          deep: '#0a2419',
-          DEFAULT: '#0f3626',
-          light: '#1c5a40',
-          glow: '#237250',
+        table: { DEFAULT: '#0f3d2e', dark: '#0a2b20', light: '#155040' },
+        board: { DEFAULT: '#f2e8d5', tile: '#faf4e6', line: '#d9c9a3' },
+        ink: { DEFAULT: '#1f2417', soft: '#4a4f3d', faint: '#8a8b76' },
+        brass: { DEFAULT: '#c9982f', deep: '#96701c', light: '#e3bb5c', soft: '#f0d79a' },
+        rent: { DEFAULT: '#a8342a', deep: '#7c2019', light: '#e0695c' },
+        go: { DEFAULT: '#1f7a5c', deep: '#155a43', light: '#4fc39a' },
+        // Dark UI chrome that frames the parchment board.
+        felt: {
+          900: '#061109', 800: '#0a1b13', 700: '#0e2419',
+          600: '#123021', 500: '#173c2a', 400: '#1e4c36',
         },
-        // Parchment board surface - warmer and more saturated than a
-        // generic cream, so it reads as aged paper/card stock, not a UI card.
-        board: {
-          DEFAULT: '#ecdfbd',
-          tile: '#f8f0da',
-          line: '#c7b184',
-          shadow: '#3d2f16',
-        },
-        ink: {
-          DEFAULT: '#211a0f',
-          soft: '#4a3f2a',
-          faint: '#8c7f60',
-        },
-        brass: {
-          DEFAULT: '#c6952f',
-          bright: '#f0c563',
-          deep: '#8a621a',
-          ink: '#3d2c0c',
-        },
-        rent: {
-          DEFAULT: '#b23b2e',
-          deep: '#7c2019',
-        },
-        go: {
-          DEFAULT: '#1f7a52',
-          deep: '#155a3d',
-        },
-        // Property group colors - original palette, not Hasbro's exact hues
+        parch: { DEFAULT: '#f4ecdc', soft: '#cfc4ae', dim: '#94917f' },
         grp: {
-          brown: '#7a5230',
-          lightblue: '#a3d0e8',
-          pink: '#d888b0',
-          orange: '#e08a3c',
-          red: '#c4453a',
-          yellow: '#e8cf4a',
-          green: '#3f9463',
-          blue: '#3a6ea8',
+          copper: '#7a5230', brown: '#7a5230', lightblue: '#a3d0e8', teal: '#3fa9a6',
+          pink: '#d888b0', magenta: '#c14e9a', orange: '#e08a3c', amber: '#e0a83c',
+          red: '#c4453a', crimson: '#a32d3f', yellow: '#e8cf4a', gold: '#d4af37',
+          green: '#3f9463', emerald: '#2e8b57', blue: '#3a6ea8', indigo: '#4b5fa8',
+          violet: '#7a5fb8', rose: '#c1567c', slate: '#5a6b7a', obsidian: '#3a3f47',
         },
       },
       fontFamily: {
         display: ['"Fraunces"', 'Georgia', 'serif'],
         sans: ['"Inter"', 'system-ui', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       boxShadow: {
-        tile: '0 1px 2px rgba(33,26,15,0.18)',
-        panel: '0 20px 60px -10px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.25)',
-        board: '0 30px 80px -15px rgba(0,0,0,0.65), 0 0 0 1px rgba(198,149,47,0.15)',
-        token: '0 2px 5px rgba(0,0,0,0.45), 0 0 0 1px rgba(0,0,0,0.1)',
-        brass: '0 0 0 3px rgba(198,149,47,0.35)',
-        'brass-glow': '0 0 30px rgba(240,197,99,0.35), 0 0 0 1px rgba(240,197,99,0.4)',
-        inset: 'inset 0 2px 4px rgba(33,26,15,0.25)',
-      },
-      backgroundImage: {
-        felt: 'radial-gradient(circle at 50% 40%, rgba(35,114,80,0.55) 0%, rgba(15,54,38,0.2) 45%, transparent 70%)',
+        tile: '0 1px 2px rgba(31,36,23,0.15)',
+        panel: '0 8px 30px rgba(0,0,0,0.35)',
+        token: '0 2px 4px rgba(0,0,0,0.4)',
+        brass: '0 0 0 3px rgba(201,152,47,0.35)',
+        // New, for the dark chrome.
+        glass: '0 1px 0 0 rgba(255,255,255,0.05) inset, 0 10px 30px -12px rgba(0,0,0,0.7)',
+        lift: '0 2px 6px -1px rgba(0,0,0,0.45), 0 12px 28px -10px rgba(0,0,0,0.6)',
+        deep: '0 24px 60px -20px rgba(0,0,0,0.85)',
+        deed: '0 1px 1px rgba(31,36,23,0.10), 0 4px 10px -6px rgba(31,36,23,0.35)',
+        'deed-hover': '0 2px 4px rgba(31,36,23,0.14), 0 14px 26px -12px rgba(31,36,23,0.55)',
       },
       keyframes: {
-        'dice-tumble': {
-          '0%': { transform: 'rotate(0deg) scale(1)' },
-          '20%': { transform: 'rotate(150deg) scale(1.15)' },
-          '45%': { transform: 'rotate(280deg) scale(0.92)' },
-          '70%': { transform: 'rotate(390deg) scale(1.08)' },
-          '100%': { transform: 'rotate(360deg) scale(1)' },
-        },
-        'token-hop': {
-          '0%, 100%': { transform: 'translateY(0) scale(1)' },
-          '50%': { transform: 'translateY(-8px) scale(1.05)' },
-        },
         'pop-in': {
           '0%': { transform: 'scale(0.85)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' },
         },
-        'coin-fall': {
-          '0%': { transform: 'translateY(-12px)', opacity: '0' },
-          '30%': { opacity: '1' },
-          '100%': { transform: 'translateY(0)', opacity: '0' },
+        'fade-in': {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
         },
-        'rise-in': {
-          '0%': { transform: 'translateY(14px)', opacity: '0' },
+        'slide-up': {
+          '0%': { transform: 'translateY(12px)', opacity: '0' },
           '100%': { transform: 'translateY(0)', opacity: '1' },
         },
-        'board-drift': {
-          '0%, 100%': { transform: 'perspective(1400px) rotateX(38deg) rotateZ(-2deg) translateY(0)' },
-          '50%': { transform: 'perspective(1400px) rotateX(38deg) rotateZ(-2deg) translateY(-10px)' },
+        'scale-in': {
+          '0%': { transform: 'scale(0.96) translateY(8px)', opacity: '0' },
+          '100%': { transform: 'scale(1) translateY(0)', opacity: '1' },
         },
-        shimmer: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
+        'turn-ring': {
+          '0%,100%': { boxShadow: '0 0 0 0 rgba(227,187,92,0.45)' },
+          '50%': { boxShadow: '0 0 0 6px rgba(227,187,92,0)' },
         },
-        'pulse-ring': {
-          '0%': { boxShadow: '0 0 0 0 rgba(240,197,99,0.55)' },
-          '100%': { boxShadow: '0 0 0 12px rgba(240,197,99,0)' },
+        tumble: {
+          '0%': { transform: 'rotate(0deg) scale(1)' },
+          '35%': { transform: 'rotate(-140deg) scale(1.12)' },
+          '70%': { transform: 'rotate(160deg) scale(0.94)' },
+          '100%': { transform: 'rotate(360deg) scale(1)' },
+        },
+        sheen: {
+          '0%': { transform: 'translateX(-120%)' },
+          '100%': { transform: 'translateX(220%)' },
         },
       },
       animation: {
-        'dice-tumble': 'dice-tumble 0.6s cubic-bezier(0.34,1.56,0.64,1)',
-        'token-hop': 'token-hop 0.4s ease-in-out',
-        'pop-in': 'pop-in 0.25s cubic-bezier(0.34,1.56,0.64,1)',
-        'coin-fall': 'coin-fall 0.9s ease-out forwards',
-        'rise-in': 'rise-in 0.5s cubic-bezier(0.16,1,0.3,1)',
-        'board-drift': 'board-drift 8s ease-in-out infinite',
-        shimmer: 'shimmer 2.5s linear infinite',
-        'pulse-ring': 'pulse-ring 1.8s cubic-bezier(0.4,0,0.6,1) infinite',
+        'pop-in': 'pop-in 0.2s ease-out',
+        'fade-in': 'fade-in 0.18s ease-out',
+        'slide-up': 'slide-up 0.24s cubic-bezier(0.22,1,0.36,1)',
+        'scale-in': 'scale-in 0.22s cubic-bezier(0.22,1,0.36,1)',
+        'turn-ring': 'turn-ring 2.4s ease-out infinite',
+        tumble: 'tumble 0.55s cubic-bezier(0.3,0.8,0.3,1)',
+        sheen: 'sheen 1.6s ease-in-out infinite',
       },
     },
   },
   plugins: [],
 };
-

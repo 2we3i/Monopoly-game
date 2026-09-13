@@ -1,17 +1,8 @@
 // logFormatter.js
-// Turns a structured log entry (as produced by the backend's addLog calls
-// - see GameManager.js) into a localized display sentence. The backend
-// never formats English prose itself for anything beyond a debug
-// fallback; all real rendering happens here, per-viewer, in whichever
-// language that browser has selected.
+// Turns a structured log entry into a localized display sentence.
 
-import { BOARD, getTileName } from '../boardData';
+import { getTileName } from '../boardData';
 
-// Keys mirror the `type` strings the backend attaches to each log entry.
-// Each entry here is itself a {en, ru} pair so this file is self-contained
-// and doesn't need to round-trip through the main translations.js
-// dictionary (log lines have a different shape - they interpolate names/
-// amounts/tile references rather than being static UI labels).
 const LOG_TEMPLATES = {
   PLAYER_JOINED: { en: '{name} joined the room.', ru: '{name} присоединился к комнате.' },
   PLAYER_LEFT: { en: '{name} left the room.', ru: '{name} покинул комнату.' },
@@ -42,21 +33,20 @@ const LOG_TEMPLATES = {
   BANKRUPTCY: { en: '{name} declared bankruptcy and is out of the game.', ru: '{name} объявил банкротство и выбывает из игры.' },
   AUTO_SKIPPED: { en: '{name} was auto-skipped after a long disconnect.', ru: '{name} был автоматически пропущен из-за долгого отключения.' },
   PLAYER_JOINED_CHAT: { en: '{name} joined.', ru: '{name} присоединился.' },
+  TRADE_PROPOSED: { en: '{name} proposed a trade to {otherName}.', ru: '{name} предложил сделку игроку {otherName}.' },
+  TRADE_ACCEPTED: { en: '{name} and {otherName} completed a trade.', ru: '{name} и {otherName} завершили сделку.' },
+  TRADE_DECLINED: { en: '{name} declined a trade from {otherName}.', ru: '{name} отклонил сделку от {otherName}.' },
+  TRADE_CANCELLED: { en: '{name} cancelled a trade offer.', ru: '{name} отменил предложение сделки.' },
+  CUSTOM_PRICE_SET: { en: '{name} set a special rent of ${amount} for {targetName} on {tileName}.', ru: '{name} установил особую аренду ${amount} для {targetName} на {tileName}.' },
+  CUSTOM_PRICE_CLEARED: { en: '{name} removed the special rent for {targetName} on {tileName}.', ru: '{name} убрал особую аренду для {targetName} на {tileName}.' },
 };
 
 function interpolate(template, vars) {
   return template.replace(/\{(\w+)\}/g, (match, key) => (key in vars ? String(vars[key]) : match));
 }
 
-// `t` is the app's useTranslation().t function, passed in so this stays a
-// plain (non-hook) utility callable from anywhere, including inside a
-// .map() where calling a hook directly isn't allowed. `language` selects
-// which half of each {en, ru} template/tile-name/card-text pair to use.
-export function formatLogEntry(entry, t, language) {
+export function formatLogEntry(entry, t, language, board) {
   if (!entry.type) {
-    // Older persisted entries (or anything that somehow skipped
-    // structuring) fall back to the raw English message rather than
-    // rendering nothing.
     return entry.message;
   }
   const template = LOG_TEMPLATES[entry.type];
@@ -65,8 +55,8 @@ export function formatLogEntry(entry, t, language) {
   const localized = template[language] || template.en;
   const params = { ...(entry.params || {}) };
 
-  if ('tileId' in params) {
-    const tile = BOARD[params.tileId];
+  if ('tileId' in params && board) {
+    const tile = board[params.tileId];
     params.tileName = getTileName(tile, language);
   }
   if (params.cardText && typeof params.cardText === 'object') {
