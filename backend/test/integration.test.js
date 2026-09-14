@@ -1,5 +1,7 @@
 // Starts the actual server in-process, then drives it with socket.io-client.
 
+const { registerAccount } = require('./helpers/testEnv');
+
 process.env.PORT = '4001';
 process.env.NODE_ENV = 'test';
 
@@ -75,10 +77,12 @@ async function main() {
   await Promise.all([onceEvent(s1, 'connect'), onceEvent(s2, 'connect')]);
   console.log('✓ both sockets connected');
 
-  const p1Id = 'player-alice-001';
+  // Only a registered player may create a room; Bob joins as a guest.
+  const alice = registerAccount('Alice');
+  const p1Id = alice.id;
   const p2Id = 'player-bob-002';
 
-  const createRes = await emitAck(s1, 'room:create', { nickname: 'Alice', playerId: p1Id });
+  const createRes = await emitAck(s1, 'room:create', { token: alice.token });
   const roomCode = createRes.roomCode;
   console.log('✓ room created:', roomCode);
   if (!/^[A-Z2-9]{5}$/.test(roomCode)) throw new Error('room code format unexpected: ' + roomCode);

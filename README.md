@@ -1,6 +1,22 @@
 # Landmark
 
-A real-time, browser-based property-trading board game for up to 10 players — a Monopoly-style game with a couple of twists: a choice of board sizes, per-player trading with server-enforced anti-fraud checks, and "For the Family" custom rent pricing between specific players.
+A real-time, browser-based board game platform: **Monopoly** (up to 10 players, two board sizes, trading and "For the Family" pricing), **Mafia** (4–15 players, secret roles, night and day) and **Citadels** (2–7 players, secret role draft and city building). Registered players host games; guests join by code or invite link; one administrator account runs the platform from an admin panel.
+
+## Accounts, permissions and the admin panel
+
+- **Registered players** create rooms in every game, invite others (room code or `/?room=CODE` link), start games, and get a profile page (`/profile`) with games played, wins, losses, win rate, time played, per-game and Citadels statistics, recent games and achievements — all computed from the server's match history.
+- **Guests** can only join an existing room by code or link. Creating or starting a room is refused by the server (`GUEST_CANNOT_CREATE` / `GUEST_CANNOT_START`), not just hidden in the UI. A guest's seat is protected by a secret key kept in their browser, so knowing a guest's player id is not enough to take their seat, and a guest can never use a registered account's id.
+- **The administrator** is exactly one account. Either set `ADMIN_ACCOUNT_ID` to that account's id (shown on its profile page) — then it is the only admin regardless of the database — or run `npm run make-admin -- <nickname>` in `backend/` on the server. Every `/api/admin/*` request re-checks the account, so a normal user opening `/admin` gets "access denied" from the server.
+- **Admin panel** (`/admin`): platform statistics (users, active/blocked users, guests, players online, games and lobbies — total/active/finished, games per day/week/month, mode popularity, average players and duration, Citadels statistics, recent games, audit trail); every live lobby with its players, invite link, stage and age, with "remove player" and "close lobby"; every user with search, status/activity filters and full statistics, with **block** (reason required, explicit confirmation, optionally removing them from their rooms — who blocked and when is stored) and **unblock**; and game modes, each of which can be enabled, disabled or paused for a set time. Disabling a mode refuses new games only — games already running are never interrupted.
+- A blocked account cannot log in, cannot use an old token, cannot create or join rooms, and its open connections are closed immediately.
+
+Platform history lives in `backend/data/platform.db` (`rooms_log`, `matches`, `match_players`, `game_modes`, `admin_actions`); accounts in `accounts.db` (migrated in place — existing accounts keep working); live rooms in `monopoly.db` as before.
+
+## Citadels
+
+Each round players pick a role in secret, starting with the crown holder — only the current picker sees the pool, and a role stays hidden until the engine calls it. Roles are then called in order (Assassin, Thief, Magician, King, Bishop, Merchant, Architect, Warlord); each holder takes 2 gold or draws a district card, uses their power, collects income from districts of their type and builds. The Assassin's and Thief's targets are secret until the victim's role is called; the Thief takes the gold before the victim can act; the King takes the crown and picks first next round. Districts are residential, religious, trade, military or special (Dragon Gate, University, Library, Observatory, Smithy, Laboratory, School of Magic, Keep, Great Wall, Haunted Quarter). The game ends after the round in which someone completes a city; the score is district costs, +3 for all five types, +4 for finishing first (+2 for finishing later).
+
+Roles are data in `backend/src/citadels/roles.js` (rank, income type, crown, build limit, …) with active powers in `abilities.js`; districts are data in `districts.js`. The engine (`CitadelsGame.js`) validates every action against server state and builds a separate payload per player, so hands, the draft pool, unrevealed roles and secret targets never reach anyone else's browser.
 
 ## Features
 
@@ -90,6 +106,9 @@ This repo is not yet a git repository — initialize one and push it to GitHub f
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
 | `SESSION_SECRET` | Yes, in Docker Compose | none | Signs login session tokens. Set this explicitly for any deployment that should survive a restart without logging everyone out — left unset, the server generates a random secret on every startup. |
+| `ADMIN_ACCOUNT_ID` | Recommended | none | The id of the one account allowed into the admin panel. When set it overrides the database; without it, use `npm run make-admin -- <nickname>`. |
+| `DATA_DIR` | No | `backend/data` | Where the SQLite databases and avatars are stored. |
+| `FRONTEND_DIST` | No | `backend/public` | Directory of the built frontend the server serves. |
 | `PORT` | No | `4000` | Port the server listens on. |
 | `CLIENT_ORIGIN` | No | `*` | Restricts CORS and Socket.io to a specific origin. Set this to your real domain for a public deployment. |
 | `NODE_ENV` | No | `development` | Standard Node environment flag. |
@@ -99,7 +118,10 @@ Running the backend directly with `node src/index.js` (outside Docker Compose) d
 
 ## Testing
 
-The backend test suite (`cd backend && npm test`) runs 9 files covering:
+The backend test suite (`cd backend && npm test`) runs 15 files, each against its own throwaway data directory (see `test/helpers/testEnv.js`), covering:
+- Citadels engine: draft secrecy, the Assassin and Thief (secret targets, gold taken before the victim acts), King and crown order, income, building rules, Warlord vs Bishop/Keep, Magician, scoring, persistence, and 25 random 2–7 player games to the end
+- Platform end-to-end over HTTP and Socket.io: guests cannot create or start games in any mode, seat and identity spoofing is refused, the admin API rejects anonymous and normal users, disabled/paused modes refuse new games without breaking running ones, finished games land in both players' statistics, admin kick/close, and blocking (login, old tokens, create, join) and unblocking
+- Mafia engine and Mafia over Socket.io
 - Board layout structural validation (every registered game mode)
 - Full simulated games on both Classic and Metropolis boards (hundreds of turns)
 - Bankruptcy, mortgage, and win-condition logic

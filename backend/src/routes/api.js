@@ -7,6 +7,11 @@ const roomManager = require('../game/RoomManager');
 const { LAYOUT_OPTIONS } = require('../game/boardLayouts');
 const mafiaSettings = require('../mafia/settings');
 const { CONFIGURABLE_ROLES, ROLES } = require('../mafia/roles');
+const citadels = require('../citadels/CitadelsGame');
+const { ROLES: CITADELS_ROLES, ROLE_ORDER } = require('../citadels/roles');
+const { DISTRICTS, TYPE_LIST } = require('../citadels/districts');
+const modes = require('../platform/modes');
+const registry = require('../platform/registry');
 
 const router = express.Router();
 
@@ -14,12 +19,17 @@ router.get('/health', (req, res) => {
   res.json({
     ok: true,
     uptime: process.uptime(),
-    rooms: roomManager.rooms.size + roomManager.mafiaRooms.size,
+    rooms: roomManager.rooms.size + roomManager.mafiaRooms.size + roomManager.citadelsRooms.size,
   });
 });
 
+function monopolyModes() {
+  return LAYOUT_OPTIONS.map((opt) => ({ ...opt, available: modes.isAvailable(modes.monopolyModeId(opt.id)) }));
+}
+
 // The catalogue the main menu renders. Games are described by the server
-// so a new mode becomes selectable without shipping a new client.
+// so a new mode becomes selectable without shipping a new client, and a
+// mode the admin switched off is marked unavailable for new games.
 router.get('/games', (req, res) => {
   res.json({
     games: [
@@ -27,13 +37,21 @@ router.get('/games', (req, res) => {
         id: 'monopoly',
         minPlayers: 2,
         maxPlayers: 10,
-        modes: LAYOUT_OPTIONS,
+        modes: monopolyModes(),
+        available: modes.gameAvailable('monopoly'),
       },
       {
         id: 'mafia',
         minPlayers: mafiaSettings.MIN_PLAYERS,
         maxPlayers: mafiaSettings.MAX_PLAYERS,
         presets: Object.keys(mafiaSettings.PRESETS),
+        available: modes.gameAvailable('mafia'),
+      },
+      {
+        id: 'citadels',
+        minPlayers: citadels.MIN_PLAYERS,
+        maxPlayers: citadels.MAX_PLAYERS,
+        available: modes.gameAvailable('citadels'),
       },
     ],
   });
@@ -57,30 +75,42 @@ router.get('/mafia/config', (req, res) => {
   });
 });
 
+// Static Citadels reference data: role and district cards. The rules that
+// use them live only on the server.
+router.get('/citadels/config', (req, res) => {
+  res.json({
+    minPlayers: citadels.MIN_PLAYERS,
+    maxPlayers: citadels.MAX_PLAYERS,
+    defaults: citadels.DEFAULT_SETTINGS,
+    roleOrder: ROLE_ORDER,
+    roles: ROLE_ORDER.map((id) => {
+      const r = CITADELS_ROLES[id];
+      return {
+        id: r.id, rank: r.rank, name: r.name, text: r.text, incomeType: r.incomeType || null, ability: r.ability || null,
+      };
+    }),
+    types: TYPE_LIST,
+    districts: DISTRICTS.map((d) => ({
+      id: d.id, type: d.type, cost: d.cost, count: d.count, name: d.name, text: d.text || null, special: d.special || null,
+    })),
+  });
+});
+
 router.get('/game-modes', (req, res) => {
-  res.json({ modes: LAYOUT_OPTIONS });
+  res.json({ modes: monopolyModes() });
 });
 
 router.get('/rooms/:code/exists', (req, res) => {
-  const mafia = roomManager.getMafiaRoom(req.params.code);
-  if (mafia) {
-    return res.json({
-      exists: true,
-      gameType: 'mafia',
-      phase: mafia.phase,
-      playerCount: mafia.players.length,
-      full: mafia.players.length >= mafiaSettings.MAX_PLAYERS,
-    });
-  }
-  const mgr = roomManager.getRoom(req.params.code);
-  if (!mgr) return res.json({ exists: false });
+  const found = registry.find(req.params.code);
+  if (!found) return res.json({ exists: false });
+  const summary = found.adapter.summary(found.room);
   res.json({
     exists: true,
-    gameType: 'monopoly',
-    phase: mgr.state.phase,
-    modeId: mgr.state.modeId,
-    playerCount: mgr.state.players.length,
-    full: mgr.state.players.length >= 10,
+    gameType: summary.gameType,
+    phase: summary.phase,
+    modeId: summary.modeId,
+    playerCount: summary.players.length,
+    full: summary.players.length >= summary.maxPlayers,
   });
 });
 

@@ -1,30 +1,12 @@
 // useSocket.js
-// Central hook for all real-time communication with the game server.
+// Central hook for all real-time communication with the Monopoly server.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
+import { announce, getGuestKey, getPlayerId } from '../lib/identity';
 
-const PLAYER_ID_KEY = 'landmark_player_id';
 const ROOM_CODE_KEY = 'landmark_room_code';
 const NICKNAME_KEY = 'landmark_nickname';
-
-function uuid() {
-  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
-
-function getOrCreatePlayerId() {
-  let id = localStorage.getItem(PLAYER_ID_KEY);
-  if (!id) {
-    id = uuid();
-    localStorage.setItem(PLAYER_ID_KEY, id);
-  }
-  return id;
-}
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || undefined;
 
@@ -35,12 +17,19 @@ export function useSocket(authToken) {
   const [gameState, setGameState] = useState(null);
   const [gameError, setGameError] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
-  const [playerId, setPlayerId] = useState(getOrCreatePlayerId);
+  const [playerId, setPlayerId] = useState(getPlayerId);
   const [roomCode, setRoomCode] = useState(() => localStorage.getItem(ROOM_CODE_KEY) || null);
   const [joining, setJoining] = useState(false);
   const [rehydrating, setRehydrating] = useState(() => !!localStorage.getItem(ROOM_CODE_KEY));
   const authTokenRef = useRef(authToken);
   authTokenRef.current = authToken;
+
+  const clearRoom = useCallback(() => {
+    localStorage.removeItem(ROOM_CODE_KEY);
+    setRoomCode(null);
+    setGameState(null);
+    setChatMessages([]);
+  }, []);
 
   useEffect(() => {
     const socket = io(SERVER_URL, {
@@ -48,6 +37,8 @@ export function useSocket(authToken) {
       reconnectionAttempts: Infinity,
       reconnectionDelay: 800,
       reconnectionDelayMax: 4000,
+      // Read on every (re)connect, so presence always sees the current session.
+      auth: (cb) => cb({ token: authTokenRef.current }),
     });
     socketRef.current = socket;
 
@@ -67,11 +58,23 @@ export function useSocket(authToken) {
     socket.on('chat:system', (msg) => {
       setChatMessages((prev) => [...prev.slice(-199), { system: true, text: msg.message, type: msg.type, params: msg.params, ts: Date.now() }]);
     });
+    socket.on('room:removed', (payload) => {
+      if (payload?.gameType !== 'monopoly') return;
+      clearRoom();
+      announce('notice', { kind: 'roomRemoved', reason: payload.reason });
+    });
+    socket.on('account:blocked', (payload) => announce('blocked', payload));
 
     const savedRoom = localStorage.getItem(ROOM_CODE_KEY);
     if (savedRoom) {
       const attemptRejoin = () => {
-        socket.emit('room:join', { roomCode: savedRoom, playerId, nickname: localStorage.getItem(NICKNAME_KEY), token: authTokenRef.current }, (res) => {
+        socket.emit('room:join', {
+          roomCode: savedRoom,
+          playerId,
+          nickname: localStorage.getItem(NICKNAME_KEY),
+          token: authTokenRef.current,
+          guestKey: getGuestKey(),
+        }, (res) => {
           if (res?.ok) {
             setRoomCode(res.roomCode);
             setGameState(res.state);
@@ -92,12 +95,20 @@ export function useSocket(authToken) {
     return () => {
       socket.disconnect();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Logging in or out on an open connection re-announces who this is.
+  useEffect(() => {
+    socketRef.current?.emit('presence:identify', { token: authToken });
+  }, [authToken]);
 
   const createRoom = useCallback((nickname, modeId) => new Promise((resolve, reject) => {
     setJoining(true);
-    localStorage.setItem(NICKNAME_KEY, nickname);
-    socketRef.current.emit('room:create', { nickname, playerId, modeId, token: authTokenRef.current }, (res) => {
+    if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
+    socketRef.current.emit('room:create', {
+      nickname, playerId, modeId, token: authTokenRef.current, guestKey: getGuestKey(),
+    }, (res) => {
       setJoining(false);
       if (res?.ok) {
         localStorage.setItem(ROOM_CODE_KEY, res.roomCode);
@@ -106,7 +117,9 @@ export function useSocket(authToken) {
         setPlayerId(res.playerId);
         resolve(res);
       } else {
-        reject(new Error(res?.error || 'Failed to create room.'));
+        const err = new Error(res?.error || 'Failed to create room.');
+        err.code = res?.code || null;
+        reject(err);
       }
     });
   }), [playerId]);
@@ -114,7 +127,9 @@ export function useSocket(authToken) {
   const joinRoom = useCallback((code, nickname) => new Promise((resolve, reject) => {
     setJoining(true);
     if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
-    socketRef.current.emit('room:join', { roomCode: code, nickname, playerId, token: authTokenRef.current }, (res) => {
+    socketRef.current.emit('room:join', {
+      roomCode: code, nickname, playerId, token: authTokenRef.current, guestKey: getGuestKey(),
+    }, (res) => {
       setJoining(false);
       if (res?.ok) {
         localStorage.setItem(ROOM_CODE_KEY, res.roomCode);
@@ -123,20 +138,19 @@ export function useSocket(authToken) {
         setPlayerId(res.playerId);
         resolve(res);
       } else {
-        reject(new Error(res?.error || 'Failed to join room.'));
+        const err = new Error(res?.error || 'Failed to join room.');
+        err.code = res?.code || null;
+        reject(err);
       }
     });
   }), [playerId]);
 
   const leaveRoom = useCallback(() => {
     socketRef.current?.emit('room:leave');
-    localStorage.removeItem(ROOM_CODE_KEY);
-    setRoomCode(null);
-    setGameState(null);
-    setChatMessages([]);
+    clearRoom();
     socketRef.current.disconnect();
     socketRef.current.connect();
-  }, []);
+  }, [clearRoom]);
 
   const send = useCallback((event, payload) => {
     socketRef.current?.emit(event, payload);

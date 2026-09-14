@@ -49,20 +49,24 @@ function ModePicker({ modes, selectedId, onSelect, language, t }) {
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {modes.map((mode) => {
         const isSelected = mode.id === selectedId;
+        const unavailable = mode.available === false;
         const label = mode.label[language] || mode.label.en;
         const description = mode.description[language] || mode.description.en;
         return (
           <button
             key={mode.id}
             type="button"
+            disabled={unavailable}
             onClick={() => onSelect(mode.id)}
-            className={`rounded-xl border-2 p-3 text-left transition-colors ${
+            className={`rounded-xl border-2 p-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
               isSelected ? 'border-brass bg-brass/10' : 'border-ink/10 hover:border-brass/40'
             }`}
           >
             <p className="text-sm font-semibold text-ink">{label}</p>
             <p className="mt-0.5 text-xs leading-snug text-ink-faint">{description}</p>
-            <p className="mt-1.5 text-[11px] font-medium text-brass-deep">{t('landing.tiles', { count: mode.tileCount })}</p>
+            <p className="mt-1.5 text-[11px] font-medium text-brass-deep">
+              {unavailable ? t('menu.unavailable') : t('landing.tiles', { count: mode.tileCount })}
+            </p>
           </button>
         );
       })}
@@ -93,6 +97,7 @@ function PlayerSlot({ player, isMe }) {
         </p>
         <p className="text-xs text-ink-faint">
           {player.isHost ? t('waiting.host') : t('waiting.ready')}
+          {player.isGuest && ` · ${t('common.guest')}`}
           {!player.connected && ` · ${t('waiting.offline')}`}
         </p>
       </div>
@@ -100,18 +105,21 @@ function PlayerSlot({ player, isMe }) {
   );
 }
 
-function LandingScreen({ onCreate, onJoin, joining, savedNickname, auth, onSwitchIdentity, onBackToMenu }) {
+function LandingScreen({
+  onCreate, onJoin, joining, savedNickname, auth, onSwitchIdentity, onBackToMenu, onRequireAccount,
+}) {
   const { t, language } = useTranslation();
-  const urlRoomCode = new URLSearchParams(window.location.search).get('room');
-  const [mode, setMode] = useState(urlRoomCode ? 'join' : null);
-  const [roomCode, setRoomCode] = useState(urlRoomCode ? urlRoomCode.toUpperCase() : '');
+  const [mode, setMode] = useState(null);
+  const [roomCode, setRoomCode] = useState('');
   const [error, setError] = useState('');
   const { modes } = useGameModes();
   const [selectedModeId, setSelectedModeId] = useState(null);
+  const isGuest = !auth?.isLoggedIn;
 
   useEffect(() => {
     if (modes && modes.length > 0 && !selectedModeId) {
-      setSelectedModeId(modes[0].id);
+      const firstAvailable = modes.find((m) => m.available !== false);
+      if (firstAvailable) setSelectedModeId(firstAvailable.id);
     }
   }, [modes, selectedModeId]);
 
@@ -121,6 +129,7 @@ function LandingScreen({ onCreate, onJoin, joining, savedNickname, auth, onSwitc
     try {
       await onCreate(savedNickname, selectedModeId);
     } catch (err) {
+      if (err.code === 'GUEST_CANNOT_CREATE') onRequireAccount?.();
       setError(err.message);
     }
   };
@@ -170,11 +179,11 @@ function LandingScreen({ onCreate, onJoin, joining, savedNickname, auth, onSwitc
             <div className="flex flex-col gap-3">
               <button
                 type="button"
-                onClick={() => setMode('create')}
+                onClick={() => (isGuest ? onRequireAccount?.() : setMode('create'))}
                 className="rounded-xl bg-gradient-to-b from-brass-light to-brass px-5 py-4 text-left font-semibold text-ink shadow-tile transition-transform active:scale-[0.98]"
               >
-                <span className="block text-base">{t('landing.hostGame')}</span>
-                <span className="block text-xs font-normal text-ink/70">{t('landing.hostGameSub')}</span>
+                <span className="block text-base">{isGuest ? `🔒 ${t('landing.hostGame')}` : t('landing.hostGame')}</span>
+                <span className="block text-xs font-normal text-ink/70">{isGuest ? t('gate.subtitle') : t('landing.hostGameSub')}</span>
               </button>
               <button
                 type="button"
@@ -370,9 +379,22 @@ function WaitingRoom({ gameState, playerId, onStart, onLeave, roomCode }) {
   );
 }
 
-export default function Lobby({ gameState, playerId, roomCode, onCreate, onJoin, onStart, onLeave, onBackToMenu, joining, savedNickname, auth, onSwitchIdentity }) {
+export default function Lobby({
+  gameState, playerId, roomCode, onCreate, onJoin, onStart, onLeave, onBackToMenu, joining, savedNickname, auth, onSwitchIdentity, onRequireAccount,
+}) {
   if (!gameState || !roomCode) {
-    return <LandingScreen onCreate={onCreate} onJoin={onJoin} joining={joining} savedNickname={savedNickname} auth={auth} onSwitchIdentity={onSwitchIdentity} onBackToMenu={onBackToMenu} />;
+    return (
+      <LandingScreen
+        onCreate={onCreate}
+        onJoin={onJoin}
+        joining={joining}
+        savedNickname={savedNickname}
+        auth={auth}
+        onSwitchIdentity={onSwitchIdentity}
+        onBackToMenu={onBackToMenu}
+        onRequireAccount={onRequireAccount}
+      />
+    );
   }
   return (
     <WaitingRoom

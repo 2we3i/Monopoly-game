@@ -8,11 +8,15 @@ const cors = require('cors');
 const { Server } = require('socket.io');
 
 const apiRoutes = require('./routes/api');
+const adminRoutes = require('./routes/admin');
 const { router: authRoutes, AVATAR_DIR } = require('./routes/authRoutes');
+const presence = require('./platform/presence');
 const { registerSocketHandlers } = require('./socket/socketHandler');
 const { registerMafiaHandlers } = require('./socket/mafiaHandler');
+const { registerCitadelsHandlers } = require('./socket/citadelsHandler');
 const db = require('./db/database');
 const accountsDb = require('./db/accounts');
+const platformDb = require('./db/platform');
 
 const PORT = process.env.PORT || 4000;
 const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || '*';
@@ -25,19 +29,30 @@ const io = new Server(server, {
   cors: { origin: CLIENT_ORIGIN, methods: ['GET', 'POST'] },
   pingInterval: 10000,
   pingTimeout: 15000,
+  maxHttpBufferSize: 64 * 1024,
 });
 
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  next();
+});
 app.use(cors({ origin: CLIENT_ORIGIN }));
-app.use(express.json());
-app.use('/api', apiRoutes);
+app.use(express.json({ limit: '100kb' }));
+app.use('/api/admin', adminRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api', apiRoutes);
 // Uploaded avatars served as static files under /avatars - the path
 // stored on an account is already the exact URL a client requests. This
 // route existing on the BACKEND is what the frontend dev-server proxy
 // and any production reverse proxy both need to forward /avatars to.
 app.use('/avatars', express.static(AVATAR_DIR));
 
-const FRONTEND_DIST = path.join(__dirname, '..', 'public');
+const FRONTEND_DIST = process.env.FRONTEND_DIST
+  ? path.resolve(process.env.FRONTEND_DIST)
+  : path.join(__dirname, '..', 'public');
 app.use(express.static(FRONTEND_DIST));
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/avatars')) return next();
@@ -46,29 +61,28 @@ app.get('*', (req, res, next) => {
   });
 });
 
+// Presence first, so a socket's account is known before any game event.
+presence.attach(io);
 registerSocketHandlers(io);
-// A second game on the same socket server: its events are namespaced
-// (mafia:*) so the two handlers never see each other's traffic.
+// The other games share the socket server: their events are namespaced
+// (mafia:*, citadels:*) so the handlers never see each other's traffic.
 registerMafiaHandlers(io);
+registerCitadelsHandlers(io);
 
 server.listen(PORT, '0.0.0.0', () => {
   // eslint-disable-next-line no-console
-  console.log(`Monopoly server listening on port ${PORT} [${NODE_ENV}]`);
+  console.log(`Landmark server listening on port ${PORT} [${NODE_ENV}]`);
   // eslint-disable-next-line no-console
   console.log(`Health check: http://localhost:${PORT}/api/health`);
 });
 
-process.on('SIGTERM', () => {
+function shutdown() {
   server.close(() => {
     db.close();
     accountsDb.close();
+    platformDb.close();
     process.exit(0);
   });
-});
-process.on('SIGINT', () => {
-  server.close(() => {
-    db.close();
-    accountsDb.close();
-    process.exit(0);
-  });
-});
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

@@ -56,6 +56,21 @@
       linear-gradient(180deg, #1a1520 0%, #0d0b12 100%);
   }
 
+  /* Citadels: warm lamplight over dark stone, with a violet dusk. */
+  .table-citadel {
+    background-color: #0c0a08;
+    background-image:
+      radial-gradient(ellipse 90% 60% at 50% -10%, rgba(201,152,47,0.16) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 60% at 12% 110%, rgba(120,70,160,0.16) 0%, transparent 60%),
+      linear-gradient(180deg, #16110c 0%, #0a0806 100%);
+  }
+
+  /* The admin panel and profile: plain graphite, no table texture. */
+  .dash-bg {
+    background-color: #0a0b0d;
+    background-image: radial-gradient(ellipse 80% 50% at 50% -20%, rgba(201,152,47,0.06) 0%, transparent 60%);
+  }
+
   /* Dark glass panel used for every chrome surface around the board. */
   .panel {
     @apply rounded-2xl border border-white/10 bg-felt-700/80 shadow-glass backdrop-blur-xl;

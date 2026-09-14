@@ -1,6 +1,8 @@
 // Verifies the trading system works through the actual socket.io wire
 // protocol, proving error surfacing and correct broadcast to both parties.
 
+const { registerAccount } = require('./helpers/testEnv');
+
 process.env.PORT = '4003';
 const http = require('http');
 const express = require('express');
@@ -67,7 +69,9 @@ async function main() {
 
   await Promise.all([onceEvent(sAlice, 'connect'), onceEvent(sBob, 'connect')]);
 
-  const createRes = await emitAck(sAlice, 'room:create', { nickname: 'Alice', playerId: 'p-alice' });
+  const alice = registerAccount('Alice');
+  const ALICE_ID = alice.id;
+  const createRes = await emitAck(sAlice, 'room:create', { token: alice.token });
   const roomCode = createRes.roomCode;
   await emitAck(sBob, 'room:join', { roomCode, nickname: 'Bob', playerId: 'p-bob' });
 
@@ -80,8 +84,8 @@ async function main() {
   let aliceOwnsTile = null;
   for (let turn = 0; turn < 80 && !aliceOwnsTile; turn++) {
     const actorId = state.players[state.currentPlayerIndex].id;
-    const actorSocket = actorId === 'p-alice' ? sAlice : sBob;
-    const actorTracker = actorId === 'p-alice' ? tAlice : tBob;
+    const actorSocket = actorId === ALICE_ID ? sAlice : sBob;
+    const actorTracker = actorId === ALICE_ID ? tAlice : tBob;
 
     v = actorTracker.version;
     actorSocket.emit('game:rollDice');
@@ -109,7 +113,7 @@ async function main() {
       state = await actorTracker.waitForUpdate(v);
     }
 
-    const owned = Object.entries(state.properties).find(([, p]) => p.ownerId === 'p-alice');
+    const owned = Object.entries(state.properties).find(([, p]) => p.ownerId === ALICE_ID);
     if (owned) aliceOwnsTile = Number(owned[0]);
   }
   assert(aliceOwnsTile != null, 'Alice should have bought at least one property within 80 turns');
@@ -119,7 +123,7 @@ async function main() {
   sAlice.emit('game:proposeTrade', { toPlayerId: 'p-bob', offerTileIds: [aliceOwnsTile], offerMoney: 0, requestMoney: 50 });
   state = await tBob.waitForUpdate(v);
   assert(state.trades.length === 1, 'trade should appear in broadcast state.trades');
-  assert(state.trades[0].fromPlayerId === 'p-alice' && state.trades[0].toPlayerId === 'p-bob', 'trade parties should be correct');
+  assert(state.trades[0].fromPlayerId === ALICE_ID && state.trades[0].toPlayerId === 'p-bob', 'trade parties should be correct');
   const tradeId = state.trades[0].id;
   console.log('[3] Trade proposed over the wire, visible to Bob via game:state broadcast');
 
@@ -131,7 +135,7 @@ async function main() {
   console.log('[4] CONFIRMED over the wire: proposer accepting their own trade correctly surfaces a game:error');
 
   const bobMoneyBefore = state.players.find((p) => p.id === 'p-bob').money;
-  const aliceMoneyBefore = state.players.find((p) => p.id === 'p-alice').money;
+  const aliceMoneyBefore = state.players.find((p) => p.id === ALICE_ID).money;
 
   v = tAlice.version;
   const vBob = tBob.version;
@@ -142,7 +146,7 @@ async function main() {
   assert(state.properties[aliceOwnsTile].ownerId === 'p-bob', 'property should now belong to Bob in the broadcast state');
   assert(state.trades.length === 0, 'resolved trade should be gone from broadcast state');
   const bobAfter = state.players.find((p) => p.id === 'p-bob').money;
-  const aliceAfter = state.players.find((p) => p.id === 'p-alice').money;
+  const aliceAfter = state.players.find((p) => p.id === ALICE_ID).money;
   assert(bobAfter === bobMoneyBefore - 50, `Bob should have paid $50, got money=${bobAfter} (was ${bobMoneyBefore})`);
   assert(aliceAfter === aliceMoneyBefore + 50, `Alice should have received $50, got money=${aliceAfter} (was ${aliceMoneyBefore})`);
   console.log('[5] Trade accepted over the wire: both clients received the updated state with correct property/money transfer');

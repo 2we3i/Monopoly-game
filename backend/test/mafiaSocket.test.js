@@ -3,6 +3,8 @@
 // player is sent a DIFFERENT payload, that the phase clock advances the
 // game on its own, and that a night and a vote resolve end to end.
 
+const { registerAccount } = require('./helpers/testEnv');
+
 process.env.PORT = '4005';
 const http = require('http');
 const express = require('express');
@@ -65,8 +67,10 @@ async function run() {
   await Promise.all(clients.map((c) => c.ready()));
 
   // --- create + join ---------------------------------------------------
+  // The host must be a registered player; everyone else joins as a guest.
+  const host = registerAccount(names[0]);
   const created = await emitAck(clients[0].socket, 'mafia:create', {
-    nickname: names[0], playerId: 'u0', presetId: 'CLASSIC',
+    token: host.token, presetId: 'CLASSIC',
   });
   const roomCode = created.roomCode;
   assert(roomCode, 'creating a room returns a code');
@@ -185,10 +189,29 @@ async function run() {
     console.log('✓ chat delivered (day channel)');
   }
 
+  // --- play again ---------------------------------------------------------
+  // Driving a full game to its end over the wire would take minutes, so
+  // the engine is told the game is decided; the restart itself is real.
+  // eslint-disable-next-line global-require
+  const roomManager = require('../src/game/RoomManager');
+  const liveGame = roomManager.getMafiaRoom(roomCode);
+  if (liveGame.phase !== 'GAME_OVER') liveGame.endGame('TOWN');
+  clients[1].lastError = null;
+  clients[1].socket.emit('mafia:restart', { startNow: false });
+  await new Promise((r) => setTimeout(r, 250));
+  assert(/host|over/i.test(clients[1].lastError || ''), 'a non-host cannot restart the game');
+
+  await emitAck(clients[0].socket, 'mafia:restart', { startNow: true });
+  await Promise.all(clients.map((c) => c.waitFor(
+    (s) => s.phase === 'ROLE_REVEAL' && s.you && s.you.role && !s.winner,
+    `${c.name} to be dealt into the new game`,
+  )));
+  assert(clients[0].state.roomCode === roomCode, 'the new game is in the same room');
+  console.log('✓ the host restarts a finished game in the same room over the wire');
+
   // The test persists a real room; take it out again so repeated runs do
   // not leave a trail of dead rooms in the database.
-  // eslint-disable-next-line global-require
-  require('../src/game/RoomManager').deleteMafiaRoom(roomCode);
+  roomManager.deleteMafiaRoom(roomCode);
 
   clients.forEach((c) => c.close());
   io.close();

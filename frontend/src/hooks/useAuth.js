@@ -1,6 +1,10 @@
 // useAuth.js
 // Manages the player's account session: register/login/logout, profile
-// updates, and persisting the session token across page reloads.
+// updates, persisting the session token across page reloads, and reacting
+// when the server says the account has been blocked.
+//
+// `isAdmin` only decides what the client SHOWS. Every admin request is
+// checked again on the server, so a tampered client gains nothing.
 
 import { useCallback, useEffect, useState } from 'react';
 
@@ -41,6 +45,8 @@ async function apiRequest(path, { method = 'GET', body, token, isFormData = fals
   if (!res.ok) {
     const err = new Error(data.error || `Request failed (${res.status})`);
     err.status = res.status;
+    err.code = data.code || null;
+    err.reason = data.reason || null;
     throw err;
   }
   return data;
@@ -49,6 +55,13 @@ async function apiRequest(path, { method = 'GET', body, token, isFormData = fals
 export function useAuth() {
   const [{ token, account }, setSession] = useState(loadStoredSession);
   const [checking, setChecking] = useState(!!loadStoredSession().token);
+  // { reason } once the server has told us this account is blocked.
+  const [blocked, setBlocked] = useState(null);
+
+  const endSession = useCallback(() => {
+    clearStoredSession();
+    setSession({ token: null, account: null });
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -60,32 +73,46 @@ export function useAuth() {
         setSession({ token, account: data.account });
         storeSession(token, data.account);
       })
-      .catch(() => {
-        clearStoredSession();
-        setSession({ token: null, account: null });
+      .catch((err) => {
+        if (err.code === 'BLOCKED') setBlocked({ reason: err.reason });
+        endSession();
       })
       .finally(() => setChecking(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A socket can learn about a block at any moment mid-session.
+  useEffect(() => {
+    const onBlocked = (e) => {
+      setBlocked({ reason: e.detail?.reason || null });
+      endSession();
+    };
+    window.addEventListener('landmark:blocked', onBlocked);
+    return () => window.removeEventListener('landmark:blocked', onBlocked);
+  }, [endSession]);
+
   const register = useCallback(async (nickname, password) => {
     const data = await apiRequest('/register', { method: 'POST', body: { nickname, password } });
+    setBlocked(null);
     setSession({ token: data.token, account: data.account });
     storeSession(data.token, data.account);
     return data.account;
   }, []);
 
   const login = useCallback(async (nickname, password) => {
-    const data = await apiRequest('/login', { method: 'POST', body: { nickname, password } });
-    setSession({ token: data.token, account: data.account });
-    storeSession(data.token, data.account);
-    return data.account;
+    try {
+      const data = await apiRequest('/login', { method: 'POST', body: { nickname, password } });
+      setBlocked(null);
+      setSession({ token: data.token, account: data.account });
+      storeSession(data.token, data.account);
+      return data.account;
+    } catch (err) {
+      if (err.code === 'BLOCKED') setBlocked({ reason: err.reason });
+      throw err;
+    }
   }, []);
 
-  const logout = useCallback(() => {
-    clearStoredSession();
-    setSession({ token: null, account: null });
-  }, []);
+  const logout = endSession;
 
   const updateNickname = useCallback(async (newNickname) => {
     const data = await apiRequest('/me/nickname', { method: 'PUT', body: { nickname: newNickname }, token });
@@ -111,7 +138,10 @@ export function useAuth() {
     account,
     token,
     isLoggedIn: !!account,
+    isAdmin: account?.role === 'admin',
     checking,
+    blocked,
+    clearBlocked: () => setBlocked(null),
     register,
     login,
     logout,

@@ -370,4 +370,155 @@ function forceRoles(game, mapping) {
   console.log(`✓ a full game plays through to a winner (${game.winner})`);
 }());
 
+// --- settings that must actually bite -----------------------------------
+
+(function showOwnResultOffSilencesActors() {
+  const game = gameWith(8, {
+    roles: { MAFIA: 1, DON: 1, SHERIFF: 1, DOCTOR: 1, MANIAC: 0 },
+    autoBalance: false,
+    night: { showOwnResult: false },
+  });
+  game.start('p1');
+  forceRoles(game, {
+    p1: 'MAFIA', p2: 'DON', p3: 'SHERIFF', p4: 'DOCTOR', p5: 'CIVILIAN', p6: 'CIVILIAN', p7: 'CIVILIAN', p8: 'CIVILIAN',
+  });
+  game.advance();
+  game.submitNightAction('p1', 'p5');
+  game.submitNightAction('p2', 'p5');
+  game.submitNightAction('p2', 'p3', { secondary: true });
+  game.submitNightAction('p3', 'p1');
+  game.submitNightAction('p4', 'p5');
+  game.advance();
+  assert(game.getPlayer('p5').alive, 'the save still happens with results hidden');
+  ['p2', 'p3', 'p4'].forEach((id) => {
+    assert(!(game.privateResults[id] || []).length, `${id} is told nothing when showOwnResult is off`);
+  });
+  console.log('✓ showOwnResult=false really hides check and save results');
+}());
+
+(function deathCauseFollowsSetting() {
+  const game = gameWith(6, { roles: { MAFIA: 1, DON: 0, SHERIFF: 0, DOCTOR: 0, MANIAC: 0 }, autoBalance: false, info: { showDeathCause: false } });
+  game.start('p1');
+  forceRoles(game, { p1: 'MAFIA', p2: 'CIVILIAN', p3: 'CIVILIAN', p4: 'CIVILIAN', p5: 'CIVILIAN', p6: 'CIVILIAN' });
+  game.kill(game.getPlayer('p6'), 'MAFIA', ['p1']);
+  assert(game.toClientJSON('p2').players.find((p) => p.id === 'p6').deathCause === null, 'the cause is hidden when showDeathCause is off');
+  game.settings.info.showDeathCause = true;
+  assert(game.toClientJSON('p2').players.find((p) => p.id === 'p6').deathCause === 'MAFIA', 'and shown when it is on');
+  console.log('✓ showDeathCause gates the cause of death');
+}());
+
+// --- the Don's sheriff check --------------------------------------------
+
+(function donChecksForTheSheriff() {
+  const game = gameWith(8, { roles: { MAFIA: 1, DON: 1, SHERIFF: 1, DOCTOR: 0, MANIAC: 0 }, autoBalance: false });
+  game.start('p1');
+  forceRoles(game, {
+    p1: 'DON', p2: 'MAFIA', p3: 'SHERIFF', p4: 'CIVILIAN', p5: 'CIVILIAN', p6: 'CIVILIAN', p7: 'CIVILIAN', p8: 'CIVILIAN',
+  });
+  game.advance();
+  assertThrows(() => game.submitNightAction('p2', 'p3', { secondary: true }), /second action/i, 'plain mafia have no sheriff check');
+  assertThrows(() => game.submitNightAction('p1', 'p1', { secondary: true }), /yourself/i, 'the Don cannot check himself');
+
+  game.submitNightAction('p1', 'p5');
+  game.submitNightAction('p2', 'p5');
+  game.submitNightAction('p3', 'p4');
+  assert(!game.everyoneActed(), 'the night waits for the Don\'s check as well as his shot');
+  game.submitNightAction('p1', 'p3', { secondary: true });
+  assert(game.nightActions.p1.targetId === 'p5', 'the check does not overwrite the shot');
+  assert(game.everyoneActed(), 'with both picks in, everyone has acted');
+
+  const donView = game.toClientJSON('p1');
+  assert(donView.you.myNightSecondary === 'p3' && donView.you.secondaryAction === 'CHECK_SHERIFF', 'the Don sees his own check');
+  assert(game.toClientJSON('p2').you.myNightSecondary === null, 'the check is private to the Don');
+
+  game.advance();
+  const result = (game.privateResults.p1 || []).find((r) => r.type === 'DON_CHECK_RESULT');
+  assert(result && result.params.isSheriff === true, 'the Don learns that his target is the sheriff');
+  console.log('✓ the Don can check for the sheriff, and the night waits for it');
+}());
+
+// --- who killed whom, and stats -------------------------------------------
+
+(function killersAndStatsAreRecorded() {
+  const game = gameWith(6, { roles: { MAFIA: 2, DON: 0, SHERIFF: 1, DOCTOR: 0, MANIAC: 0 }, autoBalance: false });
+  game.start('p1');
+  forceRoles(game, { p1: 'MAFIA', p2: 'MAFIA', p3: 'SHERIFF', p4: 'CIVILIAN', p5: 'CIVILIAN', p6: 'CIVILIAN' });
+  game.advance();
+  game.submitNightAction('p1', 'p6');
+  game.submitNightAction('p2', 'p6');
+  game.submitNightAction('p3', 'p1');
+  game.advance(); // resolve
+  assert(JSON.stringify(game.getPlayer('p6').killedBy) === JSON.stringify(['p1', 'p2']), 'both shooters are recorded');
+  assert(game.getPlayer('p3').stats.mafiaFound === 1, 'the sheriff is credited with finding the mafia');
+  assert(game.getPlayer('p1').stats.kills === 1, 'a shooter is credited with the kill');
+
+  game.advance(); // DAY
+  game.advance(); // VOTE
+  game.castVote('p3', 'p1');
+  game.castVote('p4', 'p1');
+  game.castVote('p5', 'p1');
+  game.castVote('p1', 'p4');
+  game.castVote('p2', 'SKIP');
+  game.advance();
+  const executed = game.getPlayer('p1');
+  assert(executed.deathCause === 'VOTE', 'the mafia member is executed');
+  assert(JSON.stringify(executed.killedBy) === JSON.stringify(['p3', 'p4', 'p5']), 'the voters are recorded as the executioners');
+  assert(game.getPlayer('p3').stats.votesOnMafia === 1 && game.getPlayer('p4').stats.votesReceived === 1, 'vote stats are counted');
+  assert(game.getPlayer('p2').stats.votes === 0, 'an abstention is not a vote');
+
+  // End the game and read the reveal.
+  game.kill(game.getPlayer('p2'), 'VOTE', ['p3']);
+  game.checkWin();
+  const reveal = game.toClientJSON('p4').reveal;
+  const p6 = reveal.find((p) => p.id === 'p6');
+  assert(JSON.stringify(p6.killedBy) === JSON.stringify(['P1', 'P2']), 'the final screen names the killers');
+  assert(p6.stats && typeof p6.stats.votes === 'number', 'stats are sent when showPlayerStats is on');
+  game.settings.info.showPlayerStats = false;
+  assert(game.toClientJSON('p4').reveal.every((p) => p.stats === null), 'and withheld when it is off');
+  console.log('✓ killers and per-player stats are recorded and revealed at the end');
+}());
+
+(function killersStaySecretDuringPlay() {
+  const game = gameWith(6, { roles: { MAFIA: 1, DON: 0, SHERIFF: 0, DOCTOR: 0, MANIAC: 0 }, autoBalance: false });
+  game.start('p1');
+  forceRoles(game, { p1: 'MAFIA', p2: 'CIVILIAN', p3: 'CIVILIAN', p4: 'CIVILIAN', p5: 'CIVILIAN', p6: 'CIVILIAN' });
+  game.kill(game.getPlayer('p6'), 'MAFIA', ['p1']);
+  const view = JSON.stringify(game.toClientJSON('p2'));
+  assert(!view.includes('killedBy'), 'nobody learns who shot whom before the game ends');
+  console.log('✓ the killer is not leaked while the game is running');
+}());
+
+// --- playing again -------------------------------------------------------
+
+(function restartKeepsTheTable() {
+  const game = gameWith(6, { roles: { MAFIA: 1, DON: 0, SHERIFF: 0, DOCTOR: 0, MANIAC: 0 }, autoBalance: false, night: { durationSec: 25 } });
+  game.start('p1');
+  assertThrows(() => game.restart('p1'), /over/i, 'a running game cannot be restarted');
+  forceRoles(game, { p1: 'MAFIA', p2: 'CIVILIAN', p3: 'CIVILIAN', p4: 'CIVILIAN', p5: 'CIVILIAN', p6: 'CIVILIAN' });
+  game.removePlayer('p6'); // walks out mid-game
+  game.kill(game.getPlayer('p1'), 'VOTE', ['p2']);
+  game.checkWin();
+  assert(game.phase === PHASES.GAME_OVER, 'the game is over');
+  assertThrows(() => game.restart('p2'), /host/i, 'only the host restarts');
+
+  game.restart('p1');
+  assert(game.phase === PHASES.LOBBY, 'restart returns to the lobby');
+  assert(game.players.length === 5 && !game.getPlayer('p6'), 'a player who left does not come back');
+  assert(game.players.every((p) => p.alive && !p.role && !p.killedBy && p.stats.votes === 0), 'every seat is reset');
+  assert(game.settings.night.durationSec === 25, 'the rules are kept');
+  assert(game.history.length === 0 && game.winner === null && game.dayNumber === 0, 'the old game is wiped');
+  game.start('p1');
+  assert(game.phase === PHASES.ROLE_REVEAL && game.players.every((p) => p.role), 'the same room can deal a new game');
+  console.log('✓ a finished game restarts in the same room with the same rules');
+}());
+
+(function hostLeavingMidGameHandsOver() {
+  const game = gameWith(6);
+  game.start('p1');
+  game.removePlayer('p1');
+  assert(game.hostId !== 'p1' && game.getPlayer(game.hostId).isHost, 'the host role passes to a remaining player');
+  assert(!game.getPlayer('p1').isHost, 'the leaver is no longer host');
+  console.log('✓ a host who leaves mid-game hands over the room');
+}());
+
 console.log('\n=== MAFIA ENGINE TESTS PASSED ===');

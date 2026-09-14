@@ -30,7 +30,7 @@ class GameManager {
     return mgr;
   }
 
-  addPlayer({ playerId, socketId, nickname, avatarUrl = null, accountId = null }) {
+  addPlayer({ playerId, socketId, nickname, avatarUrl = null, accountId = null, guestKeyHash = null }) {
     const { state } = this;
     const existing = state.getPlayer(playerId);
     if (existing) {
@@ -56,6 +56,9 @@ class GameManager {
       avatarUrl,
       accountId,
     });
+    // Proof that a later reconnect to this guest seat comes from the same
+    // browser; see platform/access.js. Stripped before state is broadcast.
+    player.guestKeyHash = accountId ? null : guestKeyHash;
     if (state.players.length === 0) {
       player.isHost = true;
       this.hostId = player.id;
@@ -72,8 +75,11 @@ class GameManager {
     if (state.phase === 'LOBBY') {
       state.players = state.players.filter((p) => p.id !== playerId);
       if (player.isHost && state.players.length > 0) {
-        state.players[0].isHost = true;
-        this.hostId = state.players[0].id;
+        // Only registered players may start a game, so the host's seat
+        // goes to one of them when there is one.
+        const heir = state.players.find((p) => p.accountId) || state.players[0];
+        heir.isHost = true;
+        this.hostId = heir.id;
       }
       state.addLog(`${player.nickname} left the room.`, 'PLAYER_LEFT', { name: player.nickname });
     } else {

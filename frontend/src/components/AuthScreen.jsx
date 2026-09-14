@@ -67,7 +67,8 @@ function LoginForm({ onLogin, onSwitchToRegister }) {
     try {
       await onLogin(nickname, password);
     } catch (err) {
-      setError(err.message);
+      // A block is explained in the banner above the form, with its reason.
+      setError(err.code === 'BLOCKED' ? t('blocked.title') : err.message);
     } finally {
       setBusy(false);
     }
@@ -178,12 +179,23 @@ function RegisterForm({ onRegister, onSwitchToLogin }) {
   );
 }
 
-export default function AuthScreen({ onGuestReady, auth }) {
+export default function AuthScreen({
+  onGuestReady, auth, initialMode = null, onCancel,
+}) {
   const { t } = useTranslation();
-  const [mode, setMode] = useState(null);
+  const [mode, setMode] = useState(initialMode);
 
   return (
     <div className="relative flex min-h-screen items-center overflow-hidden px-6 py-12">
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="absolute left-4 top-4 z-10 rounded-lg px-3 py-2 text-sm font-medium text-board/60 transition-colors hover:bg-white/5 hover:text-board sm:left-6 sm:top-6"
+        >
+          ← {t('menu.backToMenu')}
+        </button>
+      )}
       <div className="absolute right-4 top-4 z-10 sm:right-6 sm:top-6">
         <LanguageSwitcher variant="dark" />
       </div>
@@ -200,6 +212,14 @@ export default function AuthScreen({ onGuestReady, auth }) {
             {t('app.tagline')}
           </p>
         </div>
+
+        {auth.blocked && (
+          <div role="alert" className="mb-4 rounded-2xl border border-rent-light/40 bg-rent/20 px-4 py-3 text-board">
+            <p className="text-sm font-semibold">{t('blocked.title')}</p>
+            {auth.blocked.reason && <p className="mt-0.5 text-sm text-board/80">{t('blocked.reason', { reason: auth.blocked.reason })}</p>}
+            <p className="mt-1 text-xs text-board/55">{t('blocked.hint')}</p>
+          </div>
+        )}
 
         <div className="w-full rounded-2xl border border-brass/20 bg-board p-6 shadow-panel sm:p-7">
           {!mode && (

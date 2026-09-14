@@ -2,7 +2,7 @@
 // The platform's front door. Everything below this screen is one game or
 // another; this screen only answers "which game, and how do I get into a
 // room". Games are listed from data rather than hard-coded markup, so a
-// third mode is a new entry, not a new layout.
+// new game is a new entry, not a new layout.
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from '../i18n/LanguageContext';
@@ -68,23 +68,71 @@ function MafiaArt() {
   );
 }
 
-const GAME_ART = { monopoly: MonopolyArt, mafia: MafiaArt };
+function CitadelsArt() {
+  return (
+    <svg viewBox="0 0 120 80" className="h-full w-full" aria-hidden="true">
+      <defs>
+        <linearGradient id="citadels-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3b2a57" />
+          <stop offset="100%" stopColor="#140f1c" />
+        </linearGradient>
+      </defs>
+      <rect width="120" height="80" rx="6" fill="url(#citadels-sky)" />
+      <circle cx="97" cy="17" r="7" fill="#f3d27a" opacity="0.85" />
+      <g fill="#1f1729">
+        <rect x="12" y="42" width="16" height="38" />
+        <path d="M10 42l10-13 10 13z" />
+        <rect x="32" y="30" width="20" height="50" />
+        <path d="M30 30l12-15 12 15z" />
+        <rect x="56" y="46" width="16" height="34" />
+        <path d="M56 46v-5h3v2h3v-2h4v2h3v-2h3v5z" />
+        <rect x="76" y="34" width="26" height="46" />
+        <path d="M76 34v-6h4v3h4v-3h4v3h4v-3h4v3h6v3z" />
+      </g>
+      <g fill="#f3d27a" opacity="0.85">
+        <rect x="18" y="53" width="3" height="5" rx="1" />
+        <rect x="40" y="43" width="4" height="6" rx="1.5" />
+        <rect x="62" y="57" width="3" height="5" rx="1" />
+        <rect x="87" y="47" width="4" height="6" rx="1.5" />
+      </g>
+      {['#d4a52c', '#4f7fd6', '#3fa36b', '#c94a3c', '#9a6ad6'].map((c, i) => (
+        <rect key={c} x={24 + i * 15} y="71" width="12" height="4" rx="1.5" fill={c} />
+      ))}
+    </svg>
+  );
+}
 
-function GameCard({ game, onPlay, onConfigure }) {
+const GAME_ART = { monopoly: MonopolyArt, mafia: MafiaArt, citadels: CitadelsArt };
+const GAME_ACCENT = {
+  monopoly: 'from-brass/25 to-transparent',
+  mafia: 'from-rent/25 to-transparent',
+  citadels: 'from-violet-500/25 to-transparent',
+};
+const GAME_EMOJI = { monopoly: '🎲', mafia: '🔪', citadels: '🏰' };
+
+function GameCard({ game, onPlay, onConfigure, isGuest }) {
   const { t } = useTranslation();
   const Art = GAME_ART[game.id] || MonopolyArt;
-  const accent = game.id === 'mafia' ? 'from-rent/25 to-transparent' : 'from-brass/25 to-transparent';
+  const unavailable = game.available === false;
 
   return (
-    <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-felt-700/70 shadow-glass backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-white/20 hover:shadow-deep">
-      <div className="relative h-36 w-full overflow-hidden sm:h-44">
-        <div className="absolute inset-0 transition-transform duration-500 group-hover:scale-[1.04]">
+    <article className={`group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-felt-700/70 shadow-glass backdrop-blur-xl transition-all duration-300 ${
+      unavailable ? 'opacity-70' : 'hover:-translate-y-1 hover:border-white/20 hover:shadow-deep'
+    }`}
+    >
+      <div className="relative h-36 w-full overflow-hidden sm:h-40">
+        <div className={`absolute inset-0 transition-transform duration-500 ${unavailable ? 'grayscale' : 'group-hover:scale-[1.04]'}`}>
           <Art />
         </div>
-        <div className={`pointer-events-none absolute inset-0 bg-gradient-to-t ${accent}`} />
+        <div className={`pointer-events-none absolute inset-0 bg-gradient-to-t ${GAME_ACCENT[game.id] || GAME_ACCENT.monopoly}`} />
         <span className="absolute left-3 top-3 rounded-full bg-black/45 px-2.5 py-1 text-[11px] font-bold text-parch backdrop-blur-sm">
-          {game.emoji} {t(`menu.${game.id}.badge`)}
+          {GAME_EMOJI[game.id] || '🎮'} {t(`menu.${game.id}.badge`)}
         </span>
+        {unavailable && (
+          <span className="absolute right-3 top-3 rounded-full bg-rent/80 px-2.5 py-1 text-[11px] font-bold text-white">
+            {t('menu.unavailable')}
+          </span>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col gap-3 p-4">
@@ -104,12 +152,13 @@ function GameCard({ game, onPlay, onConfigure }) {
         </ul>
 
         <div className="mt-auto flex gap-2 pt-1">
-          <button type="button" onClick={() => onPlay(game)} className="btn-primary flex-1 py-3 text-[15px]">
-            <Icon.chevronRight className="h-4 w-4" />
-            {t('menu.play')}
+          <button type="button" disabled={unavailable} onClick={() => onPlay(game)} className="btn-primary flex-1 py-3 text-[15px]">
+            {isGuest ? <Icon.lock className="h-4 w-4" /> : <Icon.chevronRight className="h-4 w-4" />}
+            {isGuest ? t('menu.createNeedsAccount') : t('menu.play')}
           </button>
           <button
             type="button"
+            disabled={unavailable}
             onClick={() => onConfigure(game)}
             title={t('menu.configure')}
             aria-label={t('menu.configure')}
@@ -123,13 +172,17 @@ function GameCard({ game, onPlay, onConfigure }) {
   );
 }
 
-export default function MainMenu({ auth, onPlay, onConfigure, onJoinCode, joinError, joining }) {
+export default function MainMenu({
+  auth, onPlay, onConfigure, onJoinCode, joinError, joining, onAuth,
+}) {
   const { t } = useTranslation();
   const [games, setGames] = useState([
-    { id: 'monopoly', emoji: '🎲', minPlayers: 2, maxPlayers: 10 },
-    { id: 'mafia', emoji: '🔪', minPlayers: 4, maxPlayers: 15 },
+    { id: 'monopoly', minPlayers: 2, maxPlayers: 10 },
+    { id: 'mafia', minPlayers: 4, maxPlayers: 15 },
+    { id: 'citadels', minPlayers: 2, maxPlayers: 7 },
   ]);
   const [code, setCode] = useState('');
+  const isGuest = !auth?.isLoggedIn;
 
   // The catalogue is authoritative on the server; the list above is only
   // what to render before the first response arrives.
@@ -138,9 +191,7 @@ export default function MainMenu({ auth, onPlay, onConfigure, onJoinCode, joinEr
     fetch('/api/games')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (cancelled || !data?.games) return;
-        const emoji = { monopoly: '🎲', mafia: '🔪' };
-        setGames(data.games.map((g) => ({ ...g, emoji: emoji[g.id] || '🎮' })));
+        if (!cancelled && data?.games) setGames(data.games);
       })
       .catch(() => { /* the built-in list is a fine fallback */ });
     return () => { cancelled = true; };
@@ -154,29 +205,42 @@ export default function MainMenu({ auth, onPlay, onConfigure, onJoinCode, joinEr
 
   return (
     <div className="table-felt min-h-screen">
-      <header className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4">
+      <header className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4">
         <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brass-light to-brass-deep text-ink shadow-lift">
           <Icon.crown className="h-5 w-5" />
         </span>
         <h1 className="font-display text-[19px] font-black tracking-tight text-parch">{t('app.title')}</h1>
         <div className="flex-1" />
         <LanguageSwitcher variant="dark" />
-        {auth?.isLoggedIn && <ProfileMenu auth={auth} />}
+        {auth?.isLoggedIn ? (
+          <ProfileMenu auth={auth} onSwitchIdentity={auth.logout} />
+        ) : (
+          <div className="flex gap-1.5">
+            <button type="button" onClick={() => onAuth('login')} className="btn-quiet px-3 py-1.5 text-[13px]">{t('auth.login')}</button>
+            <button type="button" onClick={() => onAuth('register')} className="btn-primary px-3 py-1.5 text-[13px]">{t('auth.register')}</button>
+          </div>
+        )}
       </header>
 
-      <main className="mx-auto w-full max-w-5xl px-4 pb-16">
-        <section className="mb-8 text-center">
+      <main className="mx-auto w-full max-w-6xl px-4 pb-16">
+        <section className="mb-7 text-center">
           <h2 className="font-display text-[clamp(1.8rem,5vw,2.8rem)] font-black leading-tight text-parch">
             {t('menu.heading')}
           </h2>
           <p className="mx-auto mt-2 max-w-xl text-[14px] leading-relaxed text-parch/45">
             {t('menu.subheading')}
           </p>
+          {isGuest && (
+            <p className="mx-auto mt-4 inline-flex max-w-xl items-center gap-2 rounded-full border border-brass/25 bg-brass/10 px-4 py-1.5 text-[12.5px] text-brass-light">
+              <Icon.lock className="h-3.5 w-3.5" />
+              {t('menu.guestNotice')}
+            </p>
+          )}
         </section>
 
-        <section className="grid gap-4 sm:grid-cols-2">
+        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {games.map((game) => (
-            <GameCard key={game.id} game={game} onPlay={onPlay} onConfigure={onConfigure} />
+            <GameCard key={game.id} game={game} onPlay={onPlay} onConfigure={onConfigure} isGuest={isGuest} />
           ))}
         </section>
 

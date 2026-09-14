@@ -1,6 +1,8 @@
 // translations.js
 // Flat key -> string dictionaries per language.
 
+import { platformEn, platformRu } from './platformTranslations';
+
 export const LANGUAGES = {
   en: { label: 'English', nativeLabel: 'English' },
   ru: { label: 'Russian', nativeLabel: 'Русский' },
@@ -394,7 +396,7 @@ const en = {
   'mafia.info.showDeathCause': 'Show the cause of death',
   'mafia.info.showNightResults': 'Announce night results',
   'mafia.info.showVoteCounts': 'Show vote counts',
-  'mafia.info.showPlayerStats': 'Show player stats',
+  'mafia.info.showPlayerStats': 'Show player stats in the final results',
   'mafia.info.showHistory': 'Show the event log',
   'mafia.winSection': 'Win conditions',
   'mafia.win.mafiaWinsOnParity': 'Mafia win at parity',
@@ -509,6 +511,23 @@ const en = {
   'mafia.allRoles': 'Everyone’s role',
   'mafia.diedOn': 'day {n}',
   'mafia.backToMenu': 'Back to the menu',
+  'mafia.action.donCheck': 'Choose who to check for the sheriff',
+  'mafia.donMode.kill': 'Shot',
+  'mafia.donMode.check': 'Sheriff check',
+  'mafia.donBothHint': 'Make both picks - switch between them above.',
+  'mafia.checking': 'check',
+  'mafia.killedBy.hand': 'by {names}',
+  'mafia.killedBy.vote': 'voted: {names}',
+  'mafia.stats.votes': 'votes cast: {n}',
+  'mafia.stats.votesOnMafia': 'on the mafia: {n}',
+  'mafia.stats.votesReceived': 'votes against: {n}',
+  'mafia.stats.kills': 'kills: {n}',
+  'mafia.stats.saves': 'saves: {n}',
+  'mafia.stats.mafiaFound': 'mafia found: {n}',
+  'mafia.newGame': 'Play again',
+  'mafia.changeSettings': 'Change settings',
+  'mafia.waitingForHost': 'Waiting for the host to set up a new game.',
+  'mafia.system.GAME_RESTARTED': 'A new game is being set up.',
 
   'game.freeParkingPot': 'Free Parking pot',
   'game.ownedOfTotal': 'Bought',
@@ -902,7 +921,7 @@ const ru = {
   'mafia.info.showDeathCause': 'Показывать причину смерти',
   'mafia.info.showNightResults': 'Объявлять итоги ночи',
   'mafia.info.showVoteCounts': 'Показывать счёт голосов',
-  'mafia.info.showPlayerStats': 'Показывать статистику игроков',
+  'mafia.info.showPlayerStats': 'Показывать статистику игроков в итогах',
   'mafia.info.showHistory': 'Показывать журнал событий',
   'mafia.winSection': 'Условия победы',
   'mafia.win.mafiaWinsOnParity': 'Мафия побеждает при равенстве',
@@ -1017,6 +1036,23 @@ const ru = {
   'mafia.allRoles': 'Роли всех игроков',
   'mafia.diedOn': 'день {n}',
   'mafia.backToMenu': 'В главное меню',
+  'mafia.action.donCheck': 'Выберите, кого проверить на комиссара',
+  'mafia.donMode.kill': 'Выстрел',
+  'mafia.donMode.check': 'Поиск комиссара',
+  'mafia.donBothHint': 'Сделайте оба выбора — переключайтесь выше.',
+  'mafia.checking': 'проверка',
+  'mafia.killedBy.hand': 'от рук: {names}',
+  'mafia.killedBy.vote': 'голоса: {names}',
+  'mafia.stats.votes': 'голосов: {n}',
+  'mafia.stats.votesOnMafia': 'против мафии: {n}',
+  'mafia.stats.votesReceived': 'голосов против: {n}',
+  'mafia.stats.kills': 'убийств: {n}',
+  'mafia.stats.saves': 'спасений: {n}',
+  'mafia.stats.mafiaFound': 'нашёл мафию: {n}',
+  'mafia.newGame': 'Начать новую игру',
+  'mafia.changeSettings': 'Изменить настройки',
+  'mafia.waitingForHost': 'Ждём, пока ведущий начнёт новую игру.',
+  'mafia.system.GAME_RESTARTED': 'Готовится новая партия.',
 
   'game.freeParkingPot': 'Банк парковки',
   'game.ownedOfTotal': 'Куплено',
@@ -1024,7 +1060,10 @@ const ru = {
   'game.snapshot': 'О партии',
 };
 
-export const TRANSLATIONS = { en, ru };
+export const TRANSLATIONS = {
+  en: { ...en, ...platformEn },
+  ru: { ...ru, ...platformRu },
+};
 
 if (import.meta.env.DEV) {
   const enKeys = Object.keys(en);

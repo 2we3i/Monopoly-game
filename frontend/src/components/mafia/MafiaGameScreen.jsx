@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../i18n/LanguageContext';
 import PlayerAvatar from '../PlayerAvatar';
 import Icon from '../icons';
+import { Segmented } from './MafiaSettings';
 
 const ROLE_THEME = {
   MAFIA: { color: '#a8342a', glyph: '🔪', team: 'MAFIA' },
@@ -123,7 +124,7 @@ function RoleCard({ you, t }) {
   );
 }
 
-function PlayerTile({ player, you, phase, voteTally, onPick, selectable, selected, t }) {
+function PlayerTile({ player, phase, voteTally, onPick, selectable, selected, checked, t }) {
   const th = player.role ? theme(player.role) : null;
   const votes = voteTally?.[player.id] || 0;
 
@@ -137,7 +138,9 @@ function PlayerTile({ player, you, phase, voteTally, onPick, selectable, selecte
           ? 'border-white/5 bg-black/30 opacity-50'
           : selected
             ? 'border-rent bg-rent/20 shadow-[0_0_0_1px_rgba(168,52,42,0.5)]'
-            : selectable
+            : checked
+              ? 'border-sky-400/70 bg-sky-400/10 shadow-[0_0_0_1px_rgba(56,189,248,0.4)]'
+              : selectable
               ? 'cursor-pointer border-white/10 bg-white/[0.04] hover:-translate-y-0.5 hover:border-rent/50 hover:bg-rent/10'
               : 'border-white/[0.07] bg-white/[0.025]'
       }`}
@@ -164,6 +167,9 @@ function PlayerTile({ player, you, phase, voteTally, onPick, selectable, selecte
         </span>
       )}
 
+      {checked && (
+        <span className="pill bg-sky-400/20 text-sky-200">🔎 {t('mafia.checking')}</span>
+      )}
       {phase === 'VOTE' && votes > 0 && (
         <span className="pill bg-rent/30 text-rent-light tnum">⚖️ {votes}</span>
       )}
@@ -177,7 +183,7 @@ function PlayerTile({ player, you, phase, voteTally, onPick, selectable, selecte
   );
 }
 
-function ActionPanel({ state, onNight, onVote, t }) {
+function ActionPanel({ state, onVote, nightMode, setNightMode, t }) {
   const { you, phase } = state;
   if (!you) return null;
 
@@ -203,6 +209,37 @@ function ActionPanel({ state, onNight, onVote, t }) {
       HEAL: t('mafia.action.heal'),
       INVESTIGATE: t('mafia.action.investigate'),
     }[you.action] || t('mafia.action.act');
+
+    // The Don has two picks a night: the shot and the sheriff check.
+    // One switch decides which of them a tap on a player sets.
+    if (you.secondaryAction === 'CHECK_SHERIFF') {
+      const checking = nightMode === 'secondary';
+      return (
+        <div className="panel flex flex-col gap-2.5 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="min-w-0 flex-1 text-[13px] font-bold text-parch">
+              {checking ? t('mafia.action.donCheck') : label}
+            </p>
+            <Segmented
+              value={nightMode}
+              onChange={setNightMode}
+              options={[
+                { value: 'primary', label: `🔪 ${t('mafia.donMode.kill')}` },
+                { value: 'secondary', label: `🔎 ${t('mafia.donMode.check')}` },
+              ]}
+            />
+          </div>
+          <p className="text-[12px] text-parch/45">
+            {you.myNightTarget ? `✓ ${t('mafia.donMode.kill')}` : `○ ${t('mafia.donMode.kill')}`}
+            {' · '}
+            {you.myNightSecondary ? `✓ ${t('mafia.donMode.check')}` : `○ ${t('mafia.donMode.check')}`}
+            {' — '}
+            {you.myNightTarget && you.myNightSecondary ? t('mafia.targetChosen') : t('mafia.donBothHint')}
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="panel p-4">
         <p className="mb-1 text-[13px] font-bold text-parch">{label}</p>
@@ -372,7 +409,9 @@ function ChatBox({ chat, phase, you, onSend, t }) {
   );
 }
 
-function GameOverScreen({ state, onLeave, t }) {
+const STAT_KEYS = ['votes', 'votesOnMafia', 'votesReceived', 'kills', 'saves', 'mafiaFound'];
+
+function GameOverScreen({ state, isHost, actions, onLeave, t }) {
   const winner = state.winner;
   const tone = winner === 'MAFIA' ? '#a8342a' : winner === 'MANIAC' ? '#7a5fb8' : '#1f7a5c';
   const reveal = state.reveal || [];
@@ -390,26 +429,52 @@ function GameOverScreen({ state, onLeave, t }) {
         <div className="mb-4 overflow-hidden rounded-xl border border-white/[0.08]">
           <p className="section-label border-b border-white/[0.07] bg-white/[0.03] px-3 py-1.5">{t('mafia.allRoles')}</p>
           <ul className="divide-y divide-white/[0.06]">
-            {reveal.map((p) => (
-              <li key={p.id} className="flex items-center gap-2.5 px-3 py-2">
-                <span className="text-[16px]">{theme(p.role).glyph}</span>
-                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-parch">{p.nickname}</span>
-                <span className="pill" style={{ backgroundColor: `${theme(p.role).color}33`, color: '#f4ecdc' }}>
-                  {t(`mafia.role.${p.role}`)}
-                </span>
-                {!p.alive && (
-                  <span className="text-[11px] text-parch/35">
-                    {t('mafia.diedOn', { n: p.deathDay })} · {t(`mafia.cause.${p.deathCause}`)}
-                  </span>
-                )}
-              </li>
-            ))}
+            {reveal.map((p) => {
+              const stats = p.stats ? STAT_KEYS.filter((k) => p.stats[k] > 0) : [];
+              return (
+                <li key={p.id} className="flex flex-col gap-1 px-3 py-2">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-[16px]">{theme(p.role).glyph}</span>
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-parch">{p.nickname}</span>
+                    <span className="pill" style={{ backgroundColor: `${theme(p.role).color}33`, color: '#f4ecdc' }}>
+                      {t(`mafia.role.${p.role}`)}
+                    </span>
+                  </div>
+                  {!p.alive && (
+                    <p className="pl-[26px] text-[11px] text-parch/40">
+                      💀 {t('mafia.diedOn', { n: p.deathDay })} · {t(`mafia.cause.${p.deathCause}`)}
+                      {p.killedBy?.length > 0 && (
+                        <> · {t(p.deathCause === 'VOTE' ? 'mafia.killedBy.vote' : 'mafia.killedBy.hand', { names: p.killedBy.join(', ') })}</>
+                      )}
+                    </p>
+                  )}
+                  {stats.length > 0 && (
+                    <p className="flex flex-wrap gap-x-2.5 pl-[26px] text-[11px] text-parch/35 tnum">
+                      {stats.map((k) => <span key={k}>{t(`mafia.stats.${k}`, { n: p.stats[k] })}</span>)}
+                    </p>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         </div>
 
         <HistoryPanel history={state.history} t={t} />
 
-        <button type="button" onClick={onLeave} className="btn-primary mt-4 w-full py-3">
+        {isHost ? (
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <button type="button" onClick={() => actions.restart(true)} className="btn-primary py-3">
+              🔪 {t('mafia.newGame')}
+            </button>
+            <button type="button" onClick={() => actions.restart(false)} className="btn-ghost py-3">
+              <Icon.settings className="h-4 w-4" />
+              {t('mafia.changeSettings')}
+            </button>
+          </div>
+        ) : (
+          <p className="mt-4 text-center text-[12px] text-parch/45">{t('mafia.waitingForHost')}</p>
+        )}
+        <button type="button" onClick={onLeave} className="btn-quiet mt-2 w-full py-2.5">
           {t('mafia.backToMenu')}
         </button>
       </div>
@@ -422,19 +487,28 @@ export default function MafiaGameScreen({ state, chat, actions, onLeave }) {
   const { you, phase } = state;
   const isHost = !!you?.isHost;
 
+  const [nightMode, setNightMode] = useState('primary');
+  // Every night starts on the shot, never on last night's leftover mode.
+  useEffect(() => { setNightMode('primary'); }, [phase, state.dayNumber]);
+
   const canPickNight = phase === 'NIGHT' && you?.alive && you?.canActTonight;
   const canPickVote = phase === 'VOTE' && you?.alive;
+  const checkingNow = canPickNight && nightMode === 'secondary' && !!you?.secondaryAction;
   const selectedId = phase === 'NIGHT' ? you?.myNightTarget : you?.myVote;
+  const checkedId = phase === 'NIGHT' ? you?.myNightSecondary : null;
 
   const pick = (targetId) => {
-    if (canPickNight) actions.nightAction(targetId);
+    if (checkingNow) actions.donCheck(targetId);
+    else if (canPickNight) actions.nightAction(targetId);
     else if (canPickVote) actions.vote(targetId);
   };
 
   const selectable = (player) => {
     if (!player.alive) return false;
     if (canPickNight) {
-      if (player.id === you.id) return you.role === 'DOCTOR' && !!state.settings.fun?.modifiers?.doctorSelfHeal;
+      if (player.id === you.id) {
+        return !checkingNow && you.role === 'DOCTOR' && !!state.settings.fun?.modifiers?.doctorSelfHeal;
+      }
       return true;
     }
     if (canPickVote) return true;
@@ -468,19 +542,19 @@ export default function MafiaGameScreen({ state, chat, actions, onLeave }) {
                   <PlayerTile
                     key={p.id}
                     player={p}
-                    you={you}
                     phase={phase}
                     voteTally={state.voteTally}
                     onPick={pick}
                     selectable={selectable(p)}
                     selected={selectedId === p.id}
+                    checked={checkedId === p.id}
                     t={t}
                   />
                 ))}
               </div>
             </section>
 
-            <ActionPanel state={state} onNight={actions.nightAction} onVote={actions.vote} t={t} />
+            <ActionPanel state={state} onVote={actions.vote} nightMode={nightMode} setNightMode={setNightMode} t={t} />
             <ResultsFeed state={state} t={t} />
           </div>
 
@@ -494,7 +568,7 @@ export default function MafiaGameScreen({ state, chat, actions, onLeave }) {
         </div>
       </div>
 
-      {phase === 'GAME_OVER' && <GameOverScreen state={state} onLeave={onLeave} t={t} />}
+      {phase === 'GAME_OVER' && <GameOverScreen state={state} isHost={isHost} actions={actions} onLeave={onLeave} t={t} />}
     </div>
   );
 }

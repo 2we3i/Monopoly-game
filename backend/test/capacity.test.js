@@ -1,5 +1,7 @@
 // Verifies "up to 10 players" end to end.
 
+const { registerAccount } = require('./helpers/testEnv');
+
 process.env.PORT = '4006';
 const http = require('http');
 const express = require('express');
@@ -61,7 +63,8 @@ async function main() {
   }
   console.log('✓ 11 sockets connected');
 
-  const createRes = await emitAck(sockets[0], 'room:create', { nickname: 'Player0', playerId: 'p0' });
+  const host = registerAccount('Player0');
+  const createRes = await emitAck(sockets[0], 'room:create', { token: host.token });
   const roomCode = createRes.roomCode;
   console.log('✓ room created:', roomCode);
 

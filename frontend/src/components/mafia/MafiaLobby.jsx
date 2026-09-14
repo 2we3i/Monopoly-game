@@ -4,7 +4,7 @@
 // else watches them change - the settings panel is the same component
 // for both, read-only for guests.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from '../../i18n/LanguageContext';
 import PlayerAvatar from '../PlayerAvatar';
 import MafiaSettingsModal from './MafiaSettings';
@@ -20,10 +20,19 @@ function SummaryPill({ children, tone = 'default' }) {
   return <span className={`pill ${tones[tone]}`}>{children}</span>;
 }
 
-export default function MafiaLobby({ state, playerId, actions, onLeave, minPlayers = 4 }) {
+export default function MafiaLobby({
+  state, playerId, actions, onLeave, openSettings = false, onSettingsOpened, minPlayers = 4,
+}) {
   const { t } = useTranslation();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(openSettings);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (openSettings) {
+      setSettingsOpen(true);
+      onSettingsOpened?.();
+    }
+  }, [openSettings, onSettingsOpened]);
 
   const me = state.players.find((p) => p.id === playerId);
   const isHost = !!me?.isHost;
@@ -32,13 +41,15 @@ export default function MafiaLobby({ state, playerId, actions, onLeave, minPlaye
   const fun = settings.fun || {};
   const activeMods = Object.entries(fun.modifiers || {}).filter(([, on]) => on).map(([key]) => key);
 
-  const copyCode = async () => {
+  const copyText = async (text) => {
     try {
-      await navigator.clipboard.writeText(state.roomCode);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch { /* the code is on screen anyway */ }
   };
+  const copyCode = () => copyText(state.roomCode);
+  const copyLink = () => copyText(`${window.location.origin}/?room=${state.roomCode}`);
 
   return (
     <div className="table-night min-h-screen">
@@ -68,6 +79,9 @@ export default function MafiaLobby({ state, playerId, actions, onLeave, minPlaye
             ? <Icon.check className="h-5 w-5 text-go-light" />
             : <Icon.scroll className="h-5 w-5 text-parch/40" />}
         </button>
+        <button type="button" onClick={copyLink} className="-mt-2 self-center text-[12.5px] font-medium text-brass-light underline decoration-brass-light/40 underline-offset-4 hover:decoration-brass-light">
+          {t('waiting.copyInviteLink')}
+        </button>
 
         <div className="grid gap-4 lg:grid-cols-[1.2fr,1fr]">
           {/* Players ----------------------------------------------- */}
@@ -96,6 +110,7 @@ export default function MafiaLobby({ state, playerId, actions, onLeave, minPlaye
                   <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-parch">
                     {p.nickname}
                     {p.id === playerId && <span className="ml-1.5 text-[11px] font-normal text-parch/40">{t('sidebar.you')}</span>}
+                    {p.isGuest && <span className="ml-1.5 text-[11px] font-normal text-parch/35">· {t('common.guest')}</span>}
                   </span>
                   {p.isHost && <Icon.crown className="h-4 w-4 shrink-0 text-brass" title={t('waiting.host')} />}
                   {!p.connected && <span className="pill bg-white/10 text-parch/40">{t('waiting.offline')}</span>}

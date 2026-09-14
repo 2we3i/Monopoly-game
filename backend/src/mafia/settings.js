@@ -27,7 +27,6 @@ const DEFAULT_SETTINGS = {
     showOwnResult: true,
     // Whether a role may target the same player two nights running.
     allowRepeatTarget: true,
-    actionOrder: ['DON', 'MAFIA', 'SHERIFF', 'DOCTOR', 'MANIAC'],
   },
 
   // --- day -----------------------------------------------------------
@@ -48,6 +47,7 @@ const DEFAULT_SETTINGS = {
     showDeathCause: true,
     showNightResults: true,
     showVoteCounts: true,
+    // Per-player numbers (votes, kills, saves) in the final results.
     showPlayerStats: true,
     showHistory: true,
   },

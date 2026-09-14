@@ -1,26 +1,32 @@
 // socketHandler.js
-// All real-time communication lives here.
+// Real-time layer for Monopoly.
+//
+// Every create/join goes through platform/access: only a registered
+// account may create or start a room, a blocked account may do nothing,
+// and a reconnect may only reclaim a seat that is provably the caller's.
 
 const roomManager = require('../game/RoomManager');
 const { GameError } = require('../game/GameManager');
-const { LAYOUT_OPTIONS } = require('../game/boardLayouts');
-const accountsDb = require('../db/accounts');
-const sessionToken = require('../auth/sessionToken');
+const { LAYOUT_OPTIONS, DEFAULT_LAYOUT_ID } = require('../game/boardLayouts');
+const access = require('../platform/access');
+const modes = require('../platform/modes');
+const registry = require('../platform/registry');
+const bans = require('../platform/bans');
+const {
+  notifyRemoved, clientMessage, errorPayload,
+} = require('./roomSockets');
 
+const { AccessError } = access;
 const DISCONNECT_GRACE_MS = 1000 * 60 * 10;
 const disconnectTimers = new Map();
+let ioRef = null;
 
-function resolveAccountFromToken(token) {
-  if (!token) return null;
-  const accountId = sessionToken.verify(token);
-  if (!accountId) return null;
-  const row = accountsDb.findById(accountId);
-  if (!row) return null;
-  return accountsDb.toPublicAccount(row);
-}
-
+// The state every client receives. The guest key hash is a server-side
+// secret check and never leaves the server.
 function roomStatePayload(mgr) {
-  return mgr.state.toJSON();
+  const state = mgr.state.toJSON();
+  state.players = state.players.map(({ guestKeyHash, ...p }) => ({ ...p, isGuest: !p.accountId }));
+  return state;
 }
 
 function broadcastState(io, roomCode) {
@@ -28,6 +34,7 @@ function broadcastState(io, roomCode) {
   if (!mgr) return;
   roomManager.persist(roomCode);
   io.to(roomCode).emit('game:state', roomStatePayload(mgr));
+  registry.observe('monopoly', mgr);
 }
 
 function sendError(socket, message) {
@@ -70,91 +77,197 @@ function scheduleAutoSkip(io, roomCode, playerId) {
   disconnectTimers.set(key, timer);
 }
 
+function stageOf(phase) {
+  if (phase === 'LOBBY') return 'lobby';
+  if (phase === 'GAME_OVER') return 'finished';
+  return 'active';
+}
+
+const DATA_KEYS = ['roomCode', 'playerId', 'accountId'];
+
+registry.register({
+  type: 'monopoly',
+  rooms: () => roomManager.rooms.values(),
+  get: (code) => roomManager.getRoom(code),
+  summary(mgr) {
+    const s = mgr.state;
+    const host = s.players.find((p) => p.id === mgr.hostId) || s.players.find((p) => p.isHost);
+    const winner = s.winnerId ? s.getPlayer(s.winnerId) : null;
+    return {
+      code: s.roomCode,
+      gameType: 'monopoly',
+      modeId: modes.monopolyModeId(s.modeId),
+      hostId: mgr.hostId,
+      hostNickname: host?.nickname || null,
+      hostAccountId: host?.accountId || null,
+      createdAt: s.createdAt,
+      phase: s.phase,
+      stage: stageOf(s.phase),
+      maxPlayers: 10,
+      players: s.players.map((p) => ({
+        id: p.id,
+        nickname: p.nickname,
+        accountId: p.accountId || null,
+        isGuest: !p.accountId,
+        connected: !!p.connected,
+        isHost: p.id === mgr.hostId,
+        status: p.bankrupt ? 'bankrupt' : 'playing',
+      })),
+      details: {
+        currentPlayer: s.phase !== 'LOBBY' && s.phase !== 'GAME_OVER' ? s.currentPlayer?.nickname || null : null,
+        winner: winner?.nickname || null,
+        board: s.modeId,
+      },
+    };
+  },
+  matchSummary(mgr) {
+    const s = mgr.state;
+    const stage = stageOf(s.phase);
+    const host = s.getPlayer(mgr.hostId);
+    const winner = s.winnerId ? s.getPlayer(s.winnerId) : null;
+    return {
+      gameType: 'monopoly',
+      roomCode: s.roomCode,
+      modeId: modes.monopolyModeId(s.modeId),
+      hostAccountId: host?.accountId || null,
+      stage,
+      players: s.players.map((p) => ({ playerId: p.id, accountId: p.accountId || null, nickname: p.nickname })),
+      results: stage === 'finished'
+        ? {
+          winner: winner?.nickname || null,
+          players: s.players.map((p) => ({
+            playerId: p.id, result: p.id === s.winnerId ? 'win' : 'loss', score: p.money,
+          })),
+        }
+        : null,
+    };
+  },
+  close(code, reason = 'closed') {
+    const mgr = roomManager.getRoom(code);
+    if (!mgr) return false;
+    mgr.state.players.forEach((p) => {
+      clearDisconnectTimer(code, p.id);
+      notifyRemoved(ioRef, p.socketId, { gameType: 'monopoly', roomCode: code, reason, dataKeys: DATA_KEYS });
+    });
+    roomManager.deleteRoom(code, reason);
+    return true;
+  },
+  kick(code, playerId, reason = 'kicked') {
+    const mgr = roomManager.getRoom(code);
+    const player = mgr?.state.getPlayer(playerId);
+    if (!player) return false;
+    clearDisconnectTimer(code, playerId);
+    notifyRemoved(ioRef, player.socketId, { gameType: 'monopoly', roomCode: code, reason, dataKeys: DATA_KEYS });
+    if (mgr.state.phase === 'LOBBY') {
+      mgr.removePlayer(playerId);
+    } else {
+      if (!player.bankrupt && mgr.state.phase !== 'GAME_OVER') mgr.declareBankruptcy(playerId);
+      mgr.markDisconnected(playerId);
+    }
+    if (mgr.state.players.length === 0) {
+      roomManager.deleteRoom(code, reason);
+    } else {
+      broadcastState(ioRef, code);
+    }
+    return true;
+  },
+});
+
 function registerSocketHandlers(io) {
+  ioRef = io;
   io.on('connection', (socket) => {
     socket.data.roomCode = null;
     socket.data.playerId = null;
+    socket.data.accountId = null;
 
-    socket.on('room:create', ({ nickname, playerId, modeId, token }, cb) => {
+    socket.on('room:create', (payload, cb) => {
       try {
-        const account = resolveAccountFromToken(token);
-        const effectivePlayerId = account ? account.id : playerId;
-        const effectiveNickname = account ? account.nickname : nickname;
-        const effectiveAvatarUrl = account ? account.avatarPath : null;
-
-        if (!effectiveNickname || typeof effectiveNickname !== 'string' || !effectiveNickname.trim()) {
-          throw new GameError('Nickname is required.');
-        }
-        if (modeId && !LAYOUT_OPTIONS.some((opt) => opt.id === modeId)) {
+        const {
+          nickname, playerId, modeId, token, guestKey,
+        } = payload || {};
+        const identity = access.resolveIdentity({
+          token, playerId, nickname, guestKey,
+        });
+        access.assertCanCreate(identity);
+        const layoutId = modeId || DEFAULT_LAYOUT_ID;
+        if (!LAYOUT_OPTIONS.some((opt) => opt.id === layoutId)) {
           throw new GameError(`Unknown game mode "${modeId}".`);
         }
-        const mgr = roomManager.createRoom(effectivePlayerId, modeId);
+        modes.assertAvailable(modes.monopolyModeId(layoutId));
+
+        const mgr = roomManager.createRoom(identity.playerId, layoutId, {
+          accountId: identity.accountId, nickname: identity.nickname,
+        });
         const player = mgr.addPlayer({
-          playerId: effectivePlayerId,
+          playerId: identity.playerId,
           socketId: socket.id,
-          nickname: effectiveNickname.trim(),
-          avatarUrl: effectiveAvatarUrl,
-          accountId: account ? account.id : null,
+          nickname: identity.nickname,
+          avatarUrl: identity.avatarUrl,
+          accountId: identity.accountId,
         });
         socket.join(mgr.state.roomCode);
         socket.data.roomCode = mgr.state.roomCode;
         socket.data.playerId = player.id;
+        socket.data.accountId = identity.accountId;
         roomManager.persist(mgr.state.roomCode);
         cb?.({ ok: true, roomCode: mgr.state.roomCode, playerId: player.id, state: roomStatePayload(mgr) });
         io.to(mgr.state.roomCode).emit('game:state', roomStatePayload(mgr));
       } catch (err) {
-        cb?.({ ok: false, error: err.message });
+        cb?.(errorPayload(err, [GameError]));
       }
     });
 
-    socket.on('room:join', ({ roomCode, nickname, playerId, token }, cb) => {
+    socket.on('room:join', (payload, cb) => {
       try {
+        const {
+          roomCode, nickname, playerId, token, guestKey,
+        } = payload || {};
         const mgr = roomManager.getRoom(roomCode);
         if (!mgr) throw new GameError('Room not found. Check the code and try again.');
 
-        const account = resolveAccountFromToken(token);
-        const effectivePlayerId = account ? account.id : playerId;
-        const effectiveNickname = account ? account.nickname : nickname;
-        const effectiveAvatarUrl = account ? account.avatarPath : null;
+        const identity = access.resolveIdentity({
+          token, playerId, nickname, guestKey,
+        });
+        if (bans.isBanned(mgr.state.roomCode, identity.playerId)) {
+          throw new AccessError('You were removed from this room.', 'BANNED');
+        }
 
-        const existing = mgr.state.getPlayer(effectivePlayerId);
+        const existing = mgr.state.getPlayer(identity.playerId);
         let player;
         if (existing) {
-          clearDisconnectTimer(mgr.state.roomCode, effectivePlayerId);
-          player = mgr.reconnectPlayer(effectivePlayerId, socket.id);
-          if (account) {
-            player = mgr.addPlayer({
-              playerId: effectivePlayerId,
-              socketId: socket.id,
-              nickname: effectiveNickname.trim(),
-              avatarUrl: effectiveAvatarUrl,
-              accountId: account.id,
-            });
+          access.assertCanClaimSeat(existing, identity);
+          clearDisconnectTimer(mgr.state.roomCode, identity.playerId);
+          player = mgr.reconnectPlayer(identity.playerId, socket.id);
+          if (!identity.isGuest) {
+            player.nickname = identity.nickname;
+            player.avatarUrl = identity.avatarUrl;
           }
         } else {
-          if (!effectiveNickname || !effectiveNickname.trim()) throw new GameError('Nickname is required.');
+          if (!identity.nickname) throw new GameError('Nickname is required.');
           player = mgr.addPlayer({
-            playerId: effectivePlayerId,
+            playerId: identity.playerId,
             socketId: socket.id,
-            nickname: effectiveNickname.trim(),
-            avatarUrl: effectiveAvatarUrl,
-            accountId: account ? account.id : null,
+            nickname: identity.nickname,
+            avatarUrl: identity.avatarUrl,
+            accountId: identity.accountId,
+            guestKeyHash: identity.guestKeyHash,
           });
         }
 
         socket.join(mgr.state.roomCode);
         socket.data.roomCode = mgr.state.roomCode;
         socket.data.playerId = player.id;
+        socket.data.accountId = identity.accountId;
         roomManager.persist(mgr.state.roomCode);
         cb?.({ ok: true, roomCode: mgr.state.roomCode, playerId: player.id, state: roomStatePayload(mgr) });
         io.to(mgr.state.roomCode).emit('game:state', roomStatePayload(mgr));
         io.to(mgr.state.roomCode).emit('chat:system', { message: `${player.nickname} joined.`, type: 'PLAYER_JOINED_CHAT', params: { name: player.nickname } });
       } catch (err) {
-        cb?.({ ok: false, error: err.message });
+        cb?.(errorPayload(err, [GameError]));
       }
     });
 
-    socket.on('room:rejoinCheck', ({ roomCode, playerId }, cb) => {
+    socket.on('room:rejoinCheck', ({ roomCode, playerId } = {}, cb) => {
       const mgr = roomManager.getRoom(roomCode);
       if (!mgr) return cb?.({ ok: false });
       const player = mgr.state.getPlayer(playerId);
@@ -184,16 +297,20 @@ function registerSocketHandlers(io) {
       socket.leave(roomCode);
       socket.data.roomCode = null;
       socket.data.playerId = null;
+      socket.data.accountId = null;
     });
 
     socket.on('room:start', () => {
       const mgr = roomManager.getRoom(socket.data.roomCode);
       if (!mgr) return sendError(socket, 'Room not found.');
       try {
+        if (socket.data.playerId !== mgr.hostId) throw new GameError('Only the host can start the game.');
+        access.assertCanStart(socket.data.accountId);
+        modes.assertAvailable(modes.monopolyModeId(mgr.state.modeId));
         mgr.startGame(socket.data.playerId);
         broadcastState(io, mgr.state.roomCode);
       } catch (err) {
-        sendError(socket, err.message);
+        sendError(socket, clientMessage(err, [GameError]));
       }
     });
 
@@ -201,15 +318,10 @@ function registerSocketHandlers(io) {
       const mgr = roomManager.getRoom(socket.data.roomCode);
       if (!mgr) return sendError(socket, 'You are not in an active room.');
       try {
-        handler(mgr, payload || {});
+        handler(mgr, payload && typeof payload === 'object' ? payload : {});
         broadcastState(io, mgr.state.roomCode);
       } catch (err) {
-        if (err instanceof GameError) sendError(socket, err.message);
-        else {
-          // eslint-disable-next-line no-console
-          console.error('Unexpected game error:', err);
-          sendError(socket, 'Something went wrong processing that action.');
-        }
+        sendError(socket, clientMessage(err, [GameError]));
       }
     };
 
@@ -233,7 +345,7 @@ function registerSocketHandlers(io) {
 
     socket.on('game:setCustomPrice', withGame((mgr, { tileId, targetPlayerId, amount }) => mgr.setCustomPrice(socket.data.playerId, tileId, targetPlayerId, amount)));
 
-    socket.on('chat:message', ({ text }) => {
+    socket.on('chat:message', ({ text } = {}) => {
       const mgr = roomManager.getRoom(socket.data.roomCode);
       if (!mgr) return;
       const player = mgr.state.getPlayer(socket.data.playerId);

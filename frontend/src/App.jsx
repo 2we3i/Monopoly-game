@@ -1,21 +1,30 @@
 // App.jsx
-// Platform shell. Flow: AuthScreen -> MainMenu -> one game or another.
+// Platform shell. Pages: the games (AuthScreen -> MainMenu -> a game),
+// the player's profile and the admin panel.
 //
 // Each game owns its own socket and its own room state, and this file
-// only decides which of them is on screen. A third game would add a hook
-// and a branch here, and nothing else in the app would need to know.
+// only decides which of them is on screen. Permissions shown here (a
+// guest cannot create a game, only the admin sees the panel) are for the
+// player's convenience - the server enforces every one of them itself.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSocket } from './hooks/useSocket';
 import { useMafia } from './hooks/useMafia';
+import { useCitadels } from './hooks/useCitadels';
 import { useAuth } from './hooks/useAuth';
 import AuthScreen from './components/AuthScreen';
 import MainMenu from './components/MainMenu';
 import Lobby from './components/Lobby';
 import GameUI from './components/GameUI';
+import GuestGate from './components/GuestGate';
 import MafiaLobby from './components/mafia/MafiaLobby';
 import MafiaGameScreen from './components/mafia/MafiaGameScreen';
+import CitadelsLobby from './components/citadels/CitadelsLobby';
+import CitadelsGame from './components/citadels/CitadelsGame';
+import ProfilePage from './components/profile/ProfilePage';
+import AdminPanel from './components/admin/AdminPanel';
 import { useTranslation } from './i18n/LanguageContext';
+import { usePathname } from './lib/router';
 
 const GUEST_RESOLVED_KEY = 'landmark_guest_resolved';
 const NICKNAME_KEY = 'landmark_nickname';
@@ -31,6 +40,15 @@ function ConnectionBanner({ connected, connectionError }) {
   );
 }
 
+function ErrorBanner({ message }) {
+  if (!message) return null;
+  return (
+    <div className="fixed inset-x-0 top-0 z-40 bg-ink px-4 py-2 text-center text-sm font-medium text-board">
+      {message}
+    </div>
+  );
+}
+
 function RehydratingScreen() {
   const { t } = useTranslation();
   return (
@@ -41,42 +59,137 @@ function RehydratingScreen() {
   );
 }
 
+// Explains app-wide events (a room closed by the admin, a removal) that
+// arrive while the player is looking at something else.
+function NoticeToast() {
+  const { t } = useTranslation();
+  const [notice, setNotice] = useState(null);
+  useEffect(() => {
+    const onNotice = (e) => setNotice(e.detail || {});
+    window.addEventListener('landmark:notice', onNotice);
+    return () => window.removeEventListener('landmark:notice', onNotice);
+  }, []);
+  useEffect(() => {
+    if (!notice) return undefined;
+    const id = setTimeout(() => setNotice(null), 7000);
+    return () => clearTimeout(id);
+  }, [notice]);
+  if (!notice) return null;
+  const key = `notice.${notice.reason}`;
+  const text = t(key) === key ? t('notice.roomRemoved') : t(key);
+  return (
+    <div role="status" className="fixed inset-x-0 bottom-5 z-[80] flex justify-center px-4">
+      <div className="flex max-w-md animate-slide-up items-start gap-3 rounded-2xl border border-white/15 bg-felt-800/95 px-4 py-3 text-[13.5px] text-parch shadow-deep backdrop-blur">
+        <span aria-hidden="true">⚠️</span>
+        <p className="flex-1">{text}</p>
+        <button type="button" onClick={() => setNotice(null)} className="text-parch/50 hover:text-parch" aria-label="Close">✕</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const auth = useAuth();
+  const pathname = usePathname();
   const [guestResolved, setGuestResolved] = useState(
     () => localStorage.getItem(GUEST_RESOLVED_KEY) === '1'
       || !!localStorage.getItem('landmark_room_code')
-      || !!localStorage.getItem('landmark_mafia_room'),
+      || !!localStorage.getItem('landmark_mafia_room')
+      || !!localStorage.getItem('landmark_citadels_room'),
   );
 
   if (auth.checking) return <RehydratingScreen />;
+  if (pathname.startsWith('/admin')) return <AdminPanel auth={auth} />;
+  if (pathname.startsWith('/profile')) return <ProfilePage auth={auth} />;
 
-  // useSocket is only ever mounted once useAuth has FINISHED confirming
-  // whatever token was in localStorage - its connect-and-auto-rejoin
-  // effect runs on its own mount regardless of what the parent renders
-  // afterward, so mounting it early with a not-yet-resolved token risks
-  // the rejoin request firing before the real token is known.
-  return <AppShell auth={auth} guestResolved={guestResolved} setGuestResolved={setGuestResolved} />;
+  // The game hooks are only ever mounted once useAuth has FINISHED
+  // confirming whatever token was in localStorage - their connect-and-
+  // auto-rejoin effects run on mount, and a rejoin fired with a not-yet-
+  // resolved token could claim the wrong identity.
+  return (
+    <>
+      <AppShell auth={auth} guestResolved={guestResolved} setGuestResolved={setGuestResolved} />
+      <NoticeToast />
+    </>
+  );
 }
 
 function AppShell({ auth, guestResolved, setGuestResolved }) {
   const socket = useSocket(auth.token);
   const mafia = useMafia(auth.token, { enabled: true });
+  const citadels = useCitadels(auth.token);
   const [hub, setHub] = useState(null); // null = main menu, 'monopoly' = its lobby
   const [joinError, setJoinError] = useState(null);
   const [joining, setJoining] = useState(false);
+  const [gateOpen, setGateOpen] = useState(false);
+  // 'login' | 'register' when the player asked to sign in from inside the app.
+  const [authMode, setAuthMode] = useState(null);
+  const inviteCode = useRef(new URLSearchParams(window.location.search).get('room'));
 
   const identityResolved = auth.isLoggedIn || guestResolved;
   const nickname = auth.isLoggedIn ? auth.account.nickname : (localStorage.getItem(NICKNAME_KEY) || '');
+  const inAnyRoom = !!(socket.roomCode || mafia.roomCode || citadels.roomCode);
 
-  if (!identityResolved && !socket.roomCode && !mafia.roomCode) {
+  useEffect(() => {
+    if (auth.isLoggedIn) setAuthMode(null);
+  }, [auth.isLoggedIn]);
+
+  const openAuth = (mode) => {
+    setGateOpen(false);
+    setAuthMode(mode);
+  };
+  const requireAccount = () => setGateOpen(true);
+
+  // A room code alone does not say which game it belongs to - the server
+  // does, so the client asks before deciding where to send the player.
+  const joinByCode = async (code) => {
+    setJoinError(null);
+    setJoining(true);
+    try {
+      const res = await fetch(`/api/rooms/${encodeURIComponent(code)}/exists`).then((r) => r.json());
+      if (!res?.exists) {
+        setJoinError('room-not-found');
+        return;
+      }
+      if (res.gameType === 'mafia') await mafia.joinRoom(code, nickname);
+      else if (res.gameType === 'citadels') await citadels.joinRoom(code, nickname);
+      else await socket.joinRoom(code, nickname);
+    } catch (err) {
+      setJoinError(err.message);
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  // An invite link (/?room=CODE) joins as soon as the player has an
+  // identity - straight away for a logged-in player, after the nickname
+  // for a guest.
+  useEffect(() => {
+    const code = inviteCode.current;
+    if (!code || !identityResolved || authMode) return;
+    inviteCode.current = null;
+    window.history.replaceState({}, '', window.location.pathname);
+    if (!inAnyRoom) joinByCode(code.trim().toUpperCase());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identityResolved, authMode]);
+
+  const gate = gateOpen && (
+    <GuestGate onClose={() => setGateOpen(false)} onLogin={() => openAuth('login')} onRegister={() => openAuth('register')} />
+  );
+
+  if ((!identityResolved && !inAnyRoom) || authMode || (auth.blocked && !auth.isLoggedIn)) {
     return (
       <AuthScreen
+        key={authMode || 'root'}
         auth={auth}
+        initialMode={authMode}
+        onCancel={authMode && identityResolved ? () => setAuthMode(null) : undefined}
         onGuestReady={(name) => {
           localStorage.setItem(NICKNAME_KEY, name);
           localStorage.setItem(GUEST_RESOLVED_KEY, '1');
+          auth.clearBlocked();
           setGuestResolved(true);
+          setAuthMode(null);
         }}
       />
     );
@@ -84,23 +197,43 @@ function AppShell({ auth, guestResolved, setGuestResolved }) {
 
   if (socket.rehydrating) return <RehydratingScreen />;
 
-  // --- Mafia takes the screen whenever its room is live --------------
+  // --- Citadels ------------------------------------------------------
+  if (citadels.state && citadels.roomCode) {
+    const leave = () => { citadels.leaveRoom(); setHub(null); };
+    return (
+      <>
+        <ConnectionBanner connected={citadels.connected} connectionError={null} />
+        <ErrorBanner message={citadels.error} />
+        {citadels.state.phase === 'LOBBY'
+          ? (
+            <CitadelsLobby
+              state={citadels.state}
+              actions={citadels.actions}
+              openSettings={citadels.settingsRequested}
+              onSettingsOpened={citadels.clearSettingsRequest}
+              onLeave={leave}
+            />
+          )
+          : <CitadelsGame state={citadels.state} chat={citadels.chat} actions={citadels.actions} onLeave={leave} />}
+      </>
+    );
+  }
+
+  // --- Mafia ---------------------------------------------------------
   if (mafia.state && mafia.roomCode) {
     const leave = () => { mafia.leaveRoom(); setHub(null); };
     return (
       <>
         <ConnectionBanner connected={mafia.connected} connectionError={null} />
-        {mafia.error && (
-          <div className="fixed inset-x-0 top-0 z-40 bg-ink px-4 py-2 text-center text-sm font-medium text-board">
-            {mafia.error}
-          </div>
-        )}
+        <ErrorBanner message={mafia.error} />
         {mafia.state.phase === 'LOBBY'
           ? (
             <MafiaLobby
               state={mafia.state}
               playerId={mafia.playerId}
               actions={mafia.actions}
+              openSettings={mafia.settingsRequested}
+              onSettingsOpened={mafia.clearSettingsRequest}
               onLeave={leave}
             />
           )
@@ -123,11 +256,7 @@ function AppShell({ auth, guestResolved, setGuestResolved }) {
     return (
       <>
         <ConnectionBanner connected={socket.connected} connectionError={socket.connectionError} />
-        {socket.gameError && (
-          <div className="fixed inset-x-0 top-0 z-40 bg-ink px-4 py-2 text-center text-sm font-medium text-board">
-            {socket.gameError}
-          </div>
-        )}
+        <ErrorBanner message={socket.gameError} />
         {inMonopolyGame ? (
           <GameUI
             gameState={socket.gameState}
@@ -169,6 +298,7 @@ function AppShell({ auth, guestResolved, setGuestResolved }) {
             joining={socket.joining}
             savedNickname={nickname}
             auth={auth}
+            onRequireAccount={requireAccount}
             onSwitchIdentity={() => {
               if (auth.isLoggedIn) auth.logout();
               localStorage.removeItem(GUEST_RESOLVED_KEY);
@@ -176,6 +306,7 @@ function AppShell({ auth, guestResolved, setGuestResolved }) {
             }}
           />
         )}
+        {gate}
       </>
     );
   }
@@ -183,35 +314,17 @@ function AppShell({ auth, guestResolved, setGuestResolved }) {
   // --- Main menu -----------------------------------------------------
   const play = async (game, presetId) => {
     setJoinError(null);
-    if (game.id === 'mafia') {
-      try {
-        await mafia.createRoom(nickname, presetId || 'CLASSIC');
-      } catch (err) {
-        setJoinError(err.message);
-      }
+    if (!auth.isLoggedIn) {
+      requireAccount();
       return;
     }
-    setHub('monopoly');
-  };
-
-  // A room code alone does not say which game it belongs to - the server
-  // does, so the menu asks before deciding where to send the player.
-  const joinByCode = async (code) => {
-    setJoinError(null);
-    setJoining(true);
     try {
-      const res = await fetch(`/api/rooms/${encodeURIComponent(code)}/exists`).then((r) => r.json());
-      if (!res?.exists) throw new Error('notFound');
-      if (res.gameType === 'mafia') {
-        await mafia.joinRoom(code, nickname);
-      } else {
-        await socket.joinRoom(code, nickname);
-      }
+      if (game.id === 'mafia') await mafia.createRoom(nickname, presetId || 'CLASSIC');
+      else if (game.id === 'citadels') await citadels.createRoom(nickname);
+      else setHub('monopoly');
     } catch (err) {
-      setJoinError(err.message === 'notFound' ? null : err.message);
-      if (err.message === 'notFound') setJoinError('room-not-found');
-    } finally {
-      setJoining(false);
+      if (err.code === 'GUEST_CANNOT_CREATE') requireAccount();
+      else setJoinError(err.message);
     }
   };
 
@@ -223,9 +336,11 @@ function AppShell({ auth, guestResolved, setGuestResolved }) {
         onPlay={play}
         onConfigure={play}
         onJoinCode={joinByCode}
-        joinError={joinError}
+        joinError={joinError === 'room-not-found' ? null : joinError}
         joining={joining}
+        onAuth={openAuth}
       />
+      {gate}
     </>
   );
 }

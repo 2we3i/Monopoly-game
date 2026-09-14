@@ -1,6 +1,6 @@
 // authRoutes.js
-// REST endpoints for account registration, login, and profile
-// management.
+// REST endpoints for account registration, login, profile management and
+// a player's own statistics.
 
 const path = require('path');
 const fs = require('fs');
@@ -9,7 +9,9 @@ const express = require('express');
 const multer = require('multer');
 
 const accounts = require('../db/accounts');
+const platformDb = require('../db/platform');
 const sessionToken = require('../auth/sessionToken');
+const { DATA_DIR } = require('../config');
 
 const router = express.Router();
 
@@ -39,7 +41,7 @@ function validatePassword(password) {
   return null;
 }
 
-const AVATAR_DIR = path.join(__dirname, '..', '..', 'data', 'avatars');
+const AVATAR_DIR = path.join(DATA_DIR, 'avatars');
 if (!fs.existsSync(AVATAR_DIR)) fs.mkdirSync(AVATAR_DIR, { recursive: true });
 
 const ALLOWED_AVATAR_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif']);
@@ -64,18 +66,57 @@ const avatarUpload = multer({
   },
 });
 
+// --- login throttling ----------------------------------------------------
+// A small in-memory limiter against password guessing: after too many
+// failures for the same nickname from the same address, further attempts
+// are refused for a while.
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_MAX_FAILURES = 8;
+const loginFailures = new Map();
+
+function throttleKey(req, nickname) {
+  return `${req.ip}|${String(nickname || '').toLowerCase()}`;
+}
+
+function isThrottled(key) {
+  const entry = loginFailures.get(key);
+  if (!entry) return false;
+  if (Date.now() - entry.first > LOGIN_WINDOW_MS) {
+    loginFailures.delete(key);
+    return false;
+  }
+  return entry.count >= LOGIN_MAX_FAILURES;
+}
+
+function recordFailure(key) {
+  const entry = loginFailures.get(key);
+  if (!entry || Date.now() - entry.first > LOGIN_WINDOW_MS) loginFailures.set(key, { count: 1, first: Date.now() });
+  else entry.count += 1;
+}
+
+function blockedResponse(res, row) {
+  return res.status(403).json({
+    error: 'This account is blocked.',
+    code: 'BLOCKED',
+    reason: row.blocked_reason || null,
+    blockedAt: row.blocked_at || null,
+  });
+}
+
 function attachAccount(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  req.accountId = token ? sessionToken.verify(token) : null;
+  const accountId = token ? sessionToken.verify(token) : null;
+  req.accountRow = accountId ? accounts.findById(accountId) : null;
+  req.accountId = req.accountRow ? req.accountRow.id : null;
   next();
 }
 router.use(attachAccount);
 
+// A blocked account keeps its token but can do nothing with it.
 function requireAuth(req, res, next) {
-  if (!req.accountId) {
-    return res.status(401).json({ error: 'Not logged in.' });
-  }
+  if (!req.accountRow) return res.status(401).json({ error: 'Not logged in.' });
+  if (accounts.isBlocked(req.accountRow)) return blockedResponse(res, req.accountRow);
   next();
 }
 
@@ -102,20 +143,55 @@ router.post('/login', (req, res) => {
   if (typeof nickname !== 'string' || typeof password !== 'string') {
     return res.status(400).json({ error: 'Nickname and password are required.' });
   }
+  const key = throttleKey(req, nickname.trim());
+  if (isThrottled(key)) {
+    return res.status(429).json({ error: 'Too many failed attempts. Try again in a few minutes.' });
+  }
   const row = accounts.findByNickname(nickname.trim());
   const invalidMsg = { error: 'Incorrect nickname or password.' };
-  if (!row) return res.status(401).json(invalidMsg);
-  if (!accounts.verifyPassword(password, row.password_salt, row.password_hash)) {
+  if (!row || !accounts.verifyPassword(password, row.password_salt, row.password_hash)) {
+    recordFailure(key);
     return res.status(401).json(invalidMsg);
   }
+  // The block is only revealed to someone who proved the password.
+  if (accounts.isBlocked(row)) return blockedResponse(res, row);
+  loginFailures.delete(key);
+  accounts.touchLogin(row.id);
   const token = sessionToken.sign(row.id);
   res.json({ account: accounts.toPublicAccount(row), token });
 });
 
 router.get('/me', requireAuth, (req, res) => {
-  const row = accounts.findById(req.accountId);
-  if (!row) return res.status(404).json({ error: 'Account not found.' });
-  res.json({ account: accounts.toPublicAccount(row) });
+  accounts.touchSeen(req.accountId);
+  res.json({ account: accounts.toPublicAccount(req.accountRow) });
+});
+
+// Achievements are derived from the match history, so they appear for
+// games played before the achievement existed too.
+function achievementsFor(stats, citadels) {
+  const games = Object.keys(stats.byGame);
+  const list = [
+    { id: 'FIRST_GAME', current: stats.played, target: 1 },
+    { id: 'FIRST_WIN', current: stats.wins, target: 1 },
+    { id: 'HOST', current: stats.created, target: 5 },
+    { id: 'VETERAN', current: stats.played, target: 25 },
+    { id: 'CHAMPION', current: stats.wins, target: 10 },
+    { id: 'ALL_GAMES', current: ['monopoly', 'mafia', 'citadels'].filter((g) => games.includes(g)).length, target: 3 },
+    { id: 'CITADEL_LORD', current: citadels.wins, target: 1 },
+    { id: 'MASTER_BUILDER', current: Math.round(citadels.avgBuildings * 10) / 10, target: 7 },
+  ];
+  return list.map((a) => ({ ...a, unlocked: a.current >= a.target }));
+}
+
+router.get('/me/stats', requireAuth, (req, res) => {
+  const stats = platformDb.accountStats(req.accountId);
+  const citadels = platformDb.citadelsStats(req.accountId);
+  res.json({
+    account: accounts.toPublicAccount(req.accountRow),
+    stats,
+    citadels,
+    achievements: achievementsFor(stats, citadels),
+  });
 });
 
 router.post('/me/avatar', requireAuth, (req, res) => {
@@ -143,8 +219,7 @@ router.put('/me/nickname', requireAuth, (req, res) => {
 
 router.put('/me/password', requireAuth, (req, res) => {
   const { currentPassword, newPassword } = req.body || {};
-  const row = accounts.findById(req.accountId);
-  if (!row) return res.status(404).json({ error: 'Account not found.' });
+  const row = req.accountRow;
   if (typeof currentPassword !== 'string' || !accounts.verifyPassword(currentPassword, row.password_salt, row.password_hash)) {
     return res.status(401).json({ error: 'Current password is incorrect.' });
   }

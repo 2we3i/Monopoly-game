@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../i18n/LanguageContext';
+import { navigate } from '../lib/router';
 
 const MAX_AVATAR_BYTES = 3 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
@@ -138,6 +139,25 @@ export default function ProfileMenu({ auth, savedNickname, onSwitchIdentity }) {
               </span>
             )}
             <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{auth.account.nickname}</p>
+          </div>
+
+          <div className="mb-2 flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => { setOpen(false); navigate('/profile'); }}
+              className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-ink transition-colors hover:bg-brass/10"
+            >
+              {t('profile.open')}
+            </button>
+            {auth.isAdmin && (
+              <button
+                type="button"
+                onClick={() => { setOpen(false); navigate('/admin'); }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-ink transition-colors hover:bg-brass/10"
+              >
+                {t('admin.open')}
+              </button>
+            )}
           </div>
 
           <AvatarUploadButton auth={auth} />

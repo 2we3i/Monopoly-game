@@ -9,21 +9,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
+import { announce, getGuestKey, getPlayerId } from '../lib/identity';
 
 const ROOM_KEY = 'landmark_mafia_room';
-const PLAYER_ID_KEY = 'landmark_player_id';
 const NICKNAME_KEY = 'landmark_nickname';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || undefined;
-
-function storedPlayerId() {
-  let id = localStorage.getItem(PLAYER_ID_KEY);
-  if (!id) {
-    id = window.crypto?.randomUUID?.() || `p-${Math.random().toString(36).slice(2)}`;
-    localStorage.setItem(PLAYER_ID_KEY, id);
-  }
-  return id;
-}
 
 export function useMafia(authToken, { enabled }) {
   const socketRef = useRef(null);
@@ -36,11 +27,25 @@ export function useMafia(authToken, { enabled }) {
   const [chat, setChat] = useState([]);
   const [roomCode, setRoomCode] = useState(() => localStorage.getItem(ROOM_KEY) || null);
   const [busy, setBusy] = useState(false);
-  const playerId = storedPlayerId();
+  // Set by "Change settings" on the game-over screen, so the lobby the
+  // room returns to opens with the rules already on screen.
+  const [settingsRequested, setSettingsRequested] = useState(false);
+  const playerId = getPlayerId();
+
+  const clearRoom = useCallback(() => {
+    localStorage.removeItem(ROOM_KEY);
+    setRoomCode(null);
+    setState(null);
+    setChat([]);
+  }, []);
 
   useEffect(() => {
     if (!enabled) return undefined;
-    const socket = io(SERVER_URL, { transports: ['websocket', 'polling'], reconnectionDelay: 800 });
+    const socket = io(SERVER_URL, {
+      transports: ['websocket', 'polling'],
+      reconnectionDelay: 800,
+      auth: (cb) => cb({ token: authTokenRef.current }),
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => setConnected(true));
@@ -52,6 +57,12 @@ export function useMafia(authToken, { enabled }) {
       setError(err.message);
       setTimeout(() => setError((cur) => (cur === err.message ? null : cur)), 4000);
     });
+    socket.on('room:removed', (payload) => {
+      if (payload?.gameType !== 'mafia') return;
+      clearRoom();
+      announce('notice', { kind: 'roomRemoved', reason: payload.reason });
+    });
+    socket.on('account:blocked', (payload) => announce('blocked', payload));
 
     // A saved room code means "I was in a game" - rejoin it as soon as
     // the socket is up, exactly as the Monopoly side does.
@@ -62,6 +73,7 @@ export function useMafia(authToken, { enabled }) {
         playerId,
         nickname: localStorage.getItem(NICKNAME_KEY),
         token: authTokenRef.current,
+        guestKey: getGuestKey(),
       }, (res) => {
         if (res?.ok) {
           setRoomCode(res.roomCode);
@@ -78,45 +90,49 @@ export function useMafia(authToken, { enabled }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
 
+  useEffect(() => {
+    socketRef.current?.emit('presence:identify', { token: authToken });
+  }, [authToken]);
+
   const emit = useCallback((event, payload) => {
     socketRef.current?.emit(event, payload);
   }, []);
 
-  const createRoom = useCallback((nickname, presetId) => new Promise((resolve, reject) => {
+  const request = useCallback((event, payload, fallback) => new Promise((resolve, reject) => {
     setBusy(true);
-    if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
-    socketRef.current.emit('mafia:create', { nickname, playerId, presetId, token: authTokenRef.current }, (res) => {
+    socketRef.current.emit(event, payload, (res) => {
       setBusy(false);
       if (res?.ok) {
         localStorage.setItem(ROOM_KEY, res.roomCode);
         setRoomCode(res.roomCode);
         setState(res.state);
         resolve(res);
-      } else reject(new Error(res?.error || 'Could not create the room.'));
+      } else {
+        const err = new Error(res?.error || fallback);
+        err.code = res?.code || null;
+        reject(err);
+      }
     });
-  }), [playerId]);
+  }), []);
 
-  const joinRoom = useCallback((code, nickname) => new Promise((resolve, reject) => {
-    setBusy(true);
+  const createRoom = useCallback((nickname, presetId) => {
     if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
-    socketRef.current.emit('mafia:join', { roomCode: code, nickname, playerId, token: authTokenRef.current }, (res) => {
-      setBusy(false);
-      if (res?.ok) {
-        localStorage.setItem(ROOM_KEY, res.roomCode);
-        setRoomCode(res.roomCode);
-        setState(res.state);
-        resolve(res);
-      } else reject(new Error(res?.error || 'Could not join the room.'));
-    });
-  }), [playerId]);
+    return request('mafia:create', {
+      nickname, playerId, presetId, token: authTokenRef.current, guestKey: getGuestKey(),
+    }, 'Could not create the room.');
+  }, [playerId, request]);
+
+  const joinRoom = useCallback((code, nickname) => {
+    if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
+    return request('mafia:join', {
+      roomCode: code, nickname, playerId, token: authTokenRef.current, guestKey: getGuestKey(),
+    }, 'Could not join the room.');
+  }, [playerId, request]);
 
   const leaveRoom = useCallback(() => {
     socketRef.current?.emit('mafia:leave');
-    localStorage.removeItem(ROOM_KEY);
-    setRoomCode(null);
-    setState(null);
-    setChat([]);
-  }, []);
+    clearRoom();
+  }, [clearRoom]);
 
   return {
     connected,
@@ -129,6 +145,8 @@ export function useMafia(authToken, { enabled }) {
     createRoom,
     joinRoom,
     leaveRoom,
+    settingsRequested,
+    clearSettingsRequest: () => setSettingsRequested(false),
     actions: {
       updateSettings: (settings) => emit('mafia:settings', { settings }),
       applyPreset: (presetId) => emit('mafia:preset', { presetId }),
@@ -136,6 +154,11 @@ export function useMafia(authToken, { enabled }) {
       setReady: (ready) => emit('mafia:ready', { ready }),
       start: () => emit('mafia:start', {}),
       nightAction: (targetId) => emit('mafia:night', { targetId }),
+      donCheck: (targetId) => emit('mafia:night', { secondaryTargetId: targetId }),
+      restart: (startNow) => {
+        setSettingsRequested(!startNow);
+        emit('mafia:restart', { startNow });
+      },
       vote: (targetId) => emit('mafia:vote', { targetId }),
       skipPhase: () => emit('mafia:skipPhase', {}),
       sendChat: (text) => emit('mafia:chat', { text }),

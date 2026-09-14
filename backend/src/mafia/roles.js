@@ -91,21 +91,9 @@ function isMafiaRole(roleId) {
   return roleDef(roleId).team === TEAMS.MAFIA;
 }
 
-// Night actions run in a fixed order because they interact: the doctor's
-// save has to be known before a kill is resolved, and an investigation
-// must see the board as it was before anyone died.
-function nightActionOrder(settings) {
-  const configured = settings?.night?.actionOrder;
-  const known = ROLE_IDS.filter((id) => roleDef(id).actsAtNight);
-  if (!Array.isArray(configured) || configured.length === 0) {
-    return known.sort((a, b) => roleDef(a).order - roleDef(b).order);
-  }
-  // Anything the host ordered explicitly comes first, in their order;
-  // any role they did not mention keeps its default position after it,
-  // so a partial or stale list can never drop a role from the night.
-  const ordered = configured.filter((id) => known.includes(id));
-  const rest = known.filter((id) => !ordered.includes(id)).sort((a, b) => roleDef(a).order - roleDef(b).order);
-  return [...ordered, ...rest];
-}
+// Night actions are resolved in a fixed order in MafiaGame.resolveNight
+// because they interact: the doctor's save has to be known before a kill
+// lands, and an investigation sees the board as it was before anyone
+// died. That order is a rule of the game, not a host setting.
 
-module.exports = { ROLES, ROLE_IDS, TEAMS, CONFIGURABLE_ROLES, roleDef, isMafiaRole, nightActionOrder };
+module.exports = { ROLES, ROLE_IDS, TEAMS, CONFIGURABLE_ROLES, roleDef, isMafiaRole };

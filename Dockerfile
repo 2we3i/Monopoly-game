@@ -39,11 +39,21 @@ RUN groupadd --system landmark && useradd --system --gid landmark --home /app la
 COPY backend/ ./
 COPY --from=backend-deps /app/backend/node_modules ./node_modules
 COPY --from=frontend-build /app/frontend/dist ./public
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
+# The CRLF strip keeps the script runnable even if it was checked out on
+# Windows with line-ending conversion on.
 RUN mkdir -p /app/backend/data \
-    && chown -R landmark:landmark /app/backend
+    && chown -R landmark:landmark /app/backend \
+    && sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
 
-USER landmark
+# No `USER landmark` here on purpose: a volume mounted over data/ (as on
+# Railway) arrives owned by root, so the entrypoint starts as root, fixes
+# that one directory's ownership, and then drops to `landmark` before the
+# server starts. The server itself never runs as root - no
+# RAILWAY_RUN_UID=0 override is needed.
+ENTRYPOINT ["docker-entrypoint.sh"]
 
 EXPOSE 4000
 

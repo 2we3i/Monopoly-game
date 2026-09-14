@@ -4,6 +4,8 @@
 // state, even when a malicious client actively tries to spoof another
 // identity.
 
+require('./helpers/testEnv');
+
 process.env.PORT = '4002';
 const http = require('http');
 const express = require('express');
