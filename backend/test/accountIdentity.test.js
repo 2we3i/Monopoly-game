@@ -55,9 +55,15 @@ async function main() {
   await new Promise((resolve) => server.listen(PORT, resolve));
   console.log(`test server up on ${PORT}`);
 
-  const { status: s1, body: aliceReg } = await httpPost('/api/auth/register', { nickname: 'RegAlice', password: 'password1' });
+  // Nicknames are unique per account for the life of the database, so a
+  // fixed fixture name makes this test pass exactly once and fail with a
+  // 409 on every run after that. A per-run suffix keeps it repeatable.
+  const run = Date.now().toString(36);
+  const ALICE = `RegAlice_${run}`;
+  const BOB = `RegBob_${run}`;
+  const { status: s1, body: aliceReg } = await httpPost('/api/auth/register', { nickname: ALICE, password: 'password1' });
   assert(s1 === 201, `Alice registration should succeed, got ${s1}`);
-  const { status: s2, body: bobReg } = await httpPost('/api/auth/register', { nickname: 'RegBob', password: 'password2' });
+  const { status: s2, body: bobReg } = await httpPost('/api/auth/register', { nickname: BOB, password: 'password2' });
   assert(s2 === 201, `Bob registration should succeed, got ${s2}`);
 
   accountsDb.setAvatar(aliceReg.account.id, '/avatars/fake-alice-avatar.png');
@@ -77,7 +83,7 @@ async function main() {
 
   const alicePlayer = createRes.state.players.find((p) => p.id === aliceReg.account.id);
   assert(alicePlayer, 'Alice should appear in the room state under her real account id');
-  assert(alicePlayer.nickname === 'RegAlice', `expected Alice's real registered nickname, got "${alicePlayer.nickname}"`);
+  assert(alicePlayer.nickname === ALICE, `expected Alice's real registered nickname, got "${alicePlayer.nickname}"`);
   assert(alicePlayer.avatarUrl === '/avatars/fake-alice-avatar.png', `expected Alice's real avatar URL, got ${alicePlayer.avatarUrl}`);
   assert(alicePlayer.accountId === aliceReg.account.id, 'player.accountId should be set for a logged-in player');
   console.log("✓ Alice's room-state player object uses her verified account nickname/avatar/id, ignoring the spoofed values she sent");
@@ -90,7 +96,7 @@ async function main() {
   });
   const bobPlayer = joinRes.state.players.find((p) => p.id === bobReg.account.id);
   assert(bobPlayer, 'Bob should appear in the room state under his real account id');
-  assert(bobPlayer.nickname === 'RegBob', `expected Bob's real registered nickname, got "${bobPlayer.nickname}"`);
+  assert(bobPlayer.nickname === BOB, `expected Bob's real registered nickname, got "${bobPlayer.nickname}"`);
   assert(bobPlayer.accountId === bobReg.account.id, "player.accountId should be Bob's real id");
   console.log("✓ Bob's room-state player object uses his verified account identity, ignoring spoofed values");
 

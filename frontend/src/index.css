@@ -38,6 +38,24 @@
       linear-gradient(180deg, #0a1b13 0%, #061109 100%);
   }
 
+  /* The Mafia mode's own surfaces: a cold night and a pale morning.
+     They are deliberately darker and bluer than the Monopoly felt - the
+     two games should not feel like the same table. */
+  .table-night {
+    background-color: #05060d;
+    background-image:
+      radial-gradient(ellipse 90% 60% at 75% -10%, rgba(90,105,190,0.22) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 60% at 20% 110%, rgba(120,40,50,0.18) 0%, transparent 60%),
+      linear-gradient(180deg, #0b0e1c 0%, #05060d 100%);
+  }
+  .table-dawn {
+    background-color: #120f14;
+    background-image:
+      radial-gradient(ellipse 90% 60% at 70% -10%, rgba(226,164,80,0.18) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 70% at 15% 110%, rgba(60,60,110,0.2) 0%, transparent 60%),
+      linear-gradient(180deg, #1a1520 0%, #0d0b12 100%);
+  }
+
   /* Dark glass panel used for every chrome surface around the board. */
   .panel {
     @apply rounded-2xl border border-white/10 bg-felt-700/80 shadow-glass backdrop-blur-xl;

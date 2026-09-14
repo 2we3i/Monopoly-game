@@ -10,6 +10,7 @@ const { Server } = require('socket.io');
 const apiRoutes = require('./routes/api');
 const { router: authRoutes, AVATAR_DIR } = require('./routes/authRoutes');
 const { registerSocketHandlers } = require('./socket/socketHandler');
+const { registerMafiaHandlers } = require('./socket/mafiaHandler');
 const db = require('./db/database');
 const accountsDb = require('./db/accounts');
 
@@ -46,6 +47,9 @@ app.get('*', (req, res, next) => {
 });
 
 registerSocketHandlers(io);
+// A second game on the same socket server: its events are namespaced
+// (mafia:*) so the two handlers never see each other's traffic.
+registerMafiaHandlers(io);
 
 server.listen(PORT, '0.0.0.0', () => {
   // eslint-disable-next-line no-console

@@ -100,7 +100,7 @@ function PlayerSlot({ player, isMe }) {
   );
 }
 
-function LandingScreen({ onCreate, onJoin, joining, savedNickname, auth, onSwitchIdentity }) {
+function LandingScreen({ onCreate, onJoin, joining, savedNickname, auth, onSwitchIdentity, onBackToMenu }) {
   const { t, language } = useTranslation();
   const urlRoomCode = new URLSearchParams(window.location.search).get('room');
   const [mode, setMode] = useState(urlRoomCode ? 'join' : null);
@@ -138,6 +138,15 @@ function LandingScreen({ onCreate, onJoin, joining, savedNickname, auth, onSwitc
 
   return (
     <div className="relative flex min-h-screen items-center overflow-hidden px-6 py-12">
+      {onBackToMenu && (
+        <button
+          type="button"
+          onClick={onBackToMenu}
+          className="absolute left-4 top-4 z-10 rounded-lg px-3 py-2 text-sm font-medium text-board/60 transition-colors hover:bg-white/5 hover:text-board sm:left-6 sm:top-6"
+        >
+          ← {t('menu.backToMenu')}
+        </button>
+      )}
       <div className="absolute right-4 top-4 z-10 flex items-center gap-2 sm:right-6 sm:top-6">
         <ProfileMenu auth={auth} savedNickname={savedNickname} onSwitchIdentity={onSwitchIdentity} />
         <LanguageSwitcher variant="dark" />
@@ -361,9 +370,9 @@ function WaitingRoom({ gameState, playerId, onStart, onLeave, roomCode }) {
   );
 }
 
-export default function Lobby({ gameState, playerId, roomCode, onCreate, onJoin, onStart, onLeave, joining, savedNickname, auth, onSwitchIdentity }) {
+export default function Lobby({ gameState, playerId, roomCode, onCreate, onJoin, onStart, onLeave, onBackToMenu, joining, savedNickname, auth, onSwitchIdentity }) {
   if (!gameState || !roomCode) {
-    return <LandingScreen onCreate={onCreate} onJoin={onJoin} joining={joining} savedNickname={savedNickname} auth={auth} onSwitchIdentity={onSwitchIdentity} />;
+    return <LandingScreen onCreate={onCreate} onJoin={onJoin} joining={joining} savedNickname={savedNickname} auth={auth} onSwitchIdentity={onSwitchIdentity} onBackToMenu={onBackToMenu} />;
   }
   return (
     <WaitingRoom

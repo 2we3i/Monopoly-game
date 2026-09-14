@@ -106,6 +106,10 @@ class GameState {
 
   toJSON() {
     return {
+      // Persisted rows are dispatched on this when the server restarts;
+      // rows written before Mafia existed have no gameType and are
+      // treated as Monopoly, which is what they are.
+      gameType: 'monopoly',
       roomCode: this.roomCode,
       modeId: this.modeId,
       board: this.layout.board,
