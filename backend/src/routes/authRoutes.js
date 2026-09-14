@@ -11,6 +11,8 @@ const multer = require('multer');
 const accounts = require('../db/accounts');
 const platformDb = require('../db/platform');
 const sessionToken = require('../auth/sessionToken');
+const economy = require('../economy/service');
+const { achievementsFor } = require('../economy/achievements');
 const { DATA_DIR } = require('../config');
 
 const router = express.Router();
@@ -166,31 +168,25 @@ router.get('/me', requireAuth, (req, res) => {
   res.json({ account: accounts.toPublicAccount(req.accountRow) });
 });
 
-// Achievements are derived from the match history, so they appear for
-// games played before the achievement existed too.
-function achievementsFor(stats, citadels) {
-  const games = Object.keys(stats.byGame);
-  const list = [
-    { id: 'FIRST_GAME', current: stats.played, target: 1 },
-    { id: 'FIRST_WIN', current: stats.wins, target: 1 },
-    { id: 'HOST', current: stats.created, target: 5 },
-    { id: 'VETERAN', current: stats.played, target: 25 },
-    { id: 'CHAMPION', current: stats.wins, target: 10 },
-    { id: 'ALL_GAMES', current: ['monopoly', 'mafia', 'citadels'].filter((g) => games.includes(g)).length, target: 3 },
-    { id: 'CITADEL_LORD', current: citadels.wins, target: 1 },
-    { id: 'MASTER_BUILDER', current: Math.round(citadels.avgBuildings * 10) / 10, target: 7 },
-  ];
-  return list.map((a) => ({ ...a, unlocked: a.current >= a.target }));
-}
-
 router.get('/me/stats', requireAuth, (req, res) => {
   const stats = platformDb.accountStats(req.accountId);
   const citadels = platformDb.citadelsStats(req.accountId);
+  const ranks = economy.ranksFor(req.accountId);
+  const own = economy.accountEconomy(req.accountId);
   res.json({
     account: accounts.toPublicAccount(req.accountRow),
     stats,
     citadels,
     achievements: achievementsFor(stats, citadels),
+    economy: {
+      wallet: own.wallet,
+      loadout: own.loadout,
+      inventoryCount: own.inventory.length,
+      recentInventory: own.inventory.slice(0, 8),
+      ledger: own.ledger.slice(0, 10),
+    },
+    ranks,
+    recentWins: platformDb.recentWins(req.accountId, 8),
   });
 });
 

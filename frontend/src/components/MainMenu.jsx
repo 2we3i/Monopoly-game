@@ -9,6 +9,10 @@ import { useTranslation } from '../i18n/LanguageContext';
 import LanguageSwitcher from './LanguageSwitcher';
 import ProfileMenu from './ProfileMenu';
 import Icon from './icons';
+import SocialBar from './social/SocialBar';
+import { DashIcon } from './ui/dash';
+import { navigate } from '../lib/router';
+import { BunkerArt } from './bunker/bunkerText';
 
 function MonopolyArt() {
   return (
@@ -102,13 +106,18 @@ function CitadelsArt() {
   );
 }
 
-const GAME_ART = { monopoly: MonopolyArt, mafia: MafiaArt, citadels: CitadelsArt };
+const GAME_ART = {
+  monopoly: MonopolyArt, mafia: MafiaArt, citadels: CitadelsArt, bunker: BunkerArt,
+};
 const GAME_ACCENT = {
   monopoly: 'from-brass/25 to-transparent',
   mafia: 'from-rent/25 to-transparent',
   citadels: 'from-violet-500/25 to-transparent',
+  bunker: 'from-orange-500/15 to-transparent',
 };
-const GAME_EMOJI = { monopoly: '🎲', mafia: '🔪', citadels: '🏰' };
+const GAME_EMOJI = {
+  monopoly: '🎲', mafia: '🔪', citadels: '🏰', bunker: '☢️',
+};
 
 function GameCard({ game, onPlay, onConfigure, isGuest }) {
   const { t } = useTranslation();
@@ -120,7 +129,7 @@ function GameCard({ game, onPlay, onConfigure, isGuest }) {
       unavailable ? 'opacity-70' : 'hover:-translate-y-1 hover:border-white/20 hover:shadow-deep'
     }`}
     >
-      <div className="relative h-36 w-full overflow-hidden sm:h-40">
+      <div className="relative h-36 w-full overflow-hidden sm:h-40 3xl:h-48 4xl:h-64">
         <div className={`absolute inset-0 transition-transform duration-500 ${unavailable ? 'grayscale' : 'group-hover:scale-[1.04]'}`}>
           <Art />
         </div>
@@ -137,8 +146,8 @@ function GameCard({ game, onPlay, onConfigure, isGuest }) {
 
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div>
-          <h2 className="font-display text-[22px] font-black leading-tight text-parch">{t(`menu.${game.id}.title`)}</h2>
-          <p className="mt-1 text-[13px] leading-snug text-parch/50">{t(`menu.${game.id}.description`)}</p>
+          <h2 className="font-display text-[22px] font-black leading-tight text-parch 4xl:text-[32px]">{t(`menu.${game.id}.title`)}</h2>
+          <p className="mt-1 text-[13px] leading-snug text-parch/50 4xl:text-[16.5px]">{t(`menu.${game.id}.description`)}</p>
         </div>
 
         <ul className="flex flex-wrap gap-1.5">
@@ -152,7 +161,7 @@ function GameCard({ game, onPlay, onConfigure, isGuest }) {
         </ul>
 
         <div className="mt-auto flex gap-2 pt-1">
-          <button type="button" disabled={unavailable} onClick={() => onPlay(game)} className="btn-primary flex-1 py-3 text-[15px]">
+          <button type="button" disabled={unavailable} onClick={() => onPlay(game)} className="btn-primary flex-1 py-3 text-[15px] 4xl:py-4 4xl:text-[18px]">
             {isGuest ? <Icon.lock className="h-4 w-4" /> : <Icon.chevronRight className="h-4 w-4" />}
             {isGuest ? t('menu.createNeedsAccount') : t('menu.play')}
           </button>
@@ -180,6 +189,7 @@ export default function MainMenu({
     { id: 'monopoly', minPlayers: 2, maxPlayers: 10 },
     { id: 'mafia', minPlayers: 4, maxPlayers: 15 },
     { id: 'citadels', minPlayers: 2, maxPlayers: 7 },
+    { id: 'bunker', minPlayers: 4, maxPlayers: 16 },
   ]);
   const [code, setCode] = useState('');
   const isGuest = !auth?.isLoggedIn;
@@ -205,12 +215,21 @@ export default function MainMenu({
 
   return (
     <div className="table-felt min-h-screen">
-      <header className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brass-light to-brass-deep text-ink shadow-lift">
-          <Icon.crown className="h-5 w-5" />
+      <header className="mx-auto flex max-w-6xl flex-wrap items-center gap-3 px-4 py-4 3xl:max-w-[1500px] 4xl:max-w-[2100px] 4xl:px-10 4xl:py-6 5xl:max-w-[2800px]">
+        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brass-light to-brass-deep text-ink shadow-lift 4xl:h-12 4xl:w-12">
+          <Icon.crown className="h-5 w-5 4xl:h-7 4xl:w-7" />
         </span>
-        <h1 className="font-display text-[19px] font-black tracking-tight text-parch">{t('app.title')}</h1>
+        <h1 className="font-display text-[19px] font-black tracking-tight text-parch 4xl:text-[26px]">{t('app.title')}</h1>
+        <nav className="ml-2 hidden items-center gap-1 md:flex" aria-label={t('nav.pages')}>
+          {[['shop', 'bag'], ['leaderboard', 'trophy'], ...(auth?.isLoggedIn ? [['inventory', 'box']] : [])].map(([id, icon]) => (
+            <button key={id} type="button" onClick={() => navigate(`/${id}`)} className="btn-quiet px-2.5 py-1.5 text-[13px] 4xl:px-3.5 4xl:text-[16px]">
+              <DashIcon name={icon} className="h-4 w-4" />
+              {t(`nav.${id}`)}
+            </button>
+          ))}
+        </nav>
         <div className="flex-1" />
+        <SocialBar />
         <LanguageSwitcher variant="dark" />
         {auth?.isLoggedIn ? (
           <ProfileMenu auth={auth} onSwitchIdentity={auth.logout} />
@@ -222,12 +241,12 @@ export default function MainMenu({
         )}
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-4 pb-16">
-        <section className="mb-7 text-center">
-          <h2 className="font-display text-[clamp(1.8rem,5vw,2.8rem)] font-black leading-tight text-parch">
+      <main className="mx-auto w-full max-w-6xl px-4 pb-16 3xl:max-w-[1500px] 4xl:max-w-[2100px] 4xl:px-10 5xl:max-w-[2800px]">
+        <section className="mb-7 text-center 4xl:mb-12 4xl:mt-6">
+          <h2 className="font-display text-[clamp(1.8rem,5vw,2.8rem)] font-black leading-tight text-parch 4xl:text-[4rem]">
             {t('menu.heading')}
           </h2>
-          <p className="mx-auto mt-2 max-w-xl text-[14px] leading-relaxed text-parch/45">
+          <p className="mx-auto mt-2 max-w-xl text-[14px] leading-relaxed text-parch/45 4xl:max-w-3xl 4xl:text-[18px]">
             {t('menu.subheading')}
           </p>
           {isGuest && (
@@ -238,13 +257,13 @@ export default function MainMenu({
           )}
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 4xl:gap-8">
           {games.map((game) => (
             <GameCard key={game.id} game={game} onPlay={onPlay} onConfigure={onConfigure} isGuest={isGuest} />
           ))}
         </section>
 
-        <section className="mx-auto mt-8 max-w-md">
+        <section className="mx-auto mt-8 max-w-md 4xl:mt-12 4xl:max-w-xl">
           <div className="panel p-4">
             <p className="section-label mb-2">{t('menu.joinByCode')}</p>
             <form onSubmit={submitCode} className="flex gap-2">

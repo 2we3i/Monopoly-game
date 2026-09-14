@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../i18n/LanguageContext';
 import { navigate } from '../lib/router';
+import { useSocial } from '../social/SocialContext';
 
 const MAX_AVATAR_BYTES = 3 * 1024 * 1024;
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
@@ -79,6 +80,7 @@ function AvatarUploadButton({ auth }) {
 
 export default function ProfileMenu({ auth, savedNickname, onSwitchIdentity }) {
   const { t } = useTranslation();
+  const social = useSocial();
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
 
@@ -148,6 +150,24 @@ export default function ProfileMenu({ auth, savedNickname, onSwitchIdentity }) {
               className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-ink transition-colors hover:bg-brass/10"
             >
               {t('profile.open')}
+            </button>
+            {[['shop', '/shop'], ['inventory', '/inventory'], ['leaderboard', '/leaderboard']].map(([id, path]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => { setOpen(false); navigate(path); }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-ink transition-colors hover:bg-brass/10"
+              >
+                {t(`nav.${id}`)}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => { setOpen(false); social.openMessenger(); }}
+              className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-ink transition-colors hover:bg-brass/10"
+            >
+              {t('nav.messages')}
+              {social.unreadMessages > 0 && <span className="rounded-full bg-rent px-1.5 text-[11px] font-bold text-white">{social.unreadMessages}</span>}
             </button>
             {auth.isAdmin && (
               <button

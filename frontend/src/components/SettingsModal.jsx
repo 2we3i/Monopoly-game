@@ -151,6 +151,9 @@ export default function SettingsModal({ onClose }) {
           <Row icon={Icon.dice} title={t('settings.animations')} hint={t('settings.animationsHint')}>
             <Toggle checked={settings.animations} onChange={(v) => update({ animations: v })} label={t('settings.animations')} />
           </Row>
+          <Row icon={Icon.bolt} title={t('settings.cosmeticSounds')} hint={t('settings.cosmeticSoundsHint')}>
+            <Toggle checked={settings.cosmeticSounds} onChange={(v) => update({ cosmeticSounds: v })} label={t('settings.cosmeticSounds')} />
+          </Row>
         </section>
 
         <p className="flex items-start gap-2 rounded-xl bg-white/[0.03] px-3 py-2 text-[11.5px] leading-snug text-parch/40">

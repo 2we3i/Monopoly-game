@@ -16,6 +16,7 @@ import OverviewSection from './OverviewSection';
 import LobbiesSection from './LobbiesSection';
 import UsersSection from './UsersSection';
 import ModesSection from './ModesSection';
+import SocialBar from '../social/SocialBar';
 
 const SECTIONS = [
   { id: 'overview', icon: 'chart', component: OverviewSection },
@@ -74,7 +75,7 @@ export default function AdminPanel({ auth }) {
 
   return (
     <div className="dash-bg min-h-screen text-zinc-200 lg:flex">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-white/[0.06] bg-[#0d0e11] lg:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-white/[0.06] bg-[#0d0e11] lg:flex 4xl:w-80">
         <div className="flex items-center gap-2.5 px-5 py-5">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brass-light to-brass-deep text-ink shadow-lift">
             <DashIcon name="shield" className="h-5 w-5" />
@@ -116,7 +117,8 @@ export default function AdminPanel({ auth }) {
       <div className="min-w-0 flex-1">
         <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#0a0b0d]/85 backdrop-blur">
           <div className="flex items-center gap-3 px-4 py-3 lg:px-8">
-            <h1 className="flex-1 text-[17px] font-semibold tracking-tight text-zinc-50">{t(`admin.nav.${section}`)}</h1>
+            <h1 className="flex-1 text-[17px] font-semibold tracking-tight text-zinc-50 4xl:text-[22px]">{t(`admin.nav.${section}`)}</h1>
+            <SocialBar compact />
             <LanguageSwitcher variant="dark" />
             <span className="lg:hidden"><Button tone="subtle" icon="door" onClick={() => navigate('/')}>{t('admin.backToSite')}</Button></span>
           </div>
@@ -136,7 +138,7 @@ export default function AdminPanel({ auth }) {
             ))}
           </nav>
         </header>
-        <main className="px-4 py-6 lg:px-8">
+        <main className="px-4 py-6 lg:px-8 4xl:mx-auto 4xl:max-w-[2600px] 4xl:px-12 4xl:py-10">
           <Section token={auth.token} admin={auth.account} />
         </main>
       </div>

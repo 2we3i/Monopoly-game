@@ -62,7 +62,7 @@ function ModeCard({ mode, token, onChanged }) {
       <div className="flex flex-1 flex-col gap-4 p-4">
         <div className="flex items-start gap-3">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ backgroundColor: `${color}1f`, color }}>
-            <DashIcon name={mode.gameId === 'citadels' ? 'castle' : 'gamepad'} className="h-5 w-5" />
+            <DashIcon name={{ citadels: 'castle', bunker: 'shield' }[mode.gameId] || 'gamepad'} className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-[15px] font-semibold text-zinc-100">{gameName(t, mode.gameId)}</p>

@@ -17,6 +17,7 @@ import { hexToRgba } from '../colorUtils';
 import PlayerAvatar from './PlayerAvatar';
 import { pieceIdFor, pieceLabel } from './tokenArt';
 import Icon from './icons';
+import { TokenDecor, useLook } from '../cosmetics/Cosmetics';
 
 const SCALE_MAX = 3.2;
 const SCALE_FLOOR = 0.12;
@@ -203,6 +204,10 @@ function Token({ player, moveDescriptor, activePlayers, sideLength, isCurrent, a
   // matter how far the board is zoomed in or out.
   const sizeVar = total > 1 ? 'var(--tok-stack, 30px)' : 'var(--tok, 30px)';
   const flashes = useMoneyFlashes(player.money, animate);
+  // Cosmetic only: the owner's token shape, rim, aura and movement trail.
+  const look = useLook(player.cosmetics);
+  const firstPosition = useRef(position);
+  const hop = animate && position !== firstPosition.current ? position : null;
 
   return (
     <div
@@ -223,12 +228,14 @@ function Token({ player, moveDescriptor, activePlayers, sideLength, isCurrent, a
             style={{ boxShadow: `0 0 0 2px ${hexToRgba(player.color, 0.9)}` }}
           />
         )}
-        <PlayerAvatar
-          player={player}
-          title={`${player.nickname} · ${pieceLabel(pieceIdFor(player), language)}`}
-          sizeClassName="h-full w-full"
-          ringClassName="ring-[3px] ring-white/95"
-        />
+        <TokenDecor look={look} color={player.color} hop={hop}>
+          <PlayerAvatar
+            player={player}
+            title={`${player.nickname} · ${pieceLabel(pieceIdFor(player), language)}`}
+            sizeClassName="h-full w-full"
+            ringClassName={look.tokenShape || look.tokenFrame ? '' : 'ring-[3px] ring-white/95'}
+          />
+        </TokenDecor>
 
         {player.inJail && (
           <span

@@ -3,6 +3,13 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
+      // Large-screen tiers above Tailwind's 2xl (1536px): full HD, QHD and
+      // 4K. Layouts use them to add columns and room, not to scale up.
+      screens: {
+        '3xl': '1920px',
+        '4xl': '2560px',
+        '5xl': '3400px',
+      },
       colors: {
         table: { DEFAULT: '#0f3d2e', dark: '#0a2b20', light: '#155040' },
         board: { DEFAULT: '#f2e8d5', tile: '#faf4e6', line: '#d9c9a3' },

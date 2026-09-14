@@ -2,6 +2,8 @@
 // Flat key -> string dictionaries per language.
 
 import { platformEn, platformRu } from './platformTranslations';
+import { communityEn, communityRu } from './communityTranslations';
+import { bunkerEn, bunkerRu } from './bunkerTranslations';
 
 export const LANGUAGES = {
   en: { label: 'English', nativeLabel: 'English' },
@@ -1061,8 +1063,8 @@ const ru = {
 };
 
 export const TRANSLATIONS = {
-  en: { ...en, ...platformEn },
-  ru: { ...ru, ...platformRu },
+  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn },
+  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu },
 };
 
 if (import.meta.env.DEV) {

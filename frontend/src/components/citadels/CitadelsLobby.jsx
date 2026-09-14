@@ -7,6 +7,9 @@ import { useTranslation } from '../../i18n/LanguageContext';
 import { useCitadelsConfig } from '../../hooks/useCitadels';
 import PlayerAvatar from '../PlayerAvatar';
 import Icon from '../icons';
+import SocialBar from '../social/SocialBar';
+import FramedAvatar from '../../cosmetics/FramedAvatar';
+import { StyledName } from '../../cosmetics/Cosmetics';
 import { Segmented } from '../mafia/MafiaSettings';
 import {
   ROLE_GLYPH, TYPE_COLORS, TYPE_ORDER, TypeIcon,
@@ -54,13 +57,14 @@ export default function CitadelsLobby({
 
   return (
     <div className="table-citadel min-h-screen">
-      <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6">
+      <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6 3xl:max-w-6xl 4xl:max-w-[1700px] 4xl:gap-6 4xl:py-10">
         <header className="flex flex-wrap items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/80 to-violet-900 text-[20px] shadow-lift">🏰</span>
           <div className="min-w-0 flex-1">
             <h1 className="font-display text-[21px] font-black leading-tight text-parch">{t('menu.citadels.title')}</h1>
             <p className="text-[12px] text-parch/45">{t('citadels.lobbySubtitle')}</p>
           </div>
+          <SocialBar compact />
           <button type="button" onClick={onLeave} className="btn-quiet px-3 py-2 text-[12.5px]">{t('waiting.leave')}</button>
         </header>
 
@@ -91,9 +95,11 @@ export default function CitadelsLobby({
             <ul className="flex flex-col gap-1.5">
               {state.players.map((p, i) => (
                 <li key={p.id} className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 ${p.ready || p.isHost ? 'border-go/35 bg-go/[0.07]' : 'border-white/[0.07] bg-white/[0.025]'}`}>
-                  <PlayerAvatar player={{ ...p, color: SEAT_COLORS[i % SEAT_COLORS.length] }} sizeClassName="h-8 w-8" ringClassName="ring-2 ring-white/15" />
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-parch">
-                    {p.nickname}
+                  <FramedAvatar cosmetics={p.cosmetics} join>
+                    <PlayerAvatar player={{ ...p, color: SEAT_COLORS[i % SEAT_COLORS.length] }} sizeClassName="h-8 w-8 4xl:h-10 4xl:w-10" ringClassName="ring-2 ring-white/15" />
+                  </FramedAvatar>
+                  <span className="flex min-w-0 flex-1 items-center truncate text-[13.5px] font-semibold text-parch 4xl:text-[16px]">
+                    <StyledName nickname={p.nickname} cosmetics={p.cosmetics} showTitle titleSize="xs" />
                     {p.isYou && <span className="ml-1.5 text-[11px] font-normal text-parch/40">{t('sidebar.you')}</span>}
                     {p.isGuest && <span className="ml-1.5 text-[11px] font-normal text-parch/35">· {t('common.guest')}</span>}
                   </span>

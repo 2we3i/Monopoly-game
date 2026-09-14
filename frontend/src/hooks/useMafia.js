@@ -161,7 +161,7 @@ export function useMafia(authToken, { enabled }) {
       },
       vote: (targetId) => emit('mafia:vote', { targetId }),
       skipPhase: () => emit('mafia:skipPhase', {}),
-      sendChat: (text) => emit('mafia:chat', { text }),
+      sendChat: (text, extra = {}) => emit('mafia:chat', { ...extra, text }),
     },
   };
 }

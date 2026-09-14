@@ -10,6 +10,8 @@ const { CONFIGURABLE_ROLES, ROLES } = require('../mafia/roles');
 const citadels = require('../citadels/CitadelsGame');
 const { ROLES: CITADELS_ROLES, ROLE_ORDER } = require('../citadels/roles');
 const { DISTRICTS, TYPE_LIST } = require('../citadels/districts');
+const bunker = require('../bunker/BunkerGame');
+const bunkerCards = require('../bunker/cards');
 const modes = require('../platform/modes');
 const registry = require('../platform/registry');
 
@@ -19,7 +21,7 @@ router.get('/health', (req, res) => {
   res.json({
     ok: true,
     uptime: process.uptime(),
-    rooms: roomManager.rooms.size + roomManager.mafiaRooms.size + roomManager.citadelsRooms.size,
+    rooms: roomManager.roomCount(),
   });
 });
 
@@ -53,7 +55,26 @@ router.get('/games', (req, res) => {
         maxPlayers: citadels.MAX_PLAYERS,
         available: modes.gameAvailable('citadels'),
       },
+      {
+        id: 'bunker',
+        minPlayers: bunker.MIN_PLAYERS,
+        maxPlayers: bunker.MAX_PLAYERS,
+        available: modes.gameAvailable('bunker'),
+      },
     ],
+  });
+});
+
+// Bunker reference data: card, catastrophe and bunker-room names. Which
+// cards a player holds is never part of this - only of their own payload.
+router.get('/bunker/config', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  res.json({
+    minPlayers: bunker.MIN_PLAYERS,
+    maxPlayers: bunker.MAX_PLAYERS,
+    firstVoteRound: bunker.FIRST_VOTE_ROUND,
+    defaults: bunker.DEFAULT_SETTINGS,
+    ...bunkerCards.publicConfig(),
   });
 });
 

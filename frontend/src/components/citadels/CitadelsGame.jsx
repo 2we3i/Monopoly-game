@@ -16,6 +16,15 @@ import {
 } from './citadelsArt';
 import { SEAT_COLORS } from './CitadelsLobby';
 import { formatCitadelsLog } from './logFormat';
+import RoomChat from '../chat/RoomChat';
+import SocialBar from '../social/SocialBar';
+import { StyledName, VictoryMark, useLook } from '../../cosmetics/Cosmetics';
+import { useOutcomeEffects, useTurnSound } from '../../cosmetics/useGameCosmetics';
+
+function SeatVictoryMark({ cosmetics, place }) {
+  const look = useLook(cosmetics);
+  return <VictoryMark item={look.tokenVictory} place={place} />;
+}
 
 function useCountdown(endsAt) {
   const [left, setLeft] = useState(() => (endsAt ? Math.max(0, endsAt - Date.now()) : 0));
@@ -62,6 +71,7 @@ function TopBar({ state, onLeave, t }) {
           {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
         </div>
       )}
+      <SocialBar compact />
       <button type="button" onClick={onLeave} className="btn-quiet px-3 py-2 text-[12.5px]">{t('waiting.leave')}</button>
     </header>
   );
@@ -124,7 +134,7 @@ function PlayerSeat({
         <div className="min-w-0 flex-1">
           <p className="truncate text-[13px] font-semibold text-parch">
             {player.crown && <span title={t('citadels.crown')}>👑 </span>}
-            {player.nickname}
+            <StyledName nickname={player.nickname} cosmetics={player.cosmetics} />
             {player.isYou && <span className="ml-1 text-[10.5px] font-normal text-parch/40">({t('waiting.you')})</span>}
           </p>
           <p className="flex flex-wrap gap-x-2.5 text-[11.5px] text-parch/55 tnum">
@@ -603,34 +613,20 @@ function LogPanel({
   );
 }
 
-function ChatPanel({ chat, onSend, t }) {
-  const [text, setText] = useState('');
-  const ref = useRef(null);
-  useEffect(() => {
-    if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
-  }, [chat.length]);
+function ChatPanel({
+  chat, onSend, players, myPlayerId, t,
+}) {
   return (
-    <section className="panel flex min-h-[11rem] flex-col overflow-hidden">
-      <p className="section-label border-b border-white/[0.07] px-3 py-2">💬 {t('citadels.chat')}</p>
-      <div ref={ref} className="scrollbar-thin max-h-48 flex-1 space-y-1 overflow-y-auto px-3 py-2">
-        {chat.length === 0 && <p className="py-3 text-center text-[12px] text-parch/30">{t('chat.noMessages')}</p>}
-        {chat.map((m, i) => (m.system ? (
-          <p key={i} className="text-center text-[11px] italic text-parch/30">{t(`citadels.system.${m.type}`, m.params)}</p>
-        ) : (
-          <p key={i} className="text-[12.5px] leading-snug">
-            <span className="font-bold text-brass-light">{m.nickname}:</span> <span className="text-parch/75">{m.text}</span>
-          </p>
-        )))}
-      </div>
-      <form
-        onSubmit={(e) => { e.preventDefault(); if (text.trim()) { onSend(text.trim()); setText(''); } }}
-        className="flex gap-2 border-t border-white/[0.07] p-2"
-      >
-        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={300} placeholder={t('chat.placeholder')} className="field min-w-0 flex-1 py-1.5 text-[12.5px]" />
-        <button type="submit" disabled={!text.trim()} className="btn-primary px-3 py-1.5" aria-label={t('citadels.chat')}>
-          <Icon.chevronRight className="h-4 w-4" />
-        </button>
-      </form>
+    <section className="panel flex h-[19rem] flex-col overflow-hidden 4xl:h-[30rem]">
+      <RoomChat
+        messages={chat}
+        onSend={onSend}
+        players={players}
+        myPlayerId={myPlayerId}
+        renderSystem={(m) => t(`citadels.system.${m.type}`, m.params)}
+        nameTone={() => 'text-brass-light'}
+        header={<p className="section-label shrink-0 border-b border-white/[0.07] px-3 py-2">💬 {t('citadels.chat')}</p>}
+      />
     </section>
   );
 }
@@ -640,6 +636,11 @@ function GameOver({
 }) {
   const { standings } = state.results;
   const isHost = !!state.you?.isHost;
+  const myId = state.players.find((p) => p.isYou)?.id;
+  const myPlace = standings.findIndex((s) => s.playerId === myId) + 1;
+  const podium = (myPlace === 2 && standings.length >= 3) || (myPlace === 3 && standings.length >= 4);
+  useOutcomeEffects(myPlace ? (myPlace === 1 ? 'win' : podium ? 'podium' : 'loss') : null, `${state.round}-${standings[0]?.playerId}`);
+  const cosmeticsOf = (id) => state.players.find((p) => p.id === id)?.cosmetics;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-md">
       <div className="w-full max-w-2xl animate-scale-in rounded-2xl border border-white/12 bg-[#15110c]/95 p-5 shadow-deep">
@@ -665,7 +666,12 @@ function GameOver({
               {standings.map((s, i) => (
                 <tr key={s.playerId} className={`border-t border-white/[0.05] ${i === 0 ? 'bg-brass/10' : ''}`}>
                   <td className="px-2 py-2 text-parch/50">{i + 1}</td>
-                  <td className="px-2 font-semibold text-parch">{s.nickname}</td>
+                  <td className="max-w-[14rem] px-2 font-semibold text-parch">
+                    <span className="flex items-center gap-1">
+                      <StyledName nickname={s.nickname} cosmetics={cosmeticsOf(s.playerId)} showTitle titleSize="xs" />
+                      <SeatVictoryMark cosmetics={cosmeticsOf(s.playerId)} place={i + 1} />
+                    </span>
+                  </td>
                   <td className="px-2 text-parch/70">{ROLE_GLYPH[s.role]} {lookup.roleName(s.role)}</td>
                   <td className="px-2 text-right tnum text-parch/70">{s.buildings}</td>
                   <td className="px-2 text-right tnum text-parch/80">{s.base}</td>
@@ -702,6 +708,8 @@ export default function CitadelsGame({
   const config = useCitadelsConfig();
   const lookup = useLookup(config, language);
   const [cityOfId, setCityOfId] = useState(null);
+  const meNow = state.players.find((p) => p.isYou);
+  useTurnSound((state.phase === 'TURNS' && !!meNow?.isCurrent) || (state.phase === 'DRAFT' && state.draft?.pickerId === meNow?.id));
 
   if (!config) {
     return (
@@ -717,7 +725,7 @@ export default function CitadelsGame({
 
   return (
     <div className="table-citadel min-h-screen">
-      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-3 py-4">
+      <div className="mx-auto flex max-w-7xl flex-col gap-3 px-3 py-4 3xl:max-w-[1760px] 4xl:max-w-[2360px] 4xl:gap-5 4xl:px-8 4xl:py-8 5xl:max-w-[3100px]">
         <TopBar state={state} onLeave={onLeave} t={t} />
         <RoleTrack state={state} lookup={lookup} t={t} />
         <div className="scrollbar-thin flex gap-2 overflow-x-auto pb-1">
@@ -726,7 +734,7 @@ export default function CitadelsGame({
           ))}
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[1fr,21rem]">
+        <div className="grid gap-3 lg:grid-cols-[1fr,21rem] 3xl:grid-cols-[1fr,26rem] 4xl:grid-cols-[1fr,36rem] 4xl:gap-5">
           <div className="flex min-w-0 flex-col gap-3">
             {state.phase === 'DRAFT' && <DraftPanel state={state} lookup={lookup} actions={actions} t={t} />}
             {state.phase === 'TURNS' && me && <TurnPanel state={state} me={me} lookup={lookup} actions={actions} t={t} language={language} />}
@@ -741,7 +749,7 @@ export default function CitadelsGame({
           <div className="flex flex-col gap-3">
             {state.you && me && <YouCard state={state} me={me} lookup={lookup} t={t} />}
             <LogPanel log={state.log} config={config} t={t} language={language} />
-            <ChatPanel chat={chat} onSend={actions.sendChat} t={t} />
+            <ChatPanel chat={chat} onSend={actions.sendChat} players={state.players} myPlayerId={me?.id} t={t} />
           </div>
         </div>
       </div>

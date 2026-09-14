@@ -15,6 +15,7 @@ const bans = require('../platform/bans');
 const {
   notifyRemoved, clientMessage, errorPayload, idString,
 } = require('./roomSockets');
+const roomChat = require('../social/roomChat');
 
 const { AccessError } = access;
 const MODE_ID = 'citadels.classic';
@@ -25,12 +26,20 @@ function sendError(socket, message) {
   socket.emit('citadels:error', { message });
 }
 
+// A player's cosmetics are looks only: attached to the payload after the
+// engine has built it, so they can never influence the game itself.
+function clientState(game, viewerId) {
+  const state = game.toClientJSON(viewerId);
+  state.players = roomChat.decoratePlayers(state.players, (p) => game.getPlayer(p.id)?.accountId);
+  return state;
+}
+
 function broadcast(io, roomCode) {
   const game = roomManager.getCitadelsRoom(roomCode);
   if (!game) return;
   roomManager.persistCitadels(roomCode);
   game.players.forEach((p) => {
-    if (p.socketId) io.to(p.socketId).emit('citadels:state', game.toClientJSON(p.id));
+    if (p.socketId) io.to(p.socketId).emit('citadels:state', clientState(game, p.id));
   });
   registry.observe('citadels', game);
 }
@@ -119,8 +128,10 @@ registry.register({
           winner: standings[0]?.nickname || null,
           players: game.players.map((p) => {
             const row = standings.find((s) => s.playerId === p.id);
+            const place = standings.findIndex((s) => s.playerId === p.id);
             return {
               playerId: p.id,
+              place: place >= 0 ? place + 1 : null,
               result: p.id === game.results.winnerId ? 'win' : 'loss',
               role: p.role,
               score: row?.total ?? 0,
@@ -200,7 +211,7 @@ function registerCitadelsHandlers(io) {
         socket.data.citadelsAccountId = identity.accountId;
         roomManager.persistCitadels(game.roomCode);
         cb?.({
-          ok: true, roomCode: game.roomCode, playerId: player.id, state: game.toClientJSON(player.id),
+          ok: true, roomCode: game.roomCode, playerId: player.id, state: clientState(game, player.id),
         });
       } catch (err) {
         cb?.(errorPayload(err, [CitadelsError]));
@@ -232,7 +243,7 @@ function registerCitadelsHandlers(io) {
         socket.data.citadelsPlayerId = player.id;
         socket.data.citadelsAccountId = identity.accountId;
         cb?.({
-          ok: true, roomCode: game.roomCode, playerId: player.id, state: game.toClientJSON(player.id),
+          ok: true, roomCode: game.roomCode, playerId: player.id, state: clientState(game, player.id),
         });
         broadcast(io, game.roomCode);
         schedule(io, game.roomCode);
@@ -285,15 +296,16 @@ function registerCitadelsHandlers(io) {
       cardUid: idString(p.cardUid, 20),
     })));
 
-    socket.on('citadels:chat', ({ text } = {}) => {
+    socket.on('citadels:chat', ({ text, emote } = {}) => {
       const game = roomManager.getCitadelsRoom(socket.data.citadelsRoom);
       const player = game?.getPlayer(socket.data.citadelsPlayerId);
       if (!player) return;
-      const clean = String(text || '').trim().slice(0, 300);
-      if (!clean) return;
-      io.to(game.roomCode).emit('citadels:chat', {
-        playerId: player.id, nickname: player.nickname, text: clean, ts: Date.now(),
+      const message = roomChat.prepareRoomMessage({
+        text, emote: idString(emote, 80), sender: player, players: game.players,
       });
+      if (!message) return;
+      io.to(game.roomCode).emit('citadels:chat', message);
+      roomChat.notifyMentions(message, { players: game.players, context: { kind: 'room', gameType: 'citadels', roomCode: game.roomCode } });
     });
 
     socket.on('citadels:leave', () => {

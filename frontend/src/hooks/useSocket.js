@@ -175,7 +175,7 @@ export function useSocket(authToken) {
     declineTrade: (tradeId) => send('game:declineTrade', { tradeId }),
     cancelTrade: (tradeId) => send('game:cancelTrade', { tradeId }),
     setCustomPrice: (tileId, targetPlayerId, amount) => send('game:setCustomPrice', { tileId, targetPlayerId, amount }),
-    sendChat: (text) => send('chat:message', { text }),
+    sendChat: (text, extra = {}) => send('chat:message', { ...extra, text }),
   };
 
   return {

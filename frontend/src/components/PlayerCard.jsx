@@ -9,6 +9,7 @@ import { useTranslation } from '../i18n/LanguageContext';
 import { hexToRgba } from '../colorUtils';
 import PlayerAvatar from './PlayerAvatar';
 import Icon from './icons';
+import { AvatarFrame, StyledName, useLook } from '../cosmetics/Cosmetics';
 
 // Groups the player's deeds by color group (plus stations/utilities) and
 // records how close each one is to a monopoly - the single most useful
@@ -48,6 +49,7 @@ export default function PlayerCard({
   player, isCurrentTurn, isMe, board, properties, onTrade, expanded, onToggleExpand, onSelectTile,
 }) {
   const { t, language } = useTranslation();
+  const look = useLook(player.cosmetics);
   const holdings = useHoldings(player, board, properties);
   const worth = useMemo(() => netWorth(player, board, properties), [player, board, properties]);
   const count = holdings.tileIds.length;
@@ -66,12 +68,14 @@ export default function PlayerCard({
 
       <div className="flex items-center gap-3 py-2.5 pl-3.5 pr-3">
         <div className="relative shrink-0">
-          <PlayerAvatar
-            player={player}
-            sizeClassName="h-10 w-10"
-            ringClassName=""
-            title={player.nickname}
-          />
+          <AvatarFrame item={look.avatarFrame}>
+            <PlayerAvatar
+              player={player}
+              sizeClassName="h-10 w-10 4xl:h-12 4xl:w-12"
+              ringClassName=""
+              title={player.nickname}
+            />
+          </AvatarFrame>
           {/* The ring is the player's own color, not a generic white one:
               it is the same cue their token carries on the board. */}
           <span
@@ -88,7 +92,9 @@ export default function PlayerCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <p className="truncate text-[13.5px] font-bold text-parch">{player.nickname}</p>
+            <p className="min-w-0 truncate text-[13.5px] font-bold text-parch 4xl:text-[15.5px]">
+              <StyledName nickname={player.nickname} look={look} showTitle titleSize="xs" />
+            </p>
             {isMe && <span className="shrink-0 text-[11px] font-medium text-parch/40">{t('sidebar.you')}</span>}
             {player.isHost && <Icon.crown className="h-3.5 w-3.5 shrink-0 text-brass/70" title={t('waiting.host')} />}
           </div>

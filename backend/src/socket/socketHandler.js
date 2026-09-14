@@ -15,6 +15,7 @@ const bans = require('../platform/bans');
 const {
   notifyRemoved, clientMessage, errorPayload,
 } = require('./roomSockets');
+const roomChat = require('../social/roomChat');
 
 const { AccessError } = access;
 const DISCONNECT_GRACE_MS = 1000 * 60 * 10;
@@ -22,11 +23,28 @@ const disconnectTimers = new Map();
 let ioRef = null;
 
 // The state every client receives. The guest key hash is a server-side
-// secret check and never leaves the server.
+// secret check and never leaves the server. Cosmetics are looks only and
+// are added after the game state is built.
 function roomStatePayload(mgr) {
   const state = mgr.state.toJSON();
-  state.players = state.players.map(({ guestKeyHash, ...p }) => ({ ...p, isGuest: !p.accountId }));
+  state.players = roomChat.decoratePlayers(
+    state.players.map(({ guestKeyHash, ...p }) => ({ ...p, isGuest: !p.accountId })),
+    (p) => p.accountId,
+  );
   return state;
+}
+
+// Final places: the winner first, then the players still solvent by cash,
+// then the bankrupt in reverse order of elimination.
+function monopolyPlaces(state) {
+  const order = [...state.players].sort((a, b) => {
+    if (a.id === state.winnerId) return -1;
+    if (b.id === state.winnerId) return 1;
+    if (a.bankrupt !== b.bankrupt) return a.bankrupt ? 1 : -1;
+    if (a.bankrupt) return (b.bankruptAt || 0) - (a.bankruptAt || 0);
+    return b.money - a.money;
+  });
+  return new Map(order.map((p, i) => [p.id, i + 1]));
 }
 
 function broadcastState(io, roomCode) {
@@ -125,6 +143,7 @@ registry.register({
     const stage = stageOf(s.phase);
     const host = s.getPlayer(mgr.hostId);
     const winner = s.winnerId ? s.getPlayer(s.winnerId) : null;
+    const places = stage === 'finished' ? monopolyPlaces(s) : null;
     return {
       gameType: 'monopoly',
       roomCode: s.roomCode,
@@ -136,7 +155,7 @@ registry.register({
         ? {
           winner: winner?.nickname || null,
           players: s.players.map((p) => ({
-            playerId: p.id, result: p.id === s.winnerId ? 'win' : 'loss', score: p.money,
+            playerId: p.id, result: p.id === s.winnerId ? 'win' : 'loss', score: p.money, place: places.get(p.id),
           })),
         }
         : null,
@@ -345,20 +364,17 @@ function registerSocketHandlers(io) {
 
     socket.on('game:setCustomPrice', withGame((mgr, { tileId, targetPlayerId, amount }) => mgr.setCustomPrice(socket.data.playerId, tileId, targetPlayerId, amount)));
 
-    socket.on('chat:message', ({ text } = {}) => {
+    socket.on('chat:message', ({ text, emote } = {}) => {
       const mgr = roomManager.getRoom(socket.data.roomCode);
       if (!mgr) return;
       const player = mgr.state.getPlayer(socket.data.playerId);
       if (!player) return;
-      const clean = String(text || '').slice(0, 300).trim();
-      if (!clean) return;
-      io.to(mgr.state.roomCode).emit('chat:message', {
-        playerId: player.id,
-        nickname: player.nickname,
-        color: player.color,
-        text: clean,
-        ts: Date.now(),
+      const message = roomChat.prepareRoomMessage({
+        text, emote: typeof emote === 'string' ? emote.slice(0, 80) : null, sender: player, players: mgr.state.players,
       });
+      if (!message) return;
+      io.to(mgr.state.roomCode).emit('chat:message', { ...message, color: player.color });
+      roomChat.notifyMentions(message, { players: mgr.state.players, context: { kind: 'room', gameType: 'monopoly', roomCode: mgr.state.roomCode } });
     });
 
     socket.on('disconnect', () => {

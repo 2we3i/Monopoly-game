@@ -683,6 +683,8 @@ class GameManager {
       }
     });
     player.bankrupt = true;
+    // Only read by match history to rank the eliminated players.
+    player.bankruptAt = Date.now();
     player.money = 0;
     state.addLog(`${player.nickname} declared bankruptcy and is out of the game.`, 'BANKRUPTCY', { name: player.nickname });
 

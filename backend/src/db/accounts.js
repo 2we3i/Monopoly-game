@@ -151,6 +151,18 @@ function listAll() {
   return getAllStmt.all();
 }
 
+const searchStmt = db.prepare(`
+  SELECT * FROM accounts WHERE nickname_lower LIKE ? ESCAPE '\\'
+  ORDER BY CASE WHEN nickname_lower LIKE ? ESCAPE '\\' THEN 0 ELSE 1 END, last_seen_at DESC
+  LIMIT ?
+`);
+
+// Nickname search for the messenger and mention pickers.
+function searchByNickname(query, limit = 20) {
+  const q = String(query || '').toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`);
+  return searchStmt.all(`%${q}%`, `${q}%`, Math.max(1, Math.min(50, limit)));
+}
+
 function createAccount({ id, nickname, password }) {
   const salt = crypto.randomBytes(16).toString('hex');
   const passwordHash = hashPassword(password, salt);
@@ -217,6 +229,7 @@ module.exports = {
   findByNickname,
   findById,
   listAll,
+  searchByNickname,
   createAccount,
   setAvatar,
   changeNickname,

@@ -9,6 +9,10 @@ import { useTranslation } from '../../i18n/LanguageContext';
 import PlayerAvatar from '../PlayerAvatar';
 import Icon from '../icons';
 import { Segmented } from './MafiaSettings';
+import RoomChat from '../chat/RoomChat';
+import SocialBar from '../social/SocialBar';
+import { StyledName } from '../../cosmetics/Cosmetics';
+import { useOutcomeEffects } from '../../cosmetics/useGameCosmetics';
 
 const ROLE_THEME = {
   MAFIA: { color: '#a8342a', glyph: '🔪', team: 'MAFIA' },
@@ -159,7 +163,9 @@ function PlayerTile({ player, phase, voteTally, onPick, selectable, selected, ch
         )}
       </div>
 
-      <span className="max-w-full truncate text-[12px] font-semibold text-parch">{player.nickname}</span>
+      <span className="flex max-w-full justify-center truncate text-[12px] font-semibold text-parch 4xl:text-[14px]">
+        <StyledName nickname={player.nickname} cosmetics={player.cosmetics} />
+      </span>
 
       {player.role && (
         <span className="pill" style={{ backgroundColor: `${theme(player.role).color}33`, color: '#f4ecdc' }}>
@@ -360,51 +366,31 @@ function HistoryPanel({ history, t }) {
   );
 }
 
-function ChatBox({ chat, phase, you, onSend, t }) {
-  const [text, setText] = useState('');
-  const scrollRef = useRef(null);
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [chat.length]);
-
+function ChatBox({
+  chat, phase, you, players, onSend, t,
+}) {
   const isNight = phase === 'NIGHT';
   const canSpeak = you?.alive && (!isNight || ['MAFIA', 'DON'].includes(you.role));
   const channelLabel = !you?.alive ? t('mafia.chat.dead') : isNight ? t('mafia.chat.mafia') : t('mafia.chat.town');
 
   return (
-    <section className="panel flex min-h-[12rem] flex-col overflow-hidden">
-      <p className="section-label border-b border-white/[0.07] px-3 py-2">💬 {channelLabel}</p>
-      <div ref={scrollRef} className="scrollbar-thin flex-1 space-y-1 overflow-y-auto px-3 py-2">
-        {chat.length === 0 && <p className="py-4 text-center text-[12px] text-parch/30">{t('chat.noMessages')}</p>}
-        {chat.map((m, i) => (
-          m.system
-            ? <p key={i} className="text-center text-[11px] italic text-parch/30">{t(`mafia.system.${m.type}`, m.params)}</p>
-            : (
-              <p key={i} className="text-[12.5px] leading-snug">
-                <span className={`font-bold ${m.channel === 'MAFIA' ? 'text-rent-light' : m.channel === 'DEAD' ? 'text-parch/35' : 'text-brass-light'}`}>
-                  {m.nickname}:
-                </span>{' '}
-                <span className="text-parch/75">{m.text}</span>
-              </p>
-            )
-        ))}
-      </div>
-      <form
-        onSubmit={(e) => { e.preventDefault(); if (text.trim()) { onSend(text.trim()); setText(''); } }}
-        className="flex gap-2 border-t border-white/[0.07] p-2"
-      >
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          disabled={!canSpeak}
-          maxLength={300}
-          placeholder={canSpeak ? t('chat.placeholder') : t('mafia.cannotSpeak')}
-          className="field min-w-0 flex-1 py-1.5 text-[12.5px]"
-        />
-        <button type="submit" disabled={!canSpeak || !text.trim()} className="btn-primary px-3 py-1.5">
-          <Icon.chevronRight className="h-4 w-4" />
-        </button>
-      </form>
+    <section className="panel flex h-[22rem] flex-col overflow-hidden lg:h-[28rem] 4xl:h-[40rem]">
+      <RoomChat
+        messages={chat}
+        onSend={onSend}
+        players={players}
+        myPlayerId={you?.id}
+        disabled={!canSpeak}
+        placeholder={canSpeak ? t('chat.placeholder') : t('mafia.cannotSpeak')}
+        renderSystem={(m) => t(`mafia.system.${m.type}`, m.params)}
+        nameTone={(m) => (m.channel === 'MAFIA' ? 'text-rent-light' : m.channel === 'DEAD' ? 'text-parch/35' : 'text-brass-light')}
+        channelBadge={(m) => {
+          if (m.channel === 'MAFIA') return <span className="mr-1" title={t('mafia.chat.mafia')}>🔪</span>;
+          if (m.channel === 'DEAD') return <span className="mr-1" title={t('mafia.chat.dead')}>☠️</span>;
+          return null;
+        }}
+        header={<p className="section-label shrink-0 border-b border-white/[0.07] px-3 py-2">💬 {channelLabel}</p>}
+      />
     </section>
   );
 }
@@ -415,6 +401,14 @@ function GameOverScreen({ state, isHost, actions, onLeave, t }) {
   const winner = state.winner;
   const tone = winner === 'MAFIA' ? '#a8342a' : winner === 'MANIAC' ? '#7a5fb8' : '#1f7a5c';
   const reveal = state.reveal || [];
+  const myRole = state.you?.role;
+  const iWon = winner === 'MAFIA'
+    ? ['MAFIA', 'DON'].includes(myRole)
+    : winner === 'MANIAC'
+      ? myRole === 'MANIAC'
+      : winner !== 'NOBODY' && !!myRole && !['MAFIA', 'DON', 'MANIAC'].includes(myRole);
+  useOutcomeEffects(state.you ? (iWon ? 'win' : 'loss') : null, `${winner}-${state.dayNumber}`);
+  const cosmeticsOf = (id) => state.players.find((p) => p.id === id)?.cosmetics;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-md">
@@ -435,7 +429,9 @@ function GameOverScreen({ state, isHost, actions, onLeave, t }) {
                 <li key={p.id} className="flex flex-col gap-1 px-3 py-2">
                   <div className="flex items-center gap-2.5">
                     <span className="text-[16px]">{theme(p.role).glyph}</span>
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-parch">{p.nickname}</span>
+                    <span className="flex min-w-0 flex-1 truncate text-[13px] font-semibold text-parch">
+                      <StyledName nickname={p.nickname} cosmetics={cosmeticsOf(p.id)} />
+                    </span>
                     <span className="pill" style={{ backgroundColor: `${theme(p.role).color}33`, color: '#f4ecdc' }}>
                       {t(`mafia.role.${p.role}`)}
                     </span>
@@ -517,7 +513,7 @@ export default function MafiaGameScreen({ state, chat, actions, onLeave }) {
 
   return (
     <div className={`min-h-screen transition-colors duration-700 ${phase === 'NIGHT' ? 'table-night' : 'table-dawn'}`}>
-      <div className="mx-auto flex max-w-5xl flex-col gap-3 px-3 py-4">
+      <div className="mx-auto flex max-w-5xl flex-col gap-3 px-3 py-4 3xl:max-w-[1500px] 4xl:max-w-[2100px] 4xl:gap-5 4xl:px-8 4xl:py-8 5xl:max-w-[2800px]">
         <PhaseBanner
           phase={phase}
           dayNumber={state.dayNumber}
@@ -527,7 +523,7 @@ export default function MafiaGameScreen({ state, chat, actions, onLeave }) {
           onSkip={actions.skipPhase}
         />
 
-        <div className="grid gap-3 lg:grid-cols-[1fr,20rem]">
+        <div className="grid gap-3 lg:grid-cols-[1fr,20rem] 3xl:grid-cols-[1fr,25rem] 4xl:grid-cols-[1fr,34rem] 4xl:gap-5">
           <div className="flex flex-col gap-3">
             {you && <RoleCard you={you} t={t} />}
 
@@ -537,7 +533,7 @@ export default function MafiaGameScreen({ state, chat, actions, onLeave }) {
                 {' · '}
                 {state.players.filter((p) => p.alive).length}/{state.players.length}
               </p>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 3xl:grid-cols-6 4xl:grid-cols-8 4xl:gap-3">
                 {state.players.map((p) => (
                   <PlayerTile
                     key={p.id}
@@ -559,7 +555,8 @@ export default function MafiaGameScreen({ state, chat, actions, onLeave }) {
           </div>
 
           <div className="flex flex-col gap-3">
-            <ChatBox chat={chat} phase={phase} you={you} onSend={actions.sendChat} t={t} />
+            <div className="flex justify-end"><SocialBar compact /></div>
+            <ChatBox chat={chat} phase={phase} you={you} players={state.players} onSend={actions.sendChat} t={t} />
             {state.settings.info.showHistory && <HistoryPanel history={state.history} t={t} />}
             <button type="button" onClick={onLeave} className="btn-quiet py-2 text-[12.5px]">
               {t('waiting.leave')}

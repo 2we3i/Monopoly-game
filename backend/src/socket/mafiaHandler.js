@@ -33,13 +33,24 @@ function sendError(socket, message) {
 
 // Every player gets a payload of their own - this is the only function
 // that writes a Mafia state onto a socket.
+// eslint-disable-next-line import/order
+const roomChat = require('../social/roomChat');
+
+// Cosmetics are looks only, added after the engine has built the
+// (secret-respecting) payload for this viewer.
+function clientState(game, viewerId) {
+  const state = game.toClientJSON(viewerId);
+  state.players = roomChat.decoratePlayers(state.players, (p) => game.getPlayer(p.id)?.accountId);
+  return state;
+}
+
 function broadcast(io, roomCode) {
   const game = roomManager.getMafiaRoom(roomCode);
   if (!game) return;
   roomManager.persistMafia(roomCode);
   game.players.forEach((player) => {
     if (!player.socketId) return;
-    io.to(player.socketId).emit('mafia:state', game.toClientJSON(player.id));
+    io.to(player.socketId).emit('mafia:state', clientState(game, player.id));
   });
   registry.observe('mafia', game);
 }
@@ -226,7 +237,7 @@ function registerMafiaHandlers(io) {
         socket.data.mafiaAccountId = identity.accountId;
         roomManager.persistMafia(game.roomCode);
         cb?.({
-          ok: true, roomCode: game.roomCode, playerId: player.id, state: game.toClientJSON(player.id),
+          ok: true, roomCode: game.roomCode, playerId: player.id, state: clientState(game, player.id),
         });
         broadcast(io, game.roomCode);
       } catch (err) {
@@ -264,7 +275,7 @@ function registerMafiaHandlers(io) {
         socket.data.mafiaAccountId = identity.accountId;
         roomManager.persistMafia(game.roomCode);
         cb?.({
-          ok: true, roomCode: game.roomCode, playerId: player.id, state: game.toClientJSON(player.id),
+          ok: true, roomCode: game.roomCode, playerId: player.id, state: clientState(game, player.id),
         });
         broadcast(io, game.roomCode);
         io.to(game.roomCode).emit('mafia:system', {
@@ -411,33 +422,31 @@ function registerMafiaHandlers(io) {
     // Chat obeys the same secrecy the rest of the game does: at night
     // the mafia have a channel of their own, and the dead can read
     // everything but say nothing to the living.
-    socket.on('mafia:chat', ({ text } = {}) => {
+    socket.on('mafia:chat', ({ text, emote } = {}) => {
       const roomCode = socket.data.mafiaRoom;
       const playerId = socket.data.mafiaPlayerId;
       const game = roomManager.getMafiaRoom(roomCode);
       if (!game) return;
       const player = game.getPlayer(playerId);
       if (!player) return;
-      const clean = String(text || '').trim().slice(0, 300);
-      if (!clean) return;
 
       const isNight = game.phase === PHASES.NIGHT;
       const channel = !player.alive ? 'DEAD' : (isNight ? 'MAFIA' : 'TOWN');
       if (channel === 'MAFIA' && !['MAFIA', 'DON'].includes(player.role)) return;
 
-      const message = {
-        channel,
-        playerId: player.id,
-        nickname: player.nickname,
-        text: clean,
-        ts: Date.now(),
-      };
+      const prepared = roomChat.prepareRoomMessage({
+        text, emote: typeof emote === 'string' ? emote.slice(0, 80) : null, sender: player, players: game.players,
+      });
+      if (!prepared) return;
+      const message = { ...prepared, channel };
+      const canRead = (p) => channel === 'TOWN'
+        || (channel === 'DEAD' && !p.alive)
+        || (channel === 'MAFIA' && (['MAFIA', 'DON'].includes(p.role) || !p.alive));
       game.players.forEach((p) => {
-        if (!p.socketId) return;
-        const canRead = channel === 'TOWN'
-          || (channel === 'DEAD' && !p.alive)
-          || (channel === 'MAFIA' && (['MAFIA', 'DON'].includes(p.role) || !p.alive));
-        if (canRead) io.to(p.socketId).emit('mafia:chat', message);
+        if (p.socketId && canRead(p)) io.to(p.socketId).emit('mafia:chat', message);
+      });
+      roomChat.notifyMentions(message, {
+        players: game.players, canRead, context: { kind: 'room', gameType: 'mafia', roomCode },
       });
     });
 

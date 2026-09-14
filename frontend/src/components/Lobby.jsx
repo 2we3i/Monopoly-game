@@ -8,6 +8,9 @@ import { useTranslation } from '../i18n/LanguageContext';
 import LanguageSwitcher from './LanguageSwitcher';
 import PlayerAvatar from './PlayerAvatar';
 import ProfileMenu from './ProfileMenu';
+import SocialBar from './social/SocialBar';
+import FramedAvatar from '../cosmetics/FramedAvatar';
+import { StyledName, useLook } from '../cosmetics/Cosmetics';
 
 function DieGlyph({ className = '' }) {
   return (
@@ -76,6 +79,10 @@ function ModePicker({ modes, selectedId, onSelect, language, t }) {
 
 function PlayerSlot({ player, isMe }) {
   const { t } = useTranslation();
+  const look = useLook(player.cosmetics);
+  // Name styles are drawn for dark surfaces; on the parchment card a
+  // styled name sits on its own small dark plate.
+  const styled = !!(look.nameStyle || look.nameDecor);
   return (
     <div
       className={`flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors ${
@@ -83,7 +90,9 @@ function PlayerSlot({ player, isMe }) {
       }`}
     >
       <span className="relative shrink-0">
-        <PlayerAvatar player={player} sizeClassName="h-9 w-9" ringClassName="ring-2 ring-white/60" />
+        <FramedAvatar cosmetics={player.cosmetics} join>
+          <PlayerAvatar player={player} sizeClassName="h-9 w-9 4xl:h-11 4xl:w-11" ringClassName="ring-2 ring-white/60" />
+        </FramedAvatar>
         {player.isHost && (
           <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-brass text-[8px] shadow-token ring-2 ring-board-tile">
             ★
@@ -91,9 +100,13 @@ function PlayerSlot({ player, isMe }) {
         )}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold text-ink">
-          {player.nickname}
-          {isMe && <span className="ml-1.5 text-xs font-normal text-ink-faint">({t('waiting.you')})</span>}
+        <p className="flex min-w-0 items-center gap-1.5 font-semibold text-ink 4xl:text-[17px]">
+          {styled ? (
+            <span className="inline-flex min-w-0 max-w-full rounded-md bg-felt-800 px-1.5 py-0.5">
+              <StyledName nickname={player.nickname} look={look} intro className="text-parch" />
+            </span>
+          ) : <span className="truncate">{player.nickname}</span>}
+          {isMe && <span className="shrink-0 text-xs font-normal text-ink-faint">({t('waiting.you')})</span>}
         </p>
         <p className="text-xs text-ink-faint">
           {player.isHost ? t('waiting.host') : t('waiting.ready')}
@@ -157,11 +170,12 @@ function LandingScreen({
         </button>
       )}
       <div className="absolute right-4 top-4 z-10 flex items-center gap-2 sm:right-6 sm:top-6">
+        <SocialBar compact />
         <ProfileMenu auth={auth} savedNickname={savedNickname} onSwitchIdentity={onSwitchIdentity} />
         <LanguageSwitcher variant="dark" />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-md flex-col">
+      <div className="relative mx-auto flex w-full max-w-md flex-col 4xl:max-w-xl">
         <div className="mb-8 text-center">
           <div className="mb-4 inline-flex items-center gap-3">
             <DieGlyph className="h-11 w-11 text-brass drop-shadow-[0_4px_10px_rgba(0,0,0,0.35)]" />
@@ -302,11 +316,12 @@ function WaitingRoom({ gameState, playerId, onStart, onLeave, roomCode }) {
 
   return (
     <div className="relative min-h-screen overflow-hidden px-6 py-12">
-      <div className="absolute right-4 top-4 sm:right-6 sm:top-6">
+      <div className="absolute right-4 top-4 flex items-center gap-2 sm:right-6 sm:top-6">
+        <SocialBar compact />
         <LanguageSwitcher variant="dark" />
       </div>
 
-      <div className="mx-auto flex max-w-2xl flex-col justify-center" style={{ minHeight: 'calc(100vh - 6rem)' }}>
+      <div className="mx-auto flex max-w-2xl flex-col justify-center 3xl:max-w-3xl 4xl:max-w-5xl" style={{ minHeight: 'calc(100vh - 6rem)' }}>
         <div className="mb-7 text-center">
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-board/50">{t('waiting.roomCode')}</p>
           <div className="flex items-center justify-center gap-3">
@@ -339,7 +354,7 @@ function WaitingRoom({ gameState, playerId, onStart, onLeave, roomCode }) {
             </button>
           </div>
 
-          <div className="grid max-h-[42vh] grid-cols-1 gap-2.5 overflow-y-auto scrollbar-thin sm:grid-cols-2">
+          <div className="grid max-h-[42vh] grid-cols-1 gap-2.5 overflow-y-auto scrollbar-thin sm:grid-cols-2 4xl:grid-cols-3 4xl:gap-3.5">
             {gameState.players.map((p) => (
               <PlayerSlot key={p.id} player={p} isMe={p.id === playerId} />
             ))}

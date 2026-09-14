@@ -22,6 +22,14 @@ import { isLightColor } from '../colorUtils';
 import { useTranslation } from '../i18n/LanguageContext';
 import { useSettings } from '../settings/SettingsContext';
 import Icon from './icons';
+import SocialBar from './social/SocialBar';
+import { StyledName, VictoryMark, useLook } from '../cosmetics/Cosmetics';
+import { useOutcomeEffects, useTurnSound } from '../cosmetics/useGameCosmetics';
+
+function PlayerVictoryMark({ player, place }) {
+  const look = useLook(player.cosmetics);
+  return <VictoryMark item={look.tokenVictory} place={place} />;
+}
 
 function TopBar({ gameState, me, onLeave, onOpenSettings }) {
   const { t } = useTranslation();
@@ -69,12 +77,16 @@ function TopBar({ gameState, me, onLeave, onOpenSettings }) {
       {me && (
         <div className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1">
           <PlayerAvatar player={me} sizeClassName="h-6 w-6" ringClassName="ring-1 ring-white/25" />
-          <span className="hidden max-w-[120px] truncate text-[12.5px] font-semibold text-parch sm:inline">{me.nickname}</span>
+          <span className="hidden max-w-[140px] truncate text-[12.5px] font-semibold text-parch sm:inline 4xl:max-w-[240px] 4xl:text-[15px]">
+            <StyledName nickname={me.nickname} cosmetics={me.cosmetics} />
+          </span>
           <span className={`font-display text-[14px] font-bold tnum ${me.money < 0 ? 'text-rent-light' : 'text-brass-light'}`}>
             {formatMoney(me.money)}
           </span>
         </div>
       )}
+
+      <SocialBar compact />
 
       <button
         type="button"
@@ -168,6 +180,9 @@ function GameOverScreen({ gameState, playerId, onLeave }) {
   const standings = [...gameState.players]
     .map((p) => ({ player: p, worth: p.bankrupt ? -1 : netWorth(p, gameState.board, gameState.properties) }))
     .sort((a, b) => b.worth - a.worth);
+  const myPlace = standings.findIndex((row) => row.player.id === playerId) + 1;
+  const podium = (myPlace === 2 && standings.length >= 3) || (myPlace === 3 && standings.length >= 4);
+  useOutcomeEffects(iWon ? 'win' : podium ? 'podium' : 'loss', `${gameState.roomCode}-${gameState.winnerId}`);
 
   return (
     <Modal onClose={onLeave} widthClass="max-w-sm">
@@ -192,9 +207,10 @@ function GameOverScreen({ gameState, playerId, onLeave }) {
               <li key={row.player.id} className="flex items-center gap-2.5 px-3 py-2 text-left">
                 <span className="w-4 shrink-0 text-[12px] font-bold text-parch/35 tnum">{i + 1}</span>
                 <PlayerAvatar player={row.player} sizeClassName="h-7 w-7" ringClassName="ring-2 ring-white/20" />
-                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-parch">
-                  {row.player.nickname}
-                  {row.player.id === playerId && <span className="ml-1 text-[11px] font-normal text-parch/40">{t('sidebar.you')}</span>}
+                <span className="flex min-w-0 flex-1 items-center gap-1 text-[13px] font-semibold text-parch">
+                  <StyledName nickname={row.player.nickname} cosmetics={row.player.cosmetics} showTitle titleSize="xs" />
+                  {row.player.id === playerId && <span className="ml-1 shrink-0 text-[11px] font-normal text-parch/40">{t('sidebar.you')}</span>}
+                  <PlayerVictoryMark player={row.player} place={row.player.bankrupt ? null : i + 1} />
                 </span>
                 {row.player.bankrupt ? (
                   <span className="pill bg-rent/20 text-rent-light">{t('sidebar.bankrupt')}</span>
@@ -289,6 +305,7 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
   const me = gameState.players.find((p) => p.id === playerId);
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const isMyTurn = currentPlayer?.id === playerId;
+  useTurnSound(isMyTurn && gameState.phase !== 'GAME_OVER');
   const selectedTile = selectedTileId != null ? gameState.board[selectedTileId] : null;
   const myTrades = gameState.trades.filter((tr) => tr.fromPlayerId === playerId || tr.toPlayerId === playerId);
   const incomingTrades = myTrades.filter((tr) => tr.toPlayerId === playerId).length;
@@ -381,7 +398,7 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
           />
         </section>
 
-        <aside className="panel flex min-h-0 w-full shrink-0 flex-col lg:h-auto lg:w-[22rem] xl:w-[24rem]">
+        <aside className="panel flex min-h-0 w-full shrink-0 flex-col lg:h-auto lg:w-[22rem] xl:w-[24rem] 3xl:w-[27rem] 4xl:w-[34rem] 5xl:w-[40rem]">
           <div role="tablist" className="flex shrink-0 border-b border-white/[0.08]">
             <SidebarTab
               active={sidebarTab === 'players'}
@@ -442,7 +459,7 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
 
           {sidebarTab === 'chat' && (
             <div className="flex max-h-[60vh] min-h-0 flex-1 lg:max-h-none">
-              <Chat messages={chatMessages} onSend={sendChat} playerId={playerId} board={gameState.board} />
+              <Chat messages={chatMessages} onSend={sendChat} playerId={playerId} players={gameState.players} board={gameState.board} />
             </div>
           )}
         </aside>

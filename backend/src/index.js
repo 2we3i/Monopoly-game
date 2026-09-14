@@ -9,11 +9,14 @@ const { Server } = require('socket.io');
 
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
+const economyRoutes = require('./routes/economy');
+const socialRoutes = require('./routes/social');
 const { router: authRoutes, AVATAR_DIR } = require('./routes/authRoutes');
 const presence = require('./platform/presence');
 const { registerSocketHandlers } = require('./socket/socketHandler');
 const { registerMafiaHandlers } = require('./socket/mafiaHandler');
 const { registerCitadelsHandlers } = require('./socket/citadelsHandler');
+const { registerBunkerHandlers } = require('./socket/bunkerHandler');
 const db = require('./db/database');
 const accountsDb = require('./db/accounts');
 const platformDb = require('./db/platform');
@@ -43,6 +46,8 @@ app.use(cors({ origin: CLIENT_ORIGIN }));
 app.use(express.json({ limit: '100kb' }));
 app.use('/api/admin', adminRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/economy', economyRoutes);
+app.use('/api/social', socialRoutes);
 app.use('/api', apiRoutes);
 // Uploaded avatars served as static files under /avatars - the path
 // stored on an account is already the exact URL a client requests. This
@@ -53,6 +58,9 @@ app.use('/avatars', express.static(AVATAR_DIR));
 const FRONTEND_DIST = process.env.FRONTEND_DIST
   ? path.resolve(process.env.FRONTEND_DIST)
   : path.join(__dirname, '..', 'public');
+// Hashed build assets never change under the same name; index.html must
+// always be revalidated so a deploy is picked up.
+app.use('/assets', express.static(path.join(FRONTEND_DIST, 'assets'), { immutable: true, maxAge: '365d' }));
 app.use(express.static(FRONTEND_DIST));
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api') || req.path.startsWith('/avatars')) return next();
@@ -68,6 +76,7 @@ registerSocketHandlers(io);
 // (mafia:*, citadels:*) so the handlers never see each other's traffic.
 registerMafiaHandlers(io);
 registerCitadelsHandlers(io);
+registerBunkerHandlers(io);
 
 server.listen(PORT, '0.0.0.0', () => {
   // eslint-disable-next-line no-console

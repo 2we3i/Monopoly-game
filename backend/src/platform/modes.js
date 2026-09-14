@@ -20,6 +20,7 @@ function catalog() {
     })),
     { id: 'mafia.classic', gameId: 'mafia', variant: 'classic', label: { en: 'Mafia', ru: 'Мафия' } },
     { id: 'citadels.classic', gameId: 'citadels', variant: 'classic', label: { en: 'Citadels', ru: 'Цитадели' } },
+    { id: 'bunker.classic', gameId: 'bunker', variant: 'classic', label: { en: 'Bunker', ru: 'Бункер' } },
   ];
 }
 

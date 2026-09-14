@@ -1,30 +1,52 @@
 // App.jsx
 // Platform shell. Pages: the games (AuthScreen -> MainMenu -> a game),
-// the player's profile and the admin panel.
+// the player's profile, shop, inventory, messages, leaderboard, other
+// players' profiles, and the admin panel.
 //
-// Each game owns its own socket and its own room state, and this file
-// only decides which of them is on screen. Permissions shown here (a
-// guest cannot create a game, only the admin sees the panel) are for the
-// player's convenience - the server enforces every one of them itself.
+// Each game owns its own socket and its own room state. Those hooks stay
+// mounted while the player visits the platform pages, so opening the shop
+// or a message in the middle of a game never drops them from the room.
+// Permissions shown here (a guest cannot create a game, only the admin
+// sees the panel) are for the player's convenience - the server enforces
+// every one of them itself.
 
-import { useEffect, useRef, useState } from 'react';
+import {
+  Suspense, lazy, useEffect, useRef, useState,
+} from 'react';
 import { useSocket } from './hooks/useSocket';
 import { useMafia } from './hooks/useMafia';
 import { useCitadels } from './hooks/useCitadels';
+import { useBunker } from './hooks/useBunker';
 import { useAuth } from './hooks/useAuth';
 import AuthScreen from './components/AuthScreen';
 import MainMenu from './components/MainMenu';
-import Lobby from './components/Lobby';
-import GameUI from './components/GameUI';
 import GuestGate from './components/GuestGate';
-import MafiaLobby from './components/mafia/MafiaLobby';
-import MafiaGameScreen from './components/mafia/MafiaGameScreen';
-import CitadelsLobby from './components/citadels/CitadelsLobby';
-import CitadelsGame from './components/citadels/CitadelsGame';
-import ProfilePage from './components/profile/ProfilePage';
-import AdminPanel from './components/admin/AdminPanel';
+import { PlatformNavContext } from './components/platform/PlatformShell';
+import { SocialProvider } from './social/SocialContext';
+import ToastStack from './components/social/ToastStack';
+import ProfilePeek from './components/social/ProfilePeek';
+import { MessengerDrawer } from './components/social/Messenger';
+import { EffectHost } from './cosmetics/effects';
+import { useStartSound } from './cosmetics/useGameCosmetics';
+import { useSettings } from './settings/SettingsContext';
 import { useTranslation } from './i18n/LanguageContext';
-import { usePathname } from './lib/router';
+import { navigate, usePathname } from './lib/router';
+
+const Lobby = lazy(() => import('./components/Lobby'));
+const GameUI = lazy(() => import('./components/GameUI'));
+const MafiaLobby = lazy(() => import('./components/mafia/MafiaLobby'));
+const MafiaGameScreen = lazy(() => import('./components/mafia/MafiaGameScreen'));
+const CitadelsLobby = lazy(() => import('./components/citadels/CitadelsLobby'));
+const CitadelsGame = lazy(() => import('./components/citadels/CitadelsGame'));
+const BunkerLobby = lazy(() => import('./components/bunker/BunkerLobby'));
+const BunkerGame = lazy(() => import('./components/bunker/BunkerGame'));
+const ProfilePage = lazy(() => import('./components/profile/ProfilePage'));
+const AdminPanel = lazy(() => import('./components/admin/AdminPanel'));
+const ShopPage = lazy(() => import('./components/shop/ShopPage'));
+const InventoryPage = lazy(() => import('./components/shop/InventoryPage'));
+const MessagesPage = lazy(() => import('./components/social/MessagesPage'));
+const LeaderboardPage = lazy(() => import('./components/social/LeaderboardPage'));
+const PublicProfilePage = lazy(() => import('./components/social/PublicProfilePage'));
 
 const GUEST_RESOLVED_KEY = 'landmark_guest_resolved';
 const NICKNAME_KEY = 'landmark_nickname';
@@ -88,36 +110,61 @@ function NoticeToast() {
   );
 }
 
+function platformPage(pathname) {
+  if (pathname.startsWith('/profile')) return 'profile';
+  if (pathname.startsWith('/shop')) return 'shop';
+  if (pathname.startsWith('/inventory')) return 'inventory';
+  if (pathname.startsWith('/messages')) return 'messages';
+  if (pathname.startsWith('/leaderboard')) return 'leaderboard';
+  if (pathname.startsWith('/u/')) return 'user';
+  return null;
+}
+
 export default function App() {
   const auth = useAuth();
   const pathname = usePathname();
+  const { settings } = useSettings();
   const [guestResolved, setGuestResolved] = useState(
     () => localStorage.getItem(GUEST_RESOLVED_KEY) === '1'
       || !!localStorage.getItem('landmark_room_code')
       || !!localStorage.getItem('landmark_mafia_room')
-      || !!localStorage.getItem('landmark_citadels_room'),
+      || !!localStorage.getItem('landmark_citadels_room')
+      || !!localStorage.getItem('landmark_bunker_room'),
   );
 
+  useEffect(() => {
+    document.documentElement.classList.toggle('motion-off', !settings.animations);
+  }, [settings.animations]);
+
   if (auth.checking) return <RehydratingScreen />;
-  if (pathname.startsWith('/admin')) return <AdminPanel auth={auth} />;
-  if (pathname.startsWith('/profile')) return <ProfilePage auth={auth} />;
 
   // The game hooks are only ever mounted once useAuth has FINISHED
   // confirming whatever token was in localStorage - their connect-and-
   // auto-rejoin effects run on mount, and a rejoin fired with a not-yet-
   // resolved token could claim the wrong identity.
   return (
-    <>
-      <AppShell auth={auth} guestResolved={guestResolved} setGuestResolved={setGuestResolved} />
+    <SocialProvider auth={auth}>
+      <Suspense fallback={<RehydratingScreen />}>
+        {pathname.startsWith('/admin')
+          ? <AdminPanel auth={auth} />
+          : <AppShell auth={auth} pathname={pathname} guestResolved={guestResolved} setGuestResolved={setGuestResolved} />}
+      </Suspense>
       <NoticeToast />
-    </>
+      <ToastStack />
+      {!pathname.startsWith('/messages') && <MessengerDrawer />}
+      <ProfilePeek />
+      <EffectHost />
+    </SocialProvider>
   );
 }
 
-function AppShell({ auth, guestResolved, setGuestResolved }) {
+function AppShell({
+  auth, pathname, guestResolved, setGuestResolved,
+}) {
   const socket = useSocket(auth.token);
   const mafia = useMafia(auth.token, { enabled: true });
   const citadels = useCitadels(auth.token);
+  const bunker = useBunker(auth.token);
   const [hub, setHub] = useState(null); // null = main menu, 'monopoly' = its lobby
   const [joinError, setJoinError] = useState(null);
   const [joining, setJoining] = useState(false);
@@ -128,7 +175,13 @@ function AppShell({ auth, guestResolved, setGuestResolved }) {
 
   const identityResolved = auth.isLoggedIn || guestResolved;
   const nickname = auth.isLoggedIn ? auth.account.nickname : (localStorage.getItem(NICKNAME_KEY) || '');
-  const inAnyRoom = !!(socket.roomCode || mafia.roomCode || citadels.roomCode);
+  const inAnyRoom = !!(socket.roomCode || mafia.roomCode || citadels.roomCode || bunker.roomCode);
+  const page = platformPage(pathname);
+
+  useStartSound(socket.gameState?.phase);
+  useStartSound(mafia.state?.phase);
+  useStartSound(citadels.state?.phase);
+  useStartSound(bunker.state?.phase);
 
   useEffect(() => {
     if (auth.isLoggedIn) setAuthMode(null);
@@ -139,6 +192,16 @@ function AppShell({ auth, guestResolved, setGuestResolved }) {
     setAuthMode(mode);
   };
   const requireAccount = () => setGateOpen(true);
+
+  // Platform pages ask for the login screen with an event.
+  useEffect(() => {
+    const onAuth = (e) => {
+      navigate('/');
+      openAuth(e.detail === 'register' ? 'register' : 'login');
+    };
+    window.addEventListener('landmark:auth', onAuth);
+    return () => window.removeEventListener('landmark:auth', onAuth);
+  }, []);
 
   // A room code alone does not say which game it belongs to - the server
   // does, so the client asks before deciding where to send the player.
@@ -153,6 +216,7 @@ function AppShell({ auth, guestResolved, setGuestResolved }) {
       }
       if (res.gameType === 'mafia') await mafia.joinRoom(code, nickname);
       else if (res.gameType === 'citadels') await citadels.joinRoom(code, nickname);
+      else if (res.gameType === 'bunker') await bunker.joinRoom(code, nickname);
       else await socket.joinRoom(code, nickname);
     } catch (err) {
       setJoinError(err.message);
@@ -172,6 +236,18 @@ function AppShell({ auth, guestResolved, setGuestResolved }) {
     if (!inAnyRoom) joinByCode(code.trim().toUpperCase());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [identityResolved, authMode]);
+
+  if (page && !authMode) {
+    const nav = { inRoom: inAnyRoom };
+    let content;
+    if (page === 'profile') content = <ProfilePage auth={auth} />;
+    else if (page === 'shop') content = <ShopPage auth={auth} />;
+    else if (page === 'inventory') content = <InventoryPage auth={auth} />;
+    else if (page === 'messages') content = <MessagesPage auth={auth} />;
+    else if (page === 'leaderboard') content = <LeaderboardPage auth={auth} />;
+    else content = <PublicProfilePage auth={auth} userId={decodeURIComponent(pathname.slice(3))} />;
+    return <PlatformNavContext.Provider value={nav}>{content}</PlatformNavContext.Provider>;
+  }
 
   const gate = gateOpen && (
     <GuestGate onClose={() => setGateOpen(false)} onLogin={() => openAuth('login')} onRegister={() => openAuth('register')} />
@@ -196,6 +272,28 @@ function AppShell({ auth, guestResolved, setGuestResolved }) {
   }
 
   if (socket.rehydrating) return <RehydratingScreen />;
+
+  // --- Bunker --------------------------------------------------------
+  if (bunker.state && bunker.roomCode) {
+    const leave = () => { bunker.leaveRoom(); setHub(null); };
+    return (
+      <>
+        <ConnectionBanner connected={bunker.connected} connectionError={null} />
+        <ErrorBanner message={bunker.error} />
+        {bunker.state.phase === 'LOBBY'
+          ? (
+            <BunkerLobby
+              state={bunker.state}
+              actions={bunker.actions}
+              openSettings={bunker.settingsRequested}
+              onSettingsOpened={bunker.clearSettingsRequest}
+              onLeave={leave}
+            />
+          )
+          : <BunkerGame state={bunker.state} chat={bunker.chat} actions={bunker.actions} onLeave={leave} />}
+      </>
+    );
+  }
 
   // --- Citadels ------------------------------------------------------
   if (citadels.state && citadels.roomCode) {
@@ -321,6 +419,7 @@ function AppShell({ auth, guestResolved, setGuestResolved }) {
     try {
       if (game.id === 'mafia') await mafia.createRoom(nickname, presetId || 'CLASSIC');
       else if (game.id === 'citadels') await citadels.createRoom(nickname);
+      else if (game.id === 'bunker') await bunker.createRoom(nickname);
       else setHub('monopoly');
     } catch (err) {
       if (err.code === 'GUEST_CANNOT_CREATE') requireAccount();

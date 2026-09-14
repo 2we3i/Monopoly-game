@@ -85,6 +85,11 @@ db.exec(`
   );
 `);
 
+// Additive migration: the final place of a seat, for ranked games.
+if (!db.prepare('PRAGMA table_info(match_players)').all().some((c) => c.name === 'place')) {
+  db.exec('ALTER TABLE match_players ADD COLUMN place INTEGER');
+}
+
 const DAY = 24 * 60 * 60 * 1000;
 
 // --- rooms ---------------------------------------------------------------
@@ -124,7 +129,7 @@ const endMatchStmt = db.prepare(`
 `);
 const resultStmt = db.prepare(`
   UPDATE match_players SET result = @result, role = @role, score = @score, buildings = @buildings,
-    gold_earned = @goldEarned, extra_json = @extraJson
+    gold_earned = @goldEarned, extra_json = @extraJson, place = @place
   WHERE match_id = @matchId AND player_id = @playerId
 `);
 
@@ -158,6 +163,7 @@ const finishMatch = db.transaction((matchId, { winner = null, players = [] }) =>
     buildings: Number.isFinite(p.buildings) ? p.buildings : null,
     goldEarned: Number.isFinite(p.goldEarned) ? p.goldEarned : null,
     extraJson: p.extra ? JSON.stringify(p.extra) : null,
+    place: Number.isInteger(p.place) ? p.place : null,
   }));
 });
 
@@ -459,6 +465,40 @@ function citadelsStats(accountId = null) {
   };
 }
 
+// --- queries: leaderboard and wins -------------------------------------------
+
+// Every finished, registered seat between two times - the raw material of
+// the leaderboard, which the economy scores.
+function finishedSeats(since = 0, until = Number.MAX_SAFE_INTEGER) {
+  return db.prepare(`
+    SELECT mp.match_id matchId, mp.account_id accountId, mp.result, mp.place, m.player_count playerCount, m.ended_at endedAt
+    FROM match_players mp JOIN matches m ON m.id = mp.match_id
+    WHERE m.status = 'finished' AND mp.account_id IS NOT NULL AND m.ended_at >= ? AND m.ended_at < ?
+  `).all(since, until);
+}
+
+function matchById(matchId) {
+  const m = db.prepare('SELECT * FROM matches WHERE id = ?').get(matchId);
+  return m ? matchRow(m) : null;
+}
+
+function recentWins(accountId, limit = 10) {
+  return db.prepare(`
+    SELECT m.id matchId, m.game_type gameType, m.mode_id modeId, m.ended_at endedAt, m.player_count playerCount,
+      mp.place, mp.score, mp.role
+    FROM match_players mp JOIN matches m ON m.id = mp.match_id
+    WHERE mp.account_id = ? AND m.status = 'finished' AND (mp.result = 'win' OR mp.place = 1)
+    ORDER BY m.ended_at DESC LIMIT ?
+  `).all(accountId, limit);
+}
+
+function finishedCountSince(accountId, since) {
+  return db.prepare(`
+    SELECT COUNT(*) n FROM match_players mp JOIN matches m ON m.id = mp.match_id
+    WHERE mp.account_id = ? AND m.status = 'finished' AND m.ended_at >= ?
+  `).get(accountId, since).n;
+}
+
 function checkpoint() {
   try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch { /* non-fatal */ }
 }
@@ -489,5 +529,10 @@ module.exports = {
   accountStats,
   allAccountStats,
   citadelsStats,
+  finishedSeats,
+  matchById,
+  recentWins,
+  finishedCountSince,
   close,
+  connection: db,
 };

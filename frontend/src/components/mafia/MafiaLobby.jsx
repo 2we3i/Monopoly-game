@@ -9,6 +9,9 @@ import { useTranslation } from '../../i18n/LanguageContext';
 import PlayerAvatar from '../PlayerAvatar';
 import MafiaSettingsModal from './MafiaSettings';
 import Icon from '../icons';
+import SocialBar from '../social/SocialBar';
+import FramedAvatar from '../../cosmetics/FramedAvatar';
+import { StyledName } from '../../cosmetics/Cosmetics';
 
 function SummaryPill({ children, tone = 'default' }) {
   const tones = {
@@ -53,7 +56,7 @@ export default function MafiaLobby({
 
   return (
     <div className="table-night min-h-screen">
-      <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-6">
+      <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-6 3xl:max-w-5xl 4xl:max-w-[1600px] 4xl:gap-6 4xl:py-10">
         <header className="flex flex-wrap items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-rent to-rent-deep text-white shadow-lift">
             🔪
@@ -62,6 +65,7 @@ export default function MafiaLobby({
             <h1 className="font-display text-[20px] font-black leading-tight text-parch">{t('menu.mafia.title')}</h1>
             <p className="text-[12px] text-parch/45">{t('mafia.lobbySubtitle')}</p>
           </div>
+          <SocialBar compact />
           <button type="button" onClick={onLeave} className="btn-quiet px-3 py-2 text-[12.5px]">
             {t('waiting.leave')}
           </button>
@@ -106,9 +110,11 @@ export default function MafiaLobby({
                     p.ready ? 'border-go/40 bg-go/[0.08]' : 'border-white/[0.07] bg-white/[0.025]'
                   }`}
                 >
-                  <PlayerAvatar player={{ ...p, color: p.isHost ? '#c9982f' : '#4b5fa8' }} sizeClassName="h-8 w-8" ringClassName="ring-2 ring-white/15" />
-                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-parch">
-                    {p.nickname}
+                  <FramedAvatar cosmetics={p.cosmetics} join>
+                    <PlayerAvatar player={{ ...p, color: p.isHost ? '#c9982f' : '#4b5fa8' }} sizeClassName="h-8 w-8 4xl:h-10 4xl:w-10" ringClassName="ring-2 ring-white/15" />
+                  </FramedAvatar>
+                  <span className="flex min-w-0 flex-1 items-center truncate text-[13.5px] font-semibold text-parch 4xl:text-[16px]">
+                    <StyledName nickname={p.nickname} cosmetics={p.cosmetics} showTitle titleSize="xs" />
                     {p.id === playerId && <span className="ml-1.5 text-[11px] font-normal text-parch/40">{t('sidebar.you')}</span>}
                     {p.isGuest && <span className="ml-1.5 text-[11px] font-normal text-parch/35">· {t('common.guest')}</span>}
                   </span>

@@ -6,6 +6,7 @@
 const { GameManager } = require('./GameManager');
 const { MafiaGame } = require('../mafia/MafiaGame');
 const { CitadelsGame } = require('../citadels/CitadelsGame');
+const { BunkerGame } = require('../bunker/BunkerGame');
 const db = require('../db/database');
 const platformDb = require('../db/platform');
 const recorder = require('../platform/recorder');
@@ -23,6 +24,7 @@ class RoomManager {
     // single namespace, so a code identifies a room regardless of game.
     this.mafiaRooms = new Map();
     this.citadelsRooms = new Map();
+    this.bunkerRooms = new Map();
     this._loadFromDisk();
     setInterval(() => db.pruneStaleRooms(ROOM_MAX_AGE_MS), 1000 * 60 * 60).unref();
   }
@@ -35,6 +37,8 @@ class RoomManager {
           this.mafiaRooms.set(roomCode, MafiaGame.fromJSON(state));
         } else if (state && state.gameType === 'citadels') {
           this.citadelsRooms.set(roomCode, CitadelsGame.fromJSON(state));
+        } else if (state && state.gameType === 'bunker') {
+          this.bunkerRooms.set(roomCode, BunkerGame.fromJSON(state));
         } else {
           this.rooms.set(roomCode, GameManager.fromPersisted(state, hostId));
         }
@@ -44,14 +48,18 @@ class RoomManager {
       }
     });
     // eslint-disable-next-line no-console
-    console.log(`Restored ${this.rooms.size + this.mafiaRooms.size + this.citadelsRooms.size} room(s) from disk.`);
+    console.log(`Restored ${this.roomCount()} room(s) from disk.`);
+  }
+
+  roomCount() {
+    return this.rooms.size + this.mafiaRooms.size + this.citadelsRooms.size + this.bunkerRooms.size;
   }
 
   generateRoomCode() {
     let code;
     do {
       code = Array.from({ length: 5 }, () => ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)]).join('');
-    } while (this.rooms.has(code) || this.mafiaRooms.has(code) || this.citadelsRooms.has(code));
+    } while (this.rooms.has(code) || this.mafiaRooms.has(code) || this.citadelsRooms.has(code) || this.bunkerRooms.has(code));
     return code;
   }
 
@@ -128,6 +136,35 @@ class RoomManager {
     this._gone(roomCode, reason);
   }
 
+  // --- Bunker rooms --------------------------------------------------
+
+  createBunkerRoom(hostId, settings, meta = null) {
+    const code = this.generateRoomCode();
+    const game = new BunkerGame(code, hostId, settings);
+    this.bunkerRooms.set(code, game);
+    this.persistBunker(code);
+    this._logCreated(code, 'bunker', 'bunker.classic', meta);
+    return game;
+  }
+
+  getBunkerRoom(roomCode) {
+    if (!roomCode) return null;
+    return this.bunkerRooms.get(String(roomCode).toUpperCase()) || null;
+  }
+
+  persistBunker(roomCode) {
+    const game = this.bunkerRooms.get(roomCode);
+    if (!game) return;
+    db.saveRoom(roomCode, game.hostId, game.toJSON());
+  }
+
+  deleteBunkerRoom(roomCode, reason = 'empty') {
+    if (!this.bunkerRooms.has(roomCode)) return;
+    this.bunkerRooms.delete(roomCode);
+    db.deleteRoom(roomCode);
+    this._gone(roomCode, reason);
+  }
+
   // What kind of game a code refers to, for callers that only have the
   // code (a player rejoining from a saved link, for instance).
   roomKind(roomCode) {
@@ -136,6 +173,7 @@ class RoomManager {
     if (this.rooms.has(code)) return 'monopoly';
     if (this.mafiaRooms.has(code)) return 'mafia';
     if (this.citadelsRooms.has(code)) return 'citadels';
+    if (this.bunkerRooms.has(code)) return 'bunker';
     return null;
   }
 

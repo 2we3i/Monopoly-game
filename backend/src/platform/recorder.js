@@ -46,6 +46,10 @@ function observe(summary) {
   if (stage === 'finished' && matchId) {
     platformDb.finishMatch(matchId, summary.results || {});
     open.delete(roomCode);
+    // Required lazily: the economy notifies players over presence, which
+    // is only wired up once the server is running.
+    // eslint-disable-next-line global-require
+    require('../economy/service').onMatchFinished(matchId, summary);
     return;
   }
 

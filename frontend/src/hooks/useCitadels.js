@@ -169,7 +169,7 @@ export function useCitadels(authToken) {
       ability: (payload) => emit('citadels:ability', payload),
       useDistrict: (districtId, cardUid) => emit('citadels:useDistrict', { districtId, cardUid }),
       endTurn: () => emit('citadels:endTurn'),
-      sendChat: (text) => emit('citadels:chat', { text }),
+      sendChat: (text, extra = {}) => emit('citadels:chat', { ...extra, text }),
     },
   };
 }
