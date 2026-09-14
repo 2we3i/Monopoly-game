@@ -12,8 +12,10 @@ import {
 import { useTranslation } from '../i18n/LanguageContext';
 import { useSettings } from '../settings/SettingsContext';
 import BoardTile from './BoardTile';
+import { artTierFor } from './tileArt';
 import { hexToRgba } from '../colorUtils';
 import PlayerAvatar from './PlayerAvatar';
+import { pieceIdFor, pieceLabel } from './tokenArt';
 import Icon from './icons';
 
 const SCALE_MAX = 3.2;
@@ -35,11 +37,18 @@ function detailFor(scale) {
 // --- The board surface (memoized: it only re-renders on real changes) ---
 
 const BoardSurface = memo(function BoardSurface({
-  board, properties, players, sideLength, detail, selectedTileId, onSelectTile, onHoverTile, language,
+  board, properties, players, sideLength, detail, selectedTileId, onSelectTile, onHoverTile, language, art,
 }) {
   const size = boardPixelSize(sideLength);
   const inner = boardInnerRect(sideLength);
   const groupOwners = useMemo(() => computeGroupOwners(board, properties), [board, properties]);
+  // The tallest building on the board is whatever the priciest square
+  // costs - taking it from the layout keeps the skyline meaningful on a
+  // 40-tile board and an 84-tile one alike, with no per-layout tuning.
+  const maxPrice = useMemo(
+    () => board.reduce((max, tile) => (tile.type === TILE_TYPES.PROPERTY ? Math.max(max, tile.price || 0) : max), 0),
+    [board],
+  );
   const playerById = useMemo(() => Object.fromEntries(players.map((p) => [p.id, p])), [players]);
 
   return (
@@ -76,6 +85,8 @@ const BoardSurface = memo(function BoardSurface({
             orientation={tileOrientation(tile.id, sideLength)}
             rect={tileRect(tile.id, sideLength)}
             detail={detail}
+            art={art}
+            tier={artTierFor(tile, maxPrice)}
             selected={selectedTileId === tile.id}
             onSelect={() => onSelectTile(tile.id)}
             onHover={(el) => onHoverTile(tile.id, el)}
@@ -156,7 +167,31 @@ function stackUnit(index, total) {
   return { x: Math.cos(angle) * 0.62, y: Math.sin(angle) * 0.62 };
 }
 
-function Token({ player, moveDescriptor, activePlayers, sideLength, isCurrent, animate }) {
+// Money moves constantly and silently: rent, salary, tax, a card. The
+// log records all of it, but a number that changes in a side panel is
+// easy to miss entirely. A short flash over the player's own token
+// answers "what just happened to me?" where the player is already
+// looking - at the board.
+function useMoneyFlashes(money, enabled) {
+  const [flashes, setFlashes] = useState([]);
+  const previous = useRef(money);
+  const nextId = useRef(0);
+
+  useEffect(() => {
+    const delta = money - previous.current;
+    previous.current = money;
+    if (!enabled || delta === 0) return undefined;
+    nextId.current += 1;
+    const id = nextId.current;
+    setFlashes((list) => [...list, { id, delta }]);
+    const timeout = setTimeout(() => setFlashes((list) => list.filter((f) => f.id !== id)), 1700);
+    return () => clearTimeout(timeout);
+  }, [money, enabled]);
+
+  return flashes;
+}
+
+function Token({ player, moveDescriptor, activePlayers, sideLength, isCurrent, animate, language }) {
   const position = useAnimatedTokenPosition(player.position, moveDescriptor, animate);
   const { x, y } = tileCenter(position, sideLength);
   const sameTile = activePlayers.filter((p) => (p.id === player.id ? true : p.position === position));
@@ -167,6 +202,7 @@ function Token({ player, moveDescriptor, activePlayers, sideLength, isCurrent, a
   // pixels, so a token is always drawn at a sane fraction of a tile no
   // matter how far the board is zoomed in or out.
   const sizeVar = total > 1 ? 'var(--tok-stack, 30px)' : 'var(--tok, 30px)';
+  const flashes = useMoneyFlashes(player.money, animate);
 
   return (
     <div
@@ -189,16 +225,45 @@ function Token({ player, moveDescriptor, activePlayers, sideLength, isCurrent, a
         )}
         <PlayerAvatar
           player={player}
-          title={player.nickname}
+          title={`${player.nickname} · ${pieceLabel(pieceIdFor(player), language)}`}
           sizeClassName="h-full w-full"
           ringClassName="ring-[3px] ring-white/95"
         />
+
+        {player.inJail && (
+          <span
+            className="absolute -bottom-[15%] -right-[15%] flex h-[55%] w-[55%] items-center justify-center rounded-full bg-rent ring-2 ring-white/90"
+            title={player.nickname}
+          >
+            <Icon.jail className="h-[70%] w-[70%] text-white" />
+          </span>
+        )}
+
+        {/* Counter-scaled so the amount stays readable however far out
+            the board is zoomed - the same trick the board centre uses. */}
+        {flashes.map((flash, i) => (
+          <span
+            key={flash.id}
+            className={`pointer-events-none absolute left-1/2 whitespace-nowrap rounded-full px-2 py-[1px] text-[13px] font-black tabular-nums shadow-lift ${
+              flash.delta > 0 ? 'bg-go text-white' : 'bg-rent text-white'
+            }`}
+            style={{
+              bottom: '110%',
+              transform: `translateX(-50%) scale(var(--hud-scale, 1)) translateY(${-i * 18}px)`,
+              transformOrigin: 'bottom center',
+              animation: 'money-float 1.7s ease-out forwards',
+              zIndex: 40,
+            }}
+          >
+            {flash.delta > 0 ? '+' : '-'}${Math.abs(flash.delta).toLocaleString('en-US')}
+          </span>
+        ))}
       </div>
     </div>
   );
 }
 
-function PlayerTokens({ players, lastMove, sideLength, currentPlayerId, animate }) {
+function PlayerTokens({ players, lastMove, sideLength, currentPlayerId, animate, language }) {
   const active = players.filter((p) => !p.bankrupt);
   return active.map((player) => (
     <Token
@@ -209,6 +274,7 @@ function PlayerTokens({ players, lastMove, sideLength, currentPlayerId, animate 
       sideLength={sideLength}
       isCurrent={player.id === currentPlayerId}
       animate={animate}
+      language={language}
     />
   ));
 }
@@ -652,6 +718,7 @@ export default function Board({
             onSelectTile={onSelectTile}
             onHoverTile={handleHoverTile}
             language={language}
+            art={settings.tileArt}
           />
           <BoardCenter
             sideLength={sideLength}
@@ -667,6 +734,7 @@ export default function Board({
             sideLength={sideLength}
             currentPlayerId={currentPlayer?.id}
             animate={settings.animations}
+            language={language}
           />
         </div>
       </div>

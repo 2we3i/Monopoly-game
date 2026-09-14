@@ -17,7 +17,7 @@ import ActivityLog from './ActivityLog';
 import SettingsModal from './SettingsModal';
 import PlayerAvatar from './PlayerAvatar';
 import Modal from './Modal';
-import { formatMoney, getTileName, ownedTileIds, tileAccentColor } from '../boardData';
+import { formatMoney, getTileName, netWorth, ownedTileIds, tileAccentColor } from '../boardData';
 import { isLightColor } from '../colorUtils';
 import { useTranslation } from '../i18n/LanguageContext';
 import { useSettings } from '../settings/SettingsContext';
@@ -162,6 +162,13 @@ function GameOverScreen({ gameState, playerId, onLeave }) {
   const { t } = useTranslation();
   const winner = gameState.players.find((p) => p.id === gameState.winnerId);
   const iWon = winner?.id === playerId;
+  // Final standings by what each player was actually worth, not just who
+  // survived - a game that ends with three players still solvent should
+  // still say who came second.
+  const standings = [...gameState.players]
+    .map((p) => ({ player: p, worth: p.bankrupt ? -1 : netWorth(p, gameState.board, gameState.properties) }))
+    .sort((a, b) => b.worth - a.worth);
+
   return (
     <Modal onClose={onLeave} widthClass="max-w-sm">
       <div className="flex flex-col items-center text-center">
@@ -172,9 +179,33 @@ function GameOverScreen({ gameState, playerId, onLeave }) {
         <h2 className="mb-1 mt-1 font-display text-2xl font-black text-parch">
           {iWon ? t('gameOver.youWon') : t('gameOver.nameWins', { name: winner?.nickname })}
         </h2>
-        <p className="mb-6 text-[13px] text-parch/45">
+        <p className="mb-4 text-[13px] text-parch/45">
           {iWon ? t('gameOver.subtitleWon') : t('gameOver.subtitleLost')}
         </p>
+
+        <div className="mb-5 w-full overflow-hidden rounded-xl border border-white/[0.08]">
+          <p className="section-label border-b border-white/[0.07] bg-white/[0.03] px-3 py-1.5 text-left">
+            {t('gameOver.standings')}
+          </p>
+          <ol className="divide-y divide-white/[0.06]">
+            {standings.map((row, i) => (
+              <li key={row.player.id} className="flex items-center gap-2.5 px-3 py-2 text-left">
+                <span className="w-4 shrink-0 text-[12px] font-bold text-parch/35 tnum">{i + 1}</span>
+                <PlayerAvatar player={row.player} sizeClassName="h-7 w-7" ringClassName="ring-2 ring-white/20" />
+                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-parch">
+                  {row.player.nickname}
+                  {row.player.id === playerId && <span className="ml-1 text-[11px] font-normal text-parch/40">{t('sidebar.you')}</span>}
+                </span>
+                {row.player.bankrupt ? (
+                  <span className="pill bg-rent/20 text-rent-light">{t('sidebar.bankrupt')}</span>
+                ) : (
+                  <span className="text-[13px] font-bold text-parch/80 tnum">{formatMoney(row.worth)}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+
         <button type="button" onClick={onLeave} className="btn-primary w-full py-3">{t('gameOver.backToLobby')}</button>
       </div>
     </Modal>

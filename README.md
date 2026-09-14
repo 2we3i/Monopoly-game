@@ -11,6 +11,9 @@ A real-time, browser-based property-trading board game for up to 10 players — 
 - **For the Family**: a property owner can set a specific, fixed rent price for a specific other player, overriding the normal computed rent for that pairing only.
 - **A board you can actually read**: the board is drawn at a fixed design size and shown through a free zoom/pan viewport — scroll to zoom at the cursor, drag to pan, pinch on touch, with a zoom readout and a fit-to-screen control. Zoom is per-player and local; it never touches game state. Tiles simplify themselves as you zoom out (a tile whose name would render smaller than it is readable shows its color group, its owner and its buildings instead), and hovering any tile gives its full details.
 - **One place to act**: an action dock under the board always shows whatever the game is waiting for — roll, buy, end turn, jail options — plus the portfolio and trade screens, so no action has to be hunted for. Space or Enter fires the current primary action.
+- **Illustrated board**: every square carries artwork drawn in its own group color — the buildings grow from cottages to skyscrapers as the price rises — and each player gets a classic playing piece (top hat, roadster, terrier, battleship…) derived from their color, so a token is recognisable on a crowded board and in every panel. A layout can also ship a real picture per square via `tile.image`, which takes precedence.
+- **Per-player settings** (gear in the header): language, tile labels (auto/always/never), tile artwork, hover details, large tokens, zoom speed, activity log, animations. Stored locally, they change nothing for anyone else.
+- Money changes flash over the player's own token on the board, so rent and salary are visible where you are already looking.
 - Live chat and an in-game activity log — both in English and Russian.
 
 ## Project layout

@@ -12,6 +12,9 @@ export const DEFAULT_SETTINGS = {
   // 'always' keeps it no matter what, 'never' keeps the board graphic.
   tileLabels: 'auto',
   showTooltips: true,
+  // Illustrations on the squares. On by default - they are what makes
+  // the board look like a board rather than a spreadsheet.
+  tileArt: true,
   showActivityLog: true,
   animations: true,
   // Wheel/trackpad zoom speed multiplier.

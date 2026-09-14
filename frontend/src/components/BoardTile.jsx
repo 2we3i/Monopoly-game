@@ -5,6 +5,7 @@
 
 import { memo } from 'react';
 import { TILE_TYPES, getTileName, tileAccentColor } from '../boardData';
+import TileArt from './tileArt';
 import { hexToRgba, isLightColor } from '../colorUtils';
 import Icon from './icons';
 
@@ -115,7 +116,7 @@ function TileShell({ rect, selected, dimmed, onSelect, onHover, children, title,
 
 // --- Property / railroad / utility ---------------------------------
 
-function OwnableTile({ tile, propState, owner, monopoly, orientation, detail, rect, selected, onSelect, onHover, language }) {
+function OwnableTile({ tile, propState, owner, monopoly, orientation, detail, rect, selected, onSelect, onHover, language, art, tier }) {
   const accent = tileAccentColor(tile);
   const name = getTileName(tile, language);
   const isProperty = tile.type === TILE_TYPES.PROPERTY;
@@ -123,9 +124,10 @@ function OwnableTile({ tile, propState, owner, monopoly, orientation, detail, re
   const vertical = orientation === 'left' || orientation === 'right';
   const minimal = detail === 'min';
 
-  const TypeIcon = tile.type === TILE_TYPES.RAILROAD ? Icon.train
-    : tile.type === TILE_TYPES.UTILITY ? (/water|вод|aqua/i.test(tile.name) ? Icon.droplet : Icon.bolt)
-      : null;
+  // Artwork is dropped before the name is: at 'mid' the tile is only
+  // about 40-60 screen pixels across, and a picture that small next to
+  // two lines of type reads as clutter rather than illustration.
+  const showArt = art && detail === 'full';
 
   return (
     <TileShell tile={tile} rect={rect} selected={selected} onSelect={onSelect} onHover={onHover} title={`${name} · $${tile.price}`}>
@@ -165,8 +167,18 @@ function OwnableTile({ tile, propState, owner, monopoly, orientation, detail, re
           className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center"
           style={bodyPadding(orientation, showBand, !!owner)}
         >
-          {TypeIcon && detail === 'full' && (
-            <TypeIcon className="mb-[2px] h-[18px] w-[18px] shrink-0" style={{ color: accent }} />
+          {showArt && (
+            tile.image
+              ? (
+                <img
+                  src={tile.image}
+                  alt=""
+                  draggable={false}
+                  className="mb-[2px] w-full shrink-0 rounded-[2px] object-cover"
+                  style={{ height: 30 }}
+                />
+              )
+              : <TileArt tile={tile} tier={tier} accent={accent} size={34} />
           )}
           {/* The name keeps its size at every detail level - what drops
               away first is the price, because two lines of tiny type are
@@ -216,7 +228,7 @@ const SPECIAL_META = {
   [TILE_TYPES.FREE_PARKING]: { icon: Icon.parking, color: '#3a6ea8', wash: 'rgba(58,110,168,0.14)' },
 };
 
-function SpecialTile({ tile, rect, detail, corner, selected, onSelect, onHover, language, t, extra }) {
+function SpecialTile({ tile, rect, detail, corner, selected, onSelect, onHover, language, art }) {
   const meta = SPECIAL_META[tile.type] || { icon: Icon.scroll, color: '#4a4f3d', wash: 'transparent' };
   const IconCmp = meta.icon;
   const name = getTileName(tile, language);
@@ -226,10 +238,14 @@ function SpecialTile({ tile, rect, detail, corner, selected, onSelect, onHover, 
     <TileShell tile={tile} rect={rect} selected={selected} onSelect={onSelect} onHover={onHover} title={name} interactive>
       <span className="pointer-events-none absolute inset-0" style={{ backgroundColor: meta.wash }} />
       <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-[3px] px-[4px] text-center">
-        <IconCmp
-          className="shrink-0"
-          style={{ color: meta.color, width: corner ? 32 : minimal ? 20 : 22, height: corner ? 32 : minimal ? 20 : 22 }}
-        />
+        {art && !minimal
+          ? <TileArt tile={tile} accent={meta.color} size={corner ? 46 : 30} corner={corner} />
+          : (
+            <IconCmp
+              className="shrink-0"
+              style={{ color: meta.color, width: corner ? 32 : minimal ? 20 : 22, height: corner ? 32 : minimal ? 20 : 22 }}
+            />
+          )}
         {!minimal && (
           <span
             className="font-bold uppercase leading-[1.1] tracking-[0.02em] text-ink"
@@ -243,9 +259,7 @@ function SpecialTile({ tile, rect, detail, corner, selected, onSelect, onHover, 
             -${tile.amount}
           </span>
         )}
-        {corner && extra && (
-          <span className="text-[8.5px] font-semibold uppercase leading-tight tracking-wide text-ink-faint">{extra}</span>
-        )}
+
       </span>
     </TileShell>
   );

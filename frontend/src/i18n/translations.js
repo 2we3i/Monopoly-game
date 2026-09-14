@@ -86,6 +86,7 @@ const en = {
   'gameOver.nameWins': '{name} wins!',
   'gameOver.subtitleWon': 'Everyone else went bankrupt. Nicely played.',
   'gameOver.subtitleLost': 'Everyone else went bankrupt. Better luck next time.',
+  'gameOver.standings': 'Final standings',
   'gameOver.backToLobby': 'Back to lobby',
 
   'sidebar.players': 'Players',
@@ -281,6 +282,8 @@ const en = {
   'settings.interfaceSection': 'Interface',
   'settings.tileLabels': 'Tile labels',
   'settings.tileLabelsHint': 'Auto hides names once they get too small to read.',
+  'settings.tileArt': 'Tile artwork',
+  'settings.tileArtHint': 'Illustrations on the squares, drawn in each group\u2019s color.',
   'settings.tooltips': 'Hover details',
   'settings.tooltipsHint': "Show a tile's price, rent and owner on hover.",
   'settings.largeTokens': 'Large player tokens',
@@ -386,6 +389,7 @@ const ru = {
   'gameOver.nameWins': 'Победитель — {name}!',
   'gameOver.subtitleWon': 'Все остальные обанкротились. Отличная игра.',
   'gameOver.subtitleLost': 'Все остальные обанкротились. Повезёт в следующий раз.',
+  'gameOver.standings': 'Итоговые места',
   'gameOver.backToLobby': 'Вернуться в лобби',
 
   'sidebar.players': 'Игроки',
@@ -581,6 +585,8 @@ const ru = {
   'settings.interfaceSection': 'Интерфейс',
   'settings.tileLabels': 'Названия клеток',
   'settings.tileLabelsHint': '«Авто» скрывает названия, когда они становятся нечитаемыми.',
+  'settings.tileArt': 'Иллюстрации на клетках',
+  'settings.tileArtHint': 'Рисунки на клетках в цвете их группы.',
   'settings.tooltips': 'Подсказки при наведении',
   'settings.tooltipsHint': 'Цена, аренда и владелец клетки.',
   'settings.largeTokens': 'Крупные фишки',

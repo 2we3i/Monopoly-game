@@ -121,6 +121,9 @@ export default function SettingsModal({ onClose }) {
               ]}
             />
           </Row>
+          <Row icon={Icon.home} title={t('settings.tileArt')} hint={t('settings.tileArtHint')}>
+            <Toggle checked={settings.tileArt} onChange={(v) => update({ tileArt: v })} label={t('settings.tileArt')} />
+          </Row>
           <Row icon={Icon.target} title={t('settings.tooltips')} hint={t('settings.tooltipsHint')}>
             <Toggle checked={settings.showTooltips} onChange={(v) => update({ showTooltips: v })} label={t('settings.tooltips')} />
           </Row>
