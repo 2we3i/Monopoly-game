@@ -18,6 +18,7 @@ import { useMafia } from './hooks/useMafia';
 import { useCitadels } from './hooks/useCitadels';
 import { useBunker } from './hooks/useBunker';
 import { useCatan } from './hooks/useCatan';
+import { useCosmic } from './hooks/useCosmic';
 import { useAuth } from './hooks/useAuth';
 import AuthScreen from './components/AuthScreen';
 import MainMenu from './components/MainMenu';
@@ -43,6 +44,8 @@ const BunkerLobby = lazy(() => import('./components/bunker/BunkerLobby'));
 const BunkerGame = lazy(() => import('./components/bunker/BunkerGame'));
 const CatanLobby = lazy(() => import('./components/catan/CatanLobby'));
 const CatanGame = lazy(() => import('./components/catan/CatanGame'));
+const CosmicLobby = lazy(() => import('./components/cosmic/CosmicLobby'));
+const CosmicGame = lazy(() => import('./components/cosmic/CosmicGame'));
 const ProfilePage = lazy(() => import('./components/profile/ProfilePage'));
 const AdminPanel = lazy(() => import('./components/admin/AdminPanel'));
 const ShopPage = lazy(() => import('./components/shop/ShopPage'));
@@ -135,7 +138,8 @@ export default function App() {
       || !!localStorage.getItem('landmark_mafia_room')
       || !!localStorage.getItem('landmark_citadels_room')
       || !!localStorage.getItem('landmark_bunker_room')
-      || !!localStorage.getItem('landmark_catan_room'),
+      || !!localStorage.getItem('landmark_catan_room')
+      || !!localStorage.getItem('landmark_cosmic_room'),
   );
 
   useEffect(() => {
@@ -172,6 +176,7 @@ function AppShell({
   const citadels = useCitadels(auth.token);
   const bunker = useBunker(auth.token);
   const catan = useCatan(auth.token);
+  const cosmic = useCosmic(auth.token);
   const [hub, setHub] = useState(null); // null = main menu, 'monopoly' = its lobby
   const [joinError, setJoinError] = useState(null);
   const [joining, setJoining] = useState(false);
@@ -182,7 +187,7 @@ function AppShell({
 
   const identityResolved = auth.isLoggedIn || guestResolved;
   const nickname = auth.isLoggedIn ? auth.account.nickname : (localStorage.getItem(NICKNAME_KEY) || '');
-  const inAnyRoom = !!(socket.roomCode || mafia.roomCode || citadels.roomCode || bunker.roomCode || catan.roomCode);
+  const inAnyRoom = !!(socket.roomCode || mafia.roomCode || citadels.roomCode || bunker.roomCode || catan.roomCode || cosmic.roomCode);
   const page = platformPage(pathname);
 
   useStartSound(socket.gameState?.phase);
@@ -190,6 +195,7 @@ function AppShell({
   useStartSound(citadels.state?.phase);
   useStartSound(bunker.state?.phase);
   useStartSound(catan.state?.phase);
+  useStartSound(cosmic.state?.phase);
 
   useEffect(() => {
     if (auth.isLoggedIn) setAuthMode(null);
@@ -226,6 +232,7 @@ function AppShell({
       else if (res.gameType === 'citadels') await citadels.joinRoom(code, nickname);
       else if (res.gameType === 'bunker') await bunker.joinRoom(code, nickname);
       else if (res.gameType === 'catan') await catan.joinRoom(code, nickname);
+      else if (res.gameType === 'cosmic') await cosmic.joinRoom(code, nickname);
       else await socket.joinRoom(code, nickname);
     } catch (err) {
       setJoinError(err.message);
@@ -282,6 +289,28 @@ function AppShell({
   }
 
   if (socket.rehydrating) return <RehydratingScreen />;
+
+  // --- Cosmic Encounter ----------------------------------------------
+  if (cosmic.state && cosmic.roomCode) {
+    const leave = () => { cosmic.leaveRoom(); setHub(null); };
+    return (
+      <>
+        <ConnectionBanner connected={cosmic.connected} connectionError={null} />
+        <ErrorBanner message={cosmic.error} />
+        {cosmic.state.phase === 'LOBBY'
+          ? (
+            <CosmicLobby
+              state={cosmic.state}
+              actions={cosmic.actions}
+              openSettings={cosmic.settingsRequested}
+              onSettingsOpened={cosmic.clearSettingsRequest}
+              onLeave={leave}
+            />
+          )
+          : <CosmicGame state={cosmic.state} chat={cosmic.chat} actions={cosmic.actions} onLeave={leave} />}
+      </>
+    );
+  }
 
   // --- Catan ---------------------------------------------------------
   if (catan.state && catan.roomCode) {
@@ -456,6 +485,7 @@ function AppShell({
       else if (game.id === 'citadels') await citadels.createRoom(nickname);
       else if (game.id === 'bunker') await bunker.createRoom(nickname);
       else if (game.id === 'catan') await catan.createRoom(nickname);
+      else if (game.id === 'cosmic') await cosmic.createRoom(nickname);
       else setHub('monopoly');
     } catch (err) {
       if (err.code === 'GUEST_CANNOT_CREATE') requireAccount();

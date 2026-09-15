@@ -5,7 +5,7 @@
 //
 // Each game's socket handler registers an adapter:
 //
-//   type                         'monopoly' | 'mafia' | 'citadels' | 'bunker' | 'catan'
+//   type                         'monopoly' | 'mafia' | 'citadels' | 'bunker' | 'catan' | 'cosmic'
 //   rooms()                      iterable of live room objects
 //   get(code)                    one live room or null
 //   summary(room)                the admin's view of a room (see below)

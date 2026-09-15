@@ -18,6 +18,7 @@ const { registerMafiaHandlers } = require('./socket/mafiaHandler');
 const { registerCitadelsHandlers } = require('./socket/citadelsHandler');
 const { registerBunkerHandlers } = require('./socket/bunkerHandler');
 const { registerCatanHandlers } = require('./socket/catanHandler');
+const { registerCosmicHandlers } = require('./socket/cosmicHandler');
 const db = require('./db/database');
 const accountsDb = require('./db/accounts');
 const platformDb = require('./db/platform');
@@ -79,6 +80,7 @@ registerMafiaHandlers(io);
 registerCitadelsHandlers(io);
 registerBunkerHandlers(io);
 registerCatanHandlers(io);
+registerCosmicHandlers(io);
 
 server.listen(PORT, '0.0.0.0', () => {
   // eslint-disable-next-line no-console

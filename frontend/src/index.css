@@ -74,6 +74,15 @@
       linear-gradient(180deg, #0a1d29 0%, #050e14 100%);
   }
 
+  /* Cosmic Encounter: deep space with a violet warp glow. */
+  .table-cosmic {
+    background-color: #05040f;
+    background-image:
+      radial-gradient(ellipse 90% 60% at 50% -10%, rgba(120,80,220,0.22) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 60% at 90% 110%, rgba(60,90,200,0.16) 0%, transparent 60%),
+      linear-gradient(180deg, #0c0a22 0%, #04030c 100%);
+  }
+
   /* The admin panel and profile: plain graphite, no table texture. */
   .dash-bg {
     background-color: #0a0b0d;
@@ -413,3 +422,11 @@
 .catan-pulse { animation: catan-pulse 1.4s ease-in-out infinite; }
 .motion-off .catan-pulse { animation: none; }
 @media (prefers-reduced-motion: reduce) { .catan-pulse { animation: none; } }
+
+/* Cosmic Encounter: the warp slowly turns and the gate's beam flows. */
+@keyframes cosmic-spin { to { transform: rotate(360deg); } }
+@keyframes cosmic-dash { to { stroke-dashoffset: -36; } }
+.cosmic-spin { animation: cosmic-spin 30s linear infinite; }
+.cosmic-dash { animation: cosmic-dash 1.2s linear infinite; }
+.motion-off .cosmic-spin, .motion-off .cosmic-dash { animation: none; }
+@media (prefers-reduced-motion: reduce) { .cosmic-spin, .cosmic-dash { animation: none; } }

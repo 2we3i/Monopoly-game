@@ -13,6 +13,7 @@ const { DISTRICTS, TYPE_LIST } = require('../citadels/districts');
 const bunker = require('../bunker/BunkerGame');
 const bunkerCards = require('../bunker/cards');
 const catan = require('../catan/CatanGame');
+const cosmic = require('../cosmic/CosmicGame');
 const modes = require('../platform/modes');
 const registry = require('../platform/registry');
 
@@ -67,6 +68,12 @@ router.get('/games', (req, res) => {
         minPlayers: catan.MIN_PLAYERS,
         maxPlayers: catan.MAX_PLAYERS,
         available: modes.gameAvailable('catan'),
+      },
+      {
+        id: 'cosmic',
+        minPlayers: cosmic.MIN_PLAYERS,
+        maxPlayers: cosmic.MAX_PLAYERS,
+        available: modes.gameAvailable('cosmic'),
       },
     ],
   });

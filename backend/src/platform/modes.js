@@ -22,6 +22,7 @@ function catalog() {
     { id: 'citadels.classic', gameId: 'citadels', variant: 'classic', label: { en: 'Citadels', ru: 'Цитадели' } },
     { id: 'bunker.classic', gameId: 'bunker', variant: 'classic', label: { en: 'Bunker', ru: 'Бункер' } },
     { id: 'catan.classic', gameId: 'catan', variant: 'classic', label: { en: 'Catan', ru: 'Колонизаторы' } },
+    { id: 'cosmic.classic', gameId: 'cosmic', variant: 'classic', label: { en: 'Cosmic Encounter', ru: 'Космический контакт' } },
   ];
 }
 

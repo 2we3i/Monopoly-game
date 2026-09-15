@@ -15,6 +15,7 @@ import { navigate } from '../lib/router';
 import { BunkerArt } from './bunker/bunkerText';
 import { ChpokArt, Chpok2Art } from './tabletop/chpokArt';
 import { CatanArt } from './catan/catanArt';
+import { CosmicArt } from './cosmic/cosmicArt';
 
 function MonopolyArt() {
   return (
@@ -109,7 +110,7 @@ function CitadelsArt() {
 }
 
 const GAME_ART = {
-  monopoly: MonopolyArt, mafia: MafiaArt, citadels: CitadelsArt, bunker: BunkerArt, catan: CatanArt, chpok: ChpokArt, chpok2: Chpok2Art,
+  monopoly: MonopolyArt, mafia: MafiaArt, citadels: CitadelsArt, bunker: BunkerArt, catan: CatanArt, cosmic: CosmicArt, chpok: ChpokArt, chpok2: Chpok2Art,
 };
 const GAME_ACCENT = {
   monopoly: 'from-brass/25 to-transparent',
@@ -117,11 +118,12 @@ const GAME_ACCENT = {
   citadels: 'from-violet-500/25 to-transparent',
   bunker: 'from-orange-500/15 to-transparent',
   catan: 'from-sky-500/20 to-transparent',
+  cosmic: 'from-violet-500/25 to-transparent',
   chpok: 'from-rose-500/20 to-transparent',
   chpok2: 'from-fuchsia-500/15 to-transparent',
 };
 const GAME_EMOJI = {
-  monopoly: '🎲', mafia: '🔪', citadels: '🏰', bunker: '☢️', catan: '🏝️', chpok: '🔞', chpok2: '🔞',
+  monopoly: '🎲', mafia: '🔪', citadels: '🏰', bunker: '☢️', catan: '🏝️', cosmic: '🛸', chpok: '🔞', chpok2: '🔞',
 };
 
 // Also used by the board-games section, which has nothing to configure.
@@ -199,6 +201,7 @@ export default function MainMenu({
     { id: 'citadels', minPlayers: 2, maxPlayers: 7 },
     { id: 'bunker', minPlayers: 4, maxPlayers: 16 },
     { id: 'catan', minPlayers: 2, maxPlayers: 4 },
+    { id: 'cosmic', minPlayers: 3, maxPlayers: 5 },
   ]);
   const [code, setCode] = useState('');
   const isGuest = !auth?.isLoggedIn;
