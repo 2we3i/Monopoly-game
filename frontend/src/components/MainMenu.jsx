@@ -14,6 +14,7 @@ import { DashIcon } from './ui/dash';
 import { navigate } from '../lib/router';
 import { BunkerArt } from './bunker/bunkerText';
 import { ChpokArt, Chpok2Art } from './tabletop/chpokArt';
+import { ThroneArt } from './tabletop/throne/throneArt';
 import { CatanArt } from './catan/catanArt';
 import { CosmicArt } from './cosmic/cosmicArt';
 
@@ -110,7 +111,7 @@ function CitadelsArt() {
 }
 
 const GAME_ART = {
-  monopoly: MonopolyArt, mafia: MafiaArt, citadels: CitadelsArt, bunker: BunkerArt, catan: CatanArt, cosmic: CosmicArt, chpok: ChpokArt, chpok2: Chpok2Art,
+  monopoly: MonopolyArt, mafia: MafiaArt, citadels: CitadelsArt, bunker: BunkerArt, catan: CatanArt, cosmic: CosmicArt, chpok: ChpokArt, chpok2: Chpok2Art, throne: ThroneArt,
 };
 const GAME_ACCENT = {
   monopoly: 'from-brass/25 to-transparent',
@@ -121,9 +122,10 @@ const GAME_ACCENT = {
   cosmic: 'from-violet-500/25 to-transparent',
   chpok: 'from-rose-500/20 to-transparent',
   chpok2: 'from-fuchsia-500/15 to-transparent',
+  throne: 'from-amber-950/40 to-transparent',
 };
 const GAME_EMOJI = {
-  monopoly: '🎲', mafia: '🔪', citadels: '🏰', bunker: '☢️', catan: '🏝️', cosmic: '🛸', chpok: '🔞', chpok2: '🔞',
+  monopoly: '🎲', mafia: '🔪', citadels: '🏰', bunker: '☢️', catan: '🏝️', cosmic: '🛸', chpok: '🔞', chpok2: '🔞', throne: '⚔️',
 };
 
 // Also used by the board-games section, which has nothing to configure.
@@ -275,13 +277,39 @@ export default function MainMenu({
           ))}
         </section>
 
-        {/* Board games played around one device. The teaser stays neutral:
-            the 18+ descriptions live behind the age question. */}
+        {/* Board games played around one device. The ЧПОК teaser stays
+            neutral: its 18+ descriptions live behind the age question. */}
         <section className="mt-8 4xl:mt-12">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <h2 className="font-display text-[22px] font-black leading-tight text-parch 4xl:text-[30px]">{t('tabletop.section')}</h2>
-            <span className="rounded-full bg-rent/85 px-2 py-0.5 text-[11px] font-black text-white">18+</span>
           </div>
+          <div className="grid gap-4 xl:grid-cols-2 4xl:gap-8">
+          <button
+            type="button"
+            onClick={() => navigate('/tabletop/iron-throne')}
+            className="group flex w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-felt-700/70 text-left shadow-glass backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-white/20 hover:shadow-deep sm:flex-row"
+          >
+            <div className="relative h-32 w-full shrink-0 overflow-hidden sm:h-auto sm:w-64 4xl:w-96">
+              <div className="absolute inset-0 transition-transform duration-500 group-hover:scale-[1.04]">
+                <ThroneArt />
+              </div>
+            </div>
+            <div className="flex flex-1 flex-col gap-2.5 p-4 4xl:p-6">
+              <div>
+                <p className="section-label">{t('menu.throne.title')}</p>
+                <p className="mt-1 text-[13px] leading-snug text-parch/55 4xl:text-[16.5px]">{t('tabletop.throneTeaser')}</p>
+              </div>
+              <ul className="flex flex-wrap gap-1.5">
+                {t('menu.throne.tags').split('|').map((tag) => (
+                  <li key={tag} className="pill bg-white/[0.06] text-parch/75">{tag}</li>
+                ))}
+              </ul>
+              <span className="mt-auto inline-flex items-center gap-1.5 text-[14px] font-semibold text-brass-light 4xl:text-[17px]">
+                {t('menu.play')}
+                <Icon.chevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </div>
+          </button>
           <button
             type="button"
             onClick={() => navigate('/tabletop')}
@@ -294,7 +322,10 @@ export default function MainMenu({
             </div>
             <div className="flex flex-1 flex-col gap-2.5 p-4 4xl:p-6">
               <div>
-                <p className="section-label">{t('tabletop.seriesTitle')}</p>
+                <p className="section-label flex items-center gap-1.5">
+                  {t('tabletop.seriesTitle')}
+                  <span className="rounded-full bg-rent/85 px-1.5 py-px text-[10px] font-black tracking-normal text-white">18+</span>
+                </p>
                 <p className="mt-1 text-[13px] leading-snug text-parch/55 4xl:text-[16.5px]">{t('tabletop.menuTeaser')}</p>
               </div>
               <ul className="flex flex-wrap gap-1.5">
@@ -308,6 +339,7 @@ export default function MainMenu({
               </span>
             </div>
           </button>
+          </div>
         </section>
 
         <section className="mx-auto mt-8 max-w-md 4xl:mt-12 4xl:max-w-xl">

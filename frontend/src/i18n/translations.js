@@ -8,6 +8,7 @@ import { tabletopEn, tabletopRu } from './tabletopTranslations';
 import { monopolyEn, monopolyRu } from './monopolyTranslations';
 import { catanEn, catanRu } from './catanTranslations';
 import { cosmicEn, cosmicRu } from './cosmicTranslations';
+import { throneEn, throneRu } from './throneTranslations';
 
 export const LANGUAGES = {
   en: { label: 'English', nativeLabel: 'English' },
@@ -1067,8 +1068,8 @@ const ru = {
 };
 
 export const TRANSLATIONS = {
-  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn, ...tabletopEn, ...monopolyEn, ...catanEn, ...cosmicEn },
-  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu, ...tabletopRu, ...monopolyRu, ...catanRu, ...cosmicRu },
+  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn, ...tabletopEn, ...monopolyEn, ...catanEn, ...cosmicEn, ...throneEn },
+  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu, ...tabletopRu, ...monopolyRu, ...catanRu, ...cosmicRu, ...throneRu },
 };
 
 if (import.meta.env.DEV) {

@@ -430,3 +430,107 @@
 .cosmic-dash { animation: cosmic-dash 1.2s linear infinite; }
 .motion-off .cosmic-spin, .motion-off .cosmic-dash { animation: none; }
 @media (prefers-reduced-motion: reduce) { .cosmic-spin, .cosmic-dash { animation: none; } }
+
+/* ---------------------------------------------------------------------
+   The Iron Throne: dark stone and iron around an old parchment map.
+   Muted gold for what matters, blood red for war, cold blue for the sea.
+   --------------------------------------------------------------------- */
+.table-throne {
+  background-color: #0c0b0a;
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -12%, rgba(180, 150, 90, 0.1) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 45% at 50% 115%, rgba(90, 110, 125, 0.08) 0%, transparent 60%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.012) 0 2px, transparent 2px 7px),
+    linear-gradient(180deg, #171512 0%, #0a0908 100%);
+  color: #e9dfc8;
+}
+.throne-panel {
+  position: relative;
+  border-radius: 0.8rem;
+  border: 1px solid rgba(160, 130, 80, 0.26);
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.035) 0%, transparent 42%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.06) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #1e1c19 0%, #141311 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 0 0 1px rgba(0, 0, 0, 0.55), 0 12px 26px -18px rgba(0, 0, 0, 0.95);
+}
+.throne-panel::before,
+.throne-panel::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 35%, #9c8a66, #3b3120 70%);
+  opacity: 0.7;
+}
+.throne-panel::before { left: 6px; }
+.throne-panel::after { right: 6px; }
+.throne-heading {
+  font-family: 'Fraunces', Georgia, serif;
+  font-variant: small-caps;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #dcbb6a;
+}
+.throne-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: rgba(233, 223, 200, 0.45);
+}
+.throne-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(160, 130, 80, 0.35);
+  background: linear-gradient(180deg, #2f2b25 0%, #1d1a16 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  color: #ece2cb;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 0.45rem 0.65rem;
+  user-select: none;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.throne-btn:hover { border-color: rgba(220, 187, 106, 0.65); background: linear-gradient(180deg, #3a342c 0%, #24201b 100%); }
+.throne-btn:active { transform: scale(0.97); }
+.throne-btn:disabled { opacity: 0.38; pointer-events: none; }
+.throne-btn-gold {
+  border-color: #6e5a2c;
+  background: linear-gradient(180deg, #dcbb6a 0%, #9c7a32 100%);
+  color: #1a140a;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 6px 16px -8px rgba(201, 152, 47, 0.8);
+}
+.throne-btn-gold:hover { background: linear-gradient(180deg, #e8cb82 0%, #ad8a3c 100%); border-color: #8a7038; }
+.throne-btn-blood {
+  border-color: #3d0f0b;
+  background: linear-gradient(180deg, #93302a 0%, #5a1611 100%);
+  color: #f6e6d2;
+}
+.throne-btn-blood:hover { background: linear-gradient(180deg, #a83a32 0%, #6b1c15 100%); border-color: #7a241c; }
+.throne-btn-dark { background: linear-gradient(180deg, #3a2a18 0%, #24190d 100%); color: #efe3c2; border-color: #1b140c; }
+.throne-parchment {
+  background:
+    radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.35) 0%, transparent 45%),
+    radial-gradient(circle at 85% 90%, rgba(90, 60, 20, 0.18) 0%, transparent 50%),
+    linear-gradient(180deg, #dccca4 0%, #c9b588 100%);
+  box-shadow: inset 0 0 0 1px rgba(58, 42, 24, 0.35), 0 4px 10px -6px rgba(0, 0, 0, 0.8);
+}
+.throne-turn-ring { box-shadow: 0 0 0 2px var(--ring); animation: throne-ring 2.4s ease-out infinite; }
+@keyframes throne-ring { 0%, 100% { opacity: 0.9; transform: scale(1); } 50% { opacity: 0.2; transform: scale(1.08); } }
+@keyframes throne-march { to { stroke-dashoffset: -56; } }
+.throne-march { animation: throne-march 1.1s linear infinite; }
+@keyframes throne-card-in { 0% { transform: translateY(6px) rotateX(-20deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+.throne-card-in { animation: throne-card-in 0.32s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+@keyframes throne-die { 0% { transform: rotate(-200deg) scale(0.6); } 100% { transform: none; } }
+.throne-die { animation: throne-die 0.5s cubic-bezier(0.3, 1.3, 0.6, 1) both; }
+.motion-off .throne-march,
+.motion-off .throne-card-in,
+.motion-off .throne-die,
+.motion-off .throne-turn-ring { animation: none !important; }
