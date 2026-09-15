@@ -95,7 +95,7 @@ export default function LobbiesSection({ token }) {
           onChange={setGame}
           options={[
             { value: 'all', label: t('common.all') },
-            ...['monopoly', 'mafia', 'citadels', 'bunker'].map((id) => ({ value: id, label: gameName(t, id) })),
+            ...['monopoly', 'mafia', 'citadels', 'bunker', 'catan'].map((id) => ({ value: id, label: gameName(t, id) })),
           ]}
         />
         <Segmented

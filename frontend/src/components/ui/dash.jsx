@@ -7,7 +7,7 @@
 import { useEffect, useState } from 'react';
 
 export const GAME_COLORS = {
-  monopoly: '#d4a52c', mafia: '#e0574b', citadels: '#a57ae0', bunker: '#9aa3ad',
+  monopoly: '#d4a52c', mafia: '#e0574b', citadels: '#a57ae0', bunker: '#9aa3ad', catan: '#3f9bd1',
 };
 
 const ICONS = {

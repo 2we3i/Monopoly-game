@@ -17,6 +17,7 @@ export function phaseName(t, gameType, phase) {
     mafia: `mafia.phase.${phase}`,
     citadels: `citadels.phase.${phase}`,
     bunker: `bunker.phase.${phase}`,
+    catan: `catan.phase.${phase}`,
     monopoly: `admin.monopolyPhase.${phase}`,
   };
   const key = keys[gameType];

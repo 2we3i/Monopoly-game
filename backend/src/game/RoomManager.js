@@ -7,6 +7,7 @@ const { GameManager } = require('./GameManager');
 const { MafiaGame } = require('../mafia/MafiaGame');
 const { CitadelsGame } = require('../citadels/CitadelsGame');
 const { BunkerGame } = require('../bunker/BunkerGame');
+const { CatanGame } = require('../catan/CatanGame');
 const db = require('../db/database');
 const platformDb = require('../db/platform');
 const recorder = require('../platform/recorder');
@@ -25,6 +26,7 @@ class RoomManager {
     this.mafiaRooms = new Map();
     this.citadelsRooms = new Map();
     this.bunkerRooms = new Map();
+    this.catanRooms = new Map();
     this._loadFromDisk();
     setInterval(() => db.pruneStaleRooms(ROOM_MAX_AGE_MS), 1000 * 60 * 60).unref();
   }
@@ -39,6 +41,8 @@ class RoomManager {
           this.citadelsRooms.set(roomCode, CitadelsGame.fromJSON(state));
         } else if (state && state.gameType === 'bunker') {
           this.bunkerRooms.set(roomCode, BunkerGame.fromJSON(state));
+        } else if (state && state.gameType === 'catan') {
+          this.catanRooms.set(roomCode, CatanGame.fromJSON(state));
         } else {
           this.rooms.set(roomCode, GameManager.fromPersisted(state, hostId));
         }
@@ -52,14 +56,14 @@ class RoomManager {
   }
 
   roomCount() {
-    return this.rooms.size + this.mafiaRooms.size + this.citadelsRooms.size + this.bunkerRooms.size;
+    return this.rooms.size + this.mafiaRooms.size + this.citadelsRooms.size + this.bunkerRooms.size + this.catanRooms.size;
   }
 
   generateRoomCode() {
     let code;
     do {
       code = Array.from({ length: 5 }, () => ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)]).join('');
-    } while (this.rooms.has(code) || this.mafiaRooms.has(code) || this.citadelsRooms.has(code) || this.bunkerRooms.has(code));
+    } while (this.rooms.has(code) || this.mafiaRooms.has(code) || this.citadelsRooms.has(code) || this.bunkerRooms.has(code) || this.catanRooms.has(code));
     return code;
   }
 
@@ -165,6 +169,35 @@ class RoomManager {
     this._gone(roomCode, reason);
   }
 
+  // --- Catan rooms ---------------------------------------------------
+
+  createCatanRoom(hostId, settings, meta = null) {
+    const code = this.generateRoomCode();
+    const game = new CatanGame(code, hostId, settings);
+    this.catanRooms.set(code, game);
+    this.persistCatan(code);
+    this._logCreated(code, 'catan', 'catan.classic', meta);
+    return game;
+  }
+
+  getCatanRoom(roomCode) {
+    if (!roomCode) return null;
+    return this.catanRooms.get(String(roomCode).toUpperCase()) || null;
+  }
+
+  persistCatan(roomCode) {
+    const game = this.catanRooms.get(roomCode);
+    if (!game) return;
+    db.saveRoom(roomCode, game.hostId, game.toJSON());
+  }
+
+  deleteCatanRoom(roomCode, reason = 'empty') {
+    if (!this.catanRooms.has(roomCode)) return;
+    this.catanRooms.delete(roomCode);
+    db.deleteRoom(roomCode);
+    this._gone(roomCode, reason);
+  }
+
   // What kind of game a code refers to, for callers that only have the
   // code (a player rejoining from a saved link, for instance).
   roomKind(roomCode) {
@@ -174,6 +207,7 @@ class RoomManager {
     if (this.mafiaRooms.has(code)) return 'mafia';
     if (this.citadelsRooms.has(code)) return 'citadels';
     if (this.bunkerRooms.has(code)) return 'bunker';
+    if (this.catanRooms.has(code)) return 'catan';
     return null;
   }
 

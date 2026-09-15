@@ -12,6 +12,7 @@ const { ROLES: CITADELS_ROLES, ROLE_ORDER } = require('../citadels/roles');
 const { DISTRICTS, TYPE_LIST } = require('../citadels/districts');
 const bunker = require('../bunker/BunkerGame');
 const bunkerCards = require('../bunker/cards');
+const catan = require('../catan/CatanGame');
 const modes = require('../platform/modes');
 const registry = require('../platform/registry');
 
@@ -60,6 +61,12 @@ router.get('/games', (req, res) => {
         minPlayers: bunker.MIN_PLAYERS,
         maxPlayers: bunker.MAX_PLAYERS,
         available: modes.gameAvailable('bunker'),
+      },
+      {
+        id: 'catan',
+        minPlayers: catan.MIN_PLAYERS,
+        maxPlayers: catan.MAX_PLAYERS,
+        available: modes.gameAvailable('catan'),
       },
     ],
   });

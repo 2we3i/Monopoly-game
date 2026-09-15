@@ -17,6 +17,7 @@ const { registerSocketHandlers } = require('./socket/socketHandler');
 const { registerMafiaHandlers } = require('./socket/mafiaHandler');
 const { registerCitadelsHandlers } = require('./socket/citadelsHandler');
 const { registerBunkerHandlers } = require('./socket/bunkerHandler');
+const { registerCatanHandlers } = require('./socket/catanHandler');
 const db = require('./db/database');
 const accountsDb = require('./db/accounts');
 const platformDb = require('./db/platform');
@@ -77,6 +78,7 @@ registerSocketHandlers(io);
 registerMafiaHandlers(io);
 registerCitadelsHandlers(io);
 registerBunkerHandlers(io);
+registerCatanHandlers(io);
 
 server.listen(PORT, '0.0.0.0', () => {
   // eslint-disable-next-line no-console

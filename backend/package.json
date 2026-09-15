@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "node test/integration.test.js && node test/capacity.test.js && node test/bankruptcy.test.js && node test/lastmove.test.js && node test/boardLayouts.test.js && node test/metropolisGame.test.js && node test/accountIdentity.test.js && node test/trading.test.js && node test/tradingSocket.test.js && node test/customPricing.test.js && node test/auctionMortgage.test.js && node test/auctionSocket.test.js && node test/tokenAnimation.test.js && node test/mafia.test.js && node test/mafiaSocket.test.js && node test/citadels.test.js && node test/bunker.test.js &&node test/platform.test.js && node test/community.test.js",
+    "test": "node test/integration.test.js && node test/capacity.test.js && node test/bankruptcy.test.js && node test/lastmove.test.js && node test/boardLayouts.test.js && node test/metropolisGame.test.js && node test/accountIdentity.test.js && node test/trading.test.js && node test/tradingSocket.test.js && node test/customPricing.test.js && node test/auctionMortgage.test.js && node test/auctionSocket.test.js && node test/tokenAnimation.test.js && node test/mafia.test.js && node test/mafiaSocket.test.js && node test/citadels.test.js && node test/bunker.test.js && node test/catan.test.js && node test/catanSocket.test.js &&node test/platform.test.js && node test/community.test.js",
     "make-admin": "node scripts/make-admin.js"
   },
   "dependencies": {

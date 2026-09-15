@@ -6,6 +6,7 @@ import { communityEn, communityRu } from './communityTranslations';
 import { bunkerEn, bunkerRu } from './bunkerTranslations';
 import { tabletopEn, tabletopRu } from './tabletopTranslations';
 import { monopolyEn, monopolyRu } from './monopolyTranslations';
+import { catanEn, catanRu } from './catanTranslations';
 
 export const LANGUAGES = {
   en: { label: 'English', nativeLabel: 'English' },
@@ -1065,8 +1066,8 @@ const ru = {
 };
 
 export const TRANSLATIONS = {
-  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn, ...tabletopEn, ...monopolyEn },
-  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu, ...tabletopRu, ...monopolyRu },
+  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn, ...tabletopEn, ...monopolyEn, ...catanEn },
+  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu, ...tabletopRu, ...monopolyRu, ...catanRu },
 };
 
 if (import.meta.env.DEV) {

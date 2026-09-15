@@ -65,6 +65,15 @@
       linear-gradient(180deg, #16110c 0%, #0a0806 100%);
   }
 
+  /* Catan: open sea around a sunlit island. */
+  .table-catan {
+    background-color: #06131c;
+    background-image:
+      radial-gradient(ellipse 90% 60% at 50% -10%, rgba(64,150,200,0.22) 0%, transparent 60%),
+      radial-gradient(ellipse 80% 60% at 10% 110%, rgba(60,130,80,0.16) 0%, transparent 60%),
+      linear-gradient(180deg, #0a1d29 0%, #050e14 100%);
+  }
+
   /* The admin panel and profile: plain graphite, no table texture. */
   .dash-bg {
     background-color: #0a0b0d;
@@ -398,3 +407,9 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Catan: legal building spots breathe gently so they are easy to find. */
+@keyframes catan-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.catan-pulse { animation: catan-pulse 1.4s ease-in-out infinite; }
+.motion-off .catan-pulse { animation: none; }
+@media (prefers-reduced-motion: reduce) { .catan-pulse { animation: none; } }

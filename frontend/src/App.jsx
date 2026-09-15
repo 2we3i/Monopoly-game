@@ -17,6 +17,7 @@ import { useSocket } from './hooks/useSocket';
 import { useMafia } from './hooks/useMafia';
 import { useCitadels } from './hooks/useCitadels';
 import { useBunker } from './hooks/useBunker';
+import { useCatan } from './hooks/useCatan';
 import { useAuth } from './hooks/useAuth';
 import AuthScreen from './components/AuthScreen';
 import MainMenu from './components/MainMenu';
@@ -40,6 +41,8 @@ const CitadelsLobby = lazy(() => import('./components/citadels/CitadelsLobby'));
 const CitadelsGame = lazy(() => import('./components/citadels/CitadelsGame'));
 const BunkerLobby = lazy(() => import('./components/bunker/BunkerLobby'));
 const BunkerGame = lazy(() => import('./components/bunker/BunkerGame'));
+const CatanLobby = lazy(() => import('./components/catan/CatanLobby'));
+const CatanGame = lazy(() => import('./components/catan/CatanGame'));
 const ProfilePage = lazy(() => import('./components/profile/ProfilePage'));
 const AdminPanel = lazy(() => import('./components/admin/AdminPanel'));
 const ShopPage = lazy(() => import('./components/shop/ShopPage'));
@@ -131,7 +134,8 @@ export default function App() {
       || !!localStorage.getItem('landmark_room_code')
       || !!localStorage.getItem('landmark_mafia_room')
       || !!localStorage.getItem('landmark_citadels_room')
-      || !!localStorage.getItem('landmark_bunker_room'),
+      || !!localStorage.getItem('landmark_bunker_room')
+      || !!localStorage.getItem('landmark_catan_room'),
   );
 
   useEffect(() => {
@@ -167,6 +171,7 @@ function AppShell({
   const mafia = useMafia(auth.token, { enabled: true });
   const citadels = useCitadels(auth.token);
   const bunker = useBunker(auth.token);
+  const catan = useCatan(auth.token);
   const [hub, setHub] = useState(null); // null = main menu, 'monopoly' = its lobby
   const [joinError, setJoinError] = useState(null);
   const [joining, setJoining] = useState(false);
@@ -177,13 +182,14 @@ function AppShell({
 
   const identityResolved = auth.isLoggedIn || guestResolved;
   const nickname = auth.isLoggedIn ? auth.account.nickname : (localStorage.getItem(NICKNAME_KEY) || '');
-  const inAnyRoom = !!(socket.roomCode || mafia.roomCode || citadels.roomCode || bunker.roomCode);
+  const inAnyRoom = !!(socket.roomCode || mafia.roomCode || citadels.roomCode || bunker.roomCode || catan.roomCode);
   const page = platformPage(pathname);
 
   useStartSound(socket.gameState?.phase);
   useStartSound(mafia.state?.phase);
   useStartSound(citadels.state?.phase);
   useStartSound(bunker.state?.phase);
+  useStartSound(catan.state?.phase);
 
   useEffect(() => {
     if (auth.isLoggedIn) setAuthMode(null);
@@ -219,6 +225,7 @@ function AppShell({
       if (res.gameType === 'mafia') await mafia.joinRoom(code, nickname);
       else if (res.gameType === 'citadels') await citadels.joinRoom(code, nickname);
       else if (res.gameType === 'bunker') await bunker.joinRoom(code, nickname);
+      else if (res.gameType === 'catan') await catan.joinRoom(code, nickname);
       else await socket.joinRoom(code, nickname);
     } catch (err) {
       setJoinError(err.message);
@@ -275,6 +282,28 @@ function AppShell({
   }
 
   if (socket.rehydrating) return <RehydratingScreen />;
+
+  // --- Catan ---------------------------------------------------------
+  if (catan.state && catan.roomCode) {
+    const leave = () => { catan.leaveRoom(); setHub(null); };
+    return (
+      <>
+        <ConnectionBanner connected={catan.connected} connectionError={null} />
+        <ErrorBanner message={catan.error} />
+        {catan.state.phase === 'LOBBY'
+          ? (
+            <CatanLobby
+              state={catan.state}
+              actions={catan.actions}
+              openSettings={catan.settingsRequested}
+              onSettingsOpened={catan.clearSettingsRequest}
+              onLeave={leave}
+            />
+          )
+          : <CatanGame state={catan.state} chat={catan.chat} actions={catan.actions} onLeave={leave} />}
+      </>
+    );
+  }
 
   // --- Bunker --------------------------------------------------------
   if (bunker.state && bunker.roomCode) {
@@ -426,6 +455,7 @@ function AppShell({
       if (game.id === 'mafia') await mafia.createRoom(nickname, presetId || 'CLASSIC');
       else if (game.id === 'citadels') await citadels.createRoom(nickname);
       else if (game.id === 'bunker') await bunker.createRoom(nickname);
+      else if (game.id === 'catan') await catan.createRoom(nickname);
       else setHub('monopoly');
     } catch (err) {
       if (err.code === 'GUEST_CANNOT_CREATE') requireAccount();
