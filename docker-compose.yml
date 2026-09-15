@@ -20,8 +20,8 @@ services:
       # explicitly to a long random string so sessions survive restarts.
       # Generate one with: openssl rand -hex 32
       SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in your .env file - see README.md}
-      # The one account allowed into the admin panel (its id is shown on
-      # its profile page). See README.md, "Accounts, permissions and the
+      # The accounts allowed into the admin panel, comma-separated (an id is
+      # shown on each profile page). See README.md, "Accounts, permissions and the
       # admin panel".
       ADMIN_ACCOUNT_ID: ${ADMIN_ACCOUNT_ID:-}
     volumes:

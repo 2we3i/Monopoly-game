@@ -7,7 +7,7 @@
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
-const { DATA_DIR, ADMIN_ACCOUNT_ID } = require('../config');
+const { DATA_DIR, ADMIN_ACCOUNT_IDS } = require('../config');
 
 const DB_PATH = path.join(DATA_DIR, 'accounts.db');
 const db = new Database(DB_PATH);
@@ -103,7 +103,7 @@ const promoteStmt = db.prepare("UPDATE accounts SET role = 'admin' WHERE id = ?"
 // The single source of truth for "is this account the administrator".
 function isAdmin(row) {
   if (!row) return false;
-  if (ADMIN_ACCOUNT_ID) return row.id === ADMIN_ACCOUNT_ID;
+  if (ADMIN_ACCOUNT_IDS.length) return ADMIN_ACCOUNT_IDS.includes(row.id);
   return row.role === 'admin';
 }
 
