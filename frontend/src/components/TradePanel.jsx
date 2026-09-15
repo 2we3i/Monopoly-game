@@ -3,6 +3,7 @@
 // the reader's own terms, exactly what leaves and what arrives, with a
 // value summary so a deal can be judged without opening anything.
 
+import { useEffect, useRef } from 'react';
 import { assetValue, formatMoney } from '../boardData';
 import { useTranslation } from '../i18n/LanguageContext';
 import { PropertyTag } from './PropertyChip';
@@ -45,8 +46,15 @@ function SideBlock({ label, accent, tileIds, money, board, properties, total, to
   );
 }
 
-function TradeCard({ trade, playerId, players, board, properties, onAccept, onDecline, onCancel }) {
+function TradeCard({
+  trade, playerId, players, board, properties, onAccept, onDecline, onCancel, focused = false, focusAt = null,
+}) {
   const { t } = useTranslation();
+  const cardRef = useRef(null);
+  // Opened from a trade alert: bring this offer into view and mark it.
+  useEffect(() => {
+    if (focused) cardRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }, [focused, focusAt]);
   const isRecipient = trade.toPlayerId === playerId;
   const other = players.find((p) => p.id === (isRecipient ? trade.fromPlayerId : trade.toPlayerId));
   if (!other) return null;
@@ -63,7 +71,13 @@ function TradeCard({ trade, playerId, players, board, properties, onAccept, onDe
   const delta = getTotal - giveTotal;
 
   return (
-    <div className={`overflow-hidden rounded-xl border ${isRecipient ? 'border-brass/45 bg-brass/[0.07]' : 'border-white/[0.09] bg-white/[0.03]'}`}>
+    <div
+      ref={cardRef}
+      data-trade-id={trade.id}
+      className={`overflow-hidden rounded-xl border transition-shadow ${isRecipient ? 'border-brass/45 bg-brass/[0.07]' : 'border-white/[0.09] bg-white/[0.03]'} ${
+        focused ? 'shadow-[0_0_0_3px_rgba(227,187,92,0.85),0_0_24px_rgba(201,152,47,0.45)]' : ''
+      }`}
+    >
       <div className="flex items-center gap-2 border-b border-white/[0.07] px-3 py-2">
         <PlayerAvatar player={other} sizeClassName="h-7 w-7" ringClassName="ring-2 ring-white/20" />
         <div className="min-w-0 flex-1">
@@ -113,7 +127,7 @@ function TradeCard({ trade, playerId, players, board, properties, onAccept, onDe
 }
 
 export default function TradePanel({
-  gameState, playerId, onOpenComposer, onAcceptTrade, onDeclineTrade, onCancelTrade,
+  gameState, playerId, onOpenComposer, onAcceptTrade, onDeclineTrade, onCancelTrade, focus = null,
 }) {
   const { t } = useTranslation();
   const me = gameState.players.find((p) => p.id === playerId);
@@ -153,6 +167,8 @@ export default function TradePanel({
                 {incoming.map((trade) => (
                   <TradeCard
                     key={trade.id}
+                    focused={focus?.id === trade.id}
+                    focusAt={focus?.at}
                     trade={trade}
                     playerId={playerId}
                     players={gameState.players}

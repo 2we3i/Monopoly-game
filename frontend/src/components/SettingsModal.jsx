@@ -130,6 +130,9 @@ export default function SettingsModal({ onClose }) {
           <Row icon={Icon.users} title={t('settings.largeTokens')} hint={t('settings.largeTokensHint')}>
             <Toggle checked={settings.largeTokens} onChange={(v) => update({ largeTokens: v })} label={t('settings.largeTokens')} />
           </Row>
+          <Row icon={Icon.bank} title={t('settings.alwaysHighlight')} hint={t('settings.alwaysHighlightHint')}>
+            <Toggle checked={settings.alwaysHighlightMine} onChange={(v) => update({ alwaysHighlightMine: v })} label={t('settings.alwaysHighlight')} />
+          </Row>
           <Row icon={Icon.search} title={t('settings.zoomSpeed')} hint={t('settings.zoomSpeedHint')}>
             <Segmented
               value={String(settings.zoomSpeed)}

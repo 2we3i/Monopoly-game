@@ -211,3 +211,75 @@ export function formatMoney(amount) {
   const sign = n < 0 ? '-' : '';
   return `${sign}$${Math.abs(n).toLocaleString('en-US')}`;
 }
+
+// --- Family prices, mortgage timers, auctions ------------------------
+
+// Mirrors the server: a mortgaged deed goes to auction after this many
+// full rounds.
+export const MORTGAGE_ROUNDS = 10;
+
+// The rent a visitor pays today without a family price - what a custom
+// price is measured against (the server's _pricingBaseRent). A utility is
+// measured against the average roll of 7.
+export function pricingBaseRent(tile, propState, board, properties) {
+  if (!tile || !propState?.ownerId) return null;
+  if (tile.type === TILE_TYPES.UTILITY) return utilityMultiplier(propState.ownerId, board, properties) * 7;
+  return currentRent(tile, propState, board, properties);
+}
+
+// One change of a family price may move it by at most 10% of the current
+// price - never less than $1, or a cheap square could not move at all.
+export function priceStepLimit(current) {
+  return Math.max(1, Math.floor(Math.max(0, current || 0) * 0.1));
+}
+
+// Full rounds left before a mortgaged deed goes to auction (0 = this is
+// the last round), or null for a deed that is not mortgaged.
+export function mortgageRoundsLeft(propState, round) {
+  if (!propState?.mortgaged || !Number.isInteger(propState.mortgageExpiresRound)) return null;
+  return Math.max(0, propState.mortgageExpiresRound - (round || 1) - 1);
+}
+
+export function bankBuybackValue(tile) {
+  return Math.floor((tile?.price || 0) / 2);
+}
+
+export function formatSignedMoney(delta) {
+  const n = Number(delta) || 0;
+  return `${n > 0 ? '+' : n < 0 ? '−' : '±'}$${Math.abs(n).toLocaleString('en-US')}`;
+}
+
+export function formatSignedPercent(percent) {
+  if (percent == null) return null;
+  return `${percent > 0 ? '+' : percent < 0 ? '−' : '±'}${Math.abs(percent)}%`;
+}
+
+// Milliseconds until a SERVER timestamp, corrected for the difference
+// between this browser's clock and the server's (measured when the state
+// arrived), so every player sees the same countdown.
+export function serverMsLeft(endsAt, gameState, now = Date.now()) {
+  const offset = gameState?.serverTime && gameState?.receivedAt ? gameState.serverTime - gameState.receivedAt : 0;
+  return endsAt - (now + offset);
+}
+
+// The family-price change a viewer should see on a square: a visitor sees
+// their own price and how it last moved; the owner sees the latest change
+// they made for anyone.
+export function priceChangeFor(propState, viewerId) {
+  if (!propState?.ownerId || !viewerId) return null;
+  const changes = propState.priceChanges || {};
+  if (propState.ownerId === viewerId) {
+    const latest = Object.entries(changes).sort((a, b) => (b[1].at || 0) - (a[1].at || 0))[0];
+    return latest ? { ...latest[1], targetId: latest[0], asOwner: true } : null;
+  }
+  const custom = propState.customPrices?.[viewerId];
+  const change = changes[viewerId];
+  if (typeof custom !== 'number' && !change) return null;
+  return {
+    ...(change || {}),
+    to: typeof custom === 'number' ? custom : change.to,
+    delta: change ? change.delta : 0,
+    percent: change ? change.percent : 0,
+    asOwner: false,
+  };
+}

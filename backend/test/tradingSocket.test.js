@@ -82,7 +82,23 @@ async function main() {
   console.log('[1] Game started with Alice and Bob');
 
   let aliceOwnsTile = null;
+
+  // A passed square (or an expired mortgage) now goes to auction; this
+  // simulation drops out of every auction so the game keeps moving.
+  const settleAuction = async () => {
+    while (state.auction && state.phase !== 'GAME_OVER') {
+      const { auction } = state;
+      const quitter = auction.participants.find((id) => !auction.withdrawn.includes(id)
+        && id !== auction.highestBidderId && !state.players.find((p) => p.id === id).bankrupt);
+      if (!quitter) break;
+      const tracker = (quitter === ALICE_ID ? tAlice : tBob);
+      const version = tracker.version;
+      (quitter === ALICE_ID ? sAlice : sBob).emit('game:withdrawAuction', { auctionId: auction.id });
+      state = await tracker.waitForUpdate(version);
+    }
+  };
   for (let turn = 0; turn < 80 && !aliceOwnsTile; turn++) {
+    await settleAuction();
     const actorId = state.players[state.currentPlayerIndex].id;
     const actorSocket = actorId === ALICE_ID ? sAlice : sBob;
     const actorTracker = actorId === ALICE_ID ? tAlice : tBob;
@@ -101,6 +117,7 @@ async function main() {
         actorSocket.emit('game:declinePurchase', { tileId: state.pendingAction.tileId });
       }
       state = await actorTracker.waitForUpdate(v);
+      await settleAuction();
     }
     if (state.pendingAction?.type === 'CARD_REVEAL' && state.pendingAction.playerId === actorId) {
       v = actorTracker.version;

@@ -47,6 +47,7 @@ const InventoryPage = lazy(() => import('./components/shop/InventoryPage'));
 const MessagesPage = lazy(() => import('./components/social/MessagesPage'));
 const LeaderboardPage = lazy(() => import('./components/social/LeaderboardPage'));
 const PublicProfilePage = lazy(() => import('./components/social/PublicProfilePage'));
+const TabletopPage = lazy(() => import('./components/tabletop/TabletopPage'));
 
 const GUEST_RESOLVED_KEY = 'landmark_guest_resolved';
 const NICKNAME_KEY = 'landmark_nickname';
@@ -117,6 +118,7 @@ function platformPage(pathname) {
   if (pathname.startsWith('/messages')) return 'messages';
   if (pathname.startsWith('/leaderboard')) return 'leaderboard';
   if (pathname.startsWith('/u/')) return 'user';
+  if (pathname.startsWith('/tabletop')) return 'tabletop';
   return null;
 }
 
@@ -245,6 +247,7 @@ function AppShell({
     else if (page === 'inventory') content = <InventoryPage auth={auth} />;
     else if (page === 'messages') content = <MessagesPage auth={auth} />;
     else if (page === 'leaderboard') content = <LeaderboardPage auth={auth} />;
+    else if (page === 'tabletop') content = <TabletopPage auth={auth} pathname={pathname} />;
     else content = <PublicProfilePage auth={auth} userId={decodeURIComponent(pathname.slice(3))} />;
     return <PlatformNavContext.Provider value={nav}>{content}</PlatformNavContext.Provider>;
   }
@@ -378,6 +381,9 @@ function AppShell({
               declineTrade: socket.declineTrade,
               cancelTrade: socket.cancelTrade,
               setCustomPrice: socket.setCustomPrice,
+              sellToBank: socket.sellToBank,
+              placeBid: socket.placeBid,
+              withdrawAuction: socket.withdrawAuction,
             }}
             onLeave={() => { socket.leaveRoom(); setHub(null); }}
             chatMessages={socket.chatMessages}

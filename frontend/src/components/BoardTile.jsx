@@ -85,28 +85,38 @@ function Houses({ houses, orientation, color }) {
 
 const MORTGAGE_HATCH = 'repeating-linear-gradient(45deg, rgba(31,36,23,0.16) 0 5px, transparent 5px 11px)';
 
-function TileShell({ rect, selected, dimmed, onSelect, onHover, children, title, tile, interactive = true }) {
+// highlight: 'mine' lights a square up in its owner's color, 'dim' pushes
+// it into the background - together they answer "which of these are mine?"
+// at any zoom and wherever the camera is.
+function TileShell({
+  rect, selected, highlight, glowColor = '#e3bb5c', onSelect, onHover, children, title, tile, interactive = true,
+}) {
   const Tag = interactive ? 'button' : 'div';
   return (
     <Tag
       {...(interactive ? { type: 'button', onClick: onSelect } : {})}
       data-tile-id={tile.id}
       data-tile-type={tile.type}
+      data-highlight={highlight || undefined}
       onMouseEnter={onHover ? (e) => onHover(e.currentTarget) : undefined}
       onMouseLeave={onHover ? () => onHover(null) : undefined}
       title={title}
-      className={`group absolute overflow-hidden rounded-[5px] text-left transition-[box-shadow,transform] duration-150
+      className={`group absolute overflow-hidden rounded-[5px] text-left transition-[box-shadow,transform,opacity,filter] duration-200
         ${interactive ? 'cursor-pointer hover:z-20 hover:shadow-deed-hover' : ''}
         ${selected ? 'z-20 ring-[3px] ring-brass ring-offset-1 ring-offset-board' : ''}
-        ${dimmed ? 'opacity-[0.55]' : ''}`}
+        ${highlight === 'mine' ? 'z-10' : ''}`}
       style={{
         left: rect.x,
         top: rect.y,
         width: rect.w,
         height: rect.h,
         backgroundColor: '#fbf6ea',
-        border: '1px solid rgba(31,36,23,0.22)',
-        boxShadow: '0 1px 1px rgba(31,36,23,0.10), 0 4px 10px -8px rgba(31,36,23,0.6)',
+        border: highlight === 'mine' ? `2px solid ${glowColor}` : '1px solid rgba(31,36,23,0.22)',
+        boxShadow: highlight === 'mine'
+          ? `0 0 0 3px ${hexToRgba(glowColor, 0.95)}, 0 0 22px 7px ${hexToRgba(glowColor, 0.7)}`
+          : '0 1px 1px rgba(31,36,23,0.10), 0 4px 10px -8px rgba(31,36,23,0.6)',
+        opacity: highlight === 'dim' ? 0.3 : 1,
+        filter: highlight === 'dim' ? 'grayscale(0.75)' : undefined,
       }}
     >
       {children}
@@ -116,7 +126,28 @@ function TileShell({ rect, selected, dimmed, onSelect, onHover, children, title,
 
 // --- Property / railroad / utility ---------------------------------
 
-function OwnableTile({ tile, propState, owner, monopoly, orientation, detail, rect, selected, onSelect, onHover, language, art, tier }) {
+// A family price on this square, as the viewer should see it: red when it
+// went up, green when it went down, with the amount and the percent.
+function PriceChangeChip({ change, full }) {
+  const up = change.delta > 0;
+  const down = change.delta < 0;
+  const arrow = up ? '▲' : down ? '▼' : '•';
+  const size = change.percent != null ? `${Math.abs(change.percent)}%` : `$${Math.abs(change.delta)}`;
+  return (
+    <span
+      className="mt-[3px] inline-flex items-center gap-[3px] rounded-full px-[5px] py-[1px] text-[9px] font-black leading-[1.3] text-white tnum"
+      style={{ backgroundColor: up ? '#a8342a' : down ? '#1f7a5c' : 'rgba(31,36,23,0.75)' }}
+    >
+      {full && <span>${change.to}</span>}
+      <span>{arrow}{change.delta !== 0 ? size : ''}</span>
+    </span>
+  );
+}
+
+function OwnableTile({
+  tile, propState, owner, monopoly, orientation, detail, rect, selected, onSelect, onHover, language, art, tier,
+  priceChange, mortgageRounds, highlight, inAuction, t,
+}) {
   const accent = tileAccentColor(tile);
   const name = getTileName(tile, language);
   const isProperty = tile.type === TILE_TYPES.PROPERTY;
@@ -130,7 +161,16 @@ function OwnableTile({ tile, propState, owner, monopoly, orientation, detail, re
   const showArt = art && detail === 'full';
 
   return (
-    <TileShell tile={tile} rect={rect} selected={selected} onSelect={onSelect} onHover={onHover} title={`${name} · $${tile.price}`}>
+    <TileShell
+      tile={tile}
+      rect={rect}
+      selected={selected}
+      highlight={highlight}
+      glowColor={owner?.color}
+      onSelect={onSelect}
+      onHover={onHover}
+      title={`${name} · $${tile.price}`}
+    >
       {/* Owner wash: the strongest "who owns this" signal at any zoom. */}
       {owner && (
         <span
@@ -196,7 +236,9 @@ function OwnableTile({ tile, propState, owner, monopoly, orientation, detail, re
           >
             {name}
           </span>
-          {detail === 'full' && (
+          {priceChange ? (
+            <PriceChangeChip change={priceChange} full={detail === 'full'} />
+          ) : detail === 'full' && (
             <span className="mt-[3px] rounded-full bg-ink/[0.07] px-[5px] py-[1px] text-[9.5px] font-bold leading-[1.3] text-ink-soft tnum">
               ${tile.price}
             </span>
@@ -204,11 +246,39 @@ function OwnableTile({ tile, propState, owner, monopoly, orientation, detail, re
         </span>
       )}
 
+      {minimal && priceChange && priceChange.delta !== 0 && !propState?.mortgaged && (
+        <span
+          className="pointer-events-none absolute left-1/2 top-1/2 flex h-[24px] min-w-[24px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full px-1 text-[12px] font-black text-white shadow-token"
+          style={{ backgroundColor: priceChange.delta > 0 ? '#a8342a' : '#1f7a5c' }}
+        >
+          {priceChange.delta > 0 ? '▲' : '▼'}
+        </span>
+      )}
+
       {propState?.mortgaged && (
         <>
           <span className="pointer-events-none absolute inset-0" style={{ backgroundImage: MORTGAGE_HATCH }} />
-          <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-[3px] bg-ink/85 px-[5px] py-[2px] text-[8px] font-black uppercase tracking-wider text-board">
-            <Icon.lock className="mr-[2px] inline h-[9px] w-[9px] align-[-1px]" />MTG
+          <span
+            className={`pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-[2px] whitespace-nowrap rounded-[3px] px-[5px] py-[2px] font-black uppercase tracking-wider text-board ${
+              mortgageRounds === 0 ? 'bg-rent' : 'bg-ink/85'
+            } ${minimal ? 'text-[13px]' : 'text-[8.5px]'}`}
+          >
+            <Icon.lock className={minimal ? 'h-[13px] w-[13px]' : 'h-[9px] w-[9px]'} />
+            {mortgageRounds == null
+              ? 'MTG'
+              : detail === 'full' && t ? t('mortgageTimer.tileShort', { count: mortgageRounds }) : mortgageRounds}
+          </span>
+        </>
+      )}
+
+      {inAuction && (
+        <>
+          <span
+            className="pointer-events-none absolute inset-0 animate-pulse rounded-[4px]"
+            style={{ boxShadow: 'inset 0 0 0 3px #c9982f', background: 'rgba(201,152,47,0.2)' }}
+          />
+          <span className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-[3px] bg-brass px-[5px] py-[2px] text-[8.5px] font-black uppercase tracking-wider text-ink shadow-token">
+            {t ? t('auction.onTile') : 'Auction'}
           </span>
         </>
       )}
@@ -228,14 +298,14 @@ const SPECIAL_META = {
   [TILE_TYPES.FREE_PARKING]: { icon: Icon.parking, color: '#3a6ea8', wash: 'rgba(58,110,168,0.14)' },
 };
 
-function SpecialTile({ tile, rect, detail, corner, selected, onSelect, onHover, language, art }) {
+function SpecialTile({ tile, rect, detail, corner, selected, onSelect, onHover, language, art, highlight }) {
   const meta = SPECIAL_META[tile.type] || { icon: Icon.scroll, color: '#4a4f3d', wash: 'transparent' };
   const IconCmp = meta.icon;
   const name = getTileName(tile, language);
   const minimal = detail === 'min' && !corner;
 
   return (
-    <TileShell tile={tile} rect={rect} selected={selected} onSelect={onSelect} onHover={onHover} title={name} interactive>
+    <TileShell tile={tile} rect={rect} selected={selected} highlight={highlight} onSelect={onSelect} onHover={onHover} title={name} interactive>
       <span className="pointer-events-none absolute inset-0" style={{ backgroundColor: meta.wash }} />
       <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-[3px] px-[4px] text-center">
         {art && !minimal

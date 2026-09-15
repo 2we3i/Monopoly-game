@@ -5,11 +5,39 @@
 const { TILE_TYPES } = require('./boardLayouts/tileTypes');
 const {
   GameState, GO_SALARY, MAX_JAIL_TURNS, JAIL_FINE, PLAYER_COLORS, makePlayer,
+  MORTGAGE_ROUNDS, AUCTION_DURATION_MS, AUCTION_EXTEND_MS, AUCTION_MIN_BID, AUCTION_MIN_STEP,
 } = require('./GameState');
 const { DEFAULT_LAYOUT_ID } = require('./boardLayouts');
 
 const MAX_PLAYERS = 10;
 const MIN_PLAYERS = 2;
+const OWNABLE_TYPES = [TILE_TYPES.PROPERTY, TILE_TYPES.RAILROAD, TILE_TYPES.UTILITY];
+
+// "For the Family" prices move in steps: a single change may shift what a
+// player is charged by at most a tenth of what they are charged now -
+// never less than $1, or a cheap square could not move at all.
+const PRICE_STEP_RATIO = 0.1;
+function priceStepLimit(current) {
+  return Math.max(1, Math.floor(Math.max(0, current) * PRICE_STEP_RATIO));
+}
+
+// What the bank pays for a deed sold back to it: its mortgage value.
+function bankBuybackValue(tile) {
+  return Math.floor((tile?.price || 0) / 2);
+}
+
+// A deed going back to the bank loses everything its last owner set up.
+function releaseProperty(propState) {
+  Object.assign(propState, {
+    ownerId: null,
+    houses: 0,
+    mortgaged: false,
+    mortgagedRound: null,
+    mortgageExpiresRound: null,
+    customPrices: {},
+    priceChanges: {},
+  });
+}
 
 class GameError extends Error {
   constructor(message) {
@@ -22,6 +50,12 @@ class GameManager {
   constructor(roomCode, hostId, modeId = DEFAULT_LAYOUT_ID) {
     this.state = new GameState(roomCode, modeId);
     this.hostId = hostId;
+    // Tests replace the clock; the server always uses real time.
+    this.clock = null;
+  }
+
+  _now() {
+    return this.clock ? this.clock() : Date.now();
   }
 
   static fromPersisted(data, hostId) {
@@ -118,6 +152,7 @@ class GameManager {
     state.phase = 'ROLLING';
     state.currentPlayerIndex = 0;
     state.turnStartedAt = Date.now();
+    state.round = 1;
     state.addLog('The game has started! Good luck.', 'GAME_STARTED');
   }
 
@@ -133,12 +168,15 @@ class GameManager {
     const { state } = this;
     const n = state.players.length;
     if (n === 0) return;
-    let next = state.currentPlayerIndex;
+    const previous = state.currentPlayerIndex;
+    let next = previous;
     for (let i = 0; i < n; i++) {
       next = (next + 1) % n;
       if (!state.players[next].bankrupt) break;
     }
     state.currentPlayerIndex = next;
+    // Turn order wrapping back past the start of the table closes a round.
+    const roundEnded = next <= previous;
     state.phase = 'ROLLING';
     state.lastRoll = null;
     state.pendingAction = null;
@@ -159,6 +197,10 @@ class GameManager {
     state.turnStartedAt = Date.now();
     const cp = state.currentPlayer;
     if (cp) state.addLog(`It's ${cp.nickname}'s turn.`, 'NEW_TURN', { name: cp.nickname });
+    if (roundEnded) {
+      state.round += 1;
+      this._forecloseExpiredMortgages();
+    }
     this.checkWinCondition();
   }
 
@@ -168,6 +210,8 @@ class GameManager {
     if (active.length === 1 && state.players.length > 1) {
       state.phase = 'GAME_OVER';
       state.winnerId = active[0].id;
+      state.auction = null;
+      state.auctionQueue = [];
       state.addLog(`${active[0].nickname} wins the game!`, 'WIN', { name: active[0].nickname });
     }
   }
@@ -176,6 +220,7 @@ class GameManager {
     this.assertPlayersTurn(playerId);
     const { state } = this;
     if (state.phase !== 'ROLLING') throw new GameError('You cannot roll right now.');
+    if (state.auction) throw new GameError('Wait for the auction to finish before rolling.');
 
     const d1 = 1 + Math.floor(Math.random() * 6);
     const d2 = 1 + Math.floor(Math.random() * 6);
@@ -353,7 +398,7 @@ class GameManager {
       case TILE_TYPES.UTILITY: {
         const propState = state.properties[tile.id];
         if (!propState.ownerId) {
-          if (!opts.skipPendingBuy) {
+          if (!opts.skipPendingBuy && !this._isInAuction(tile.id)) {
             state.pendingAction = { type: 'BUY_DECISION', tileId: tile.id, playerId: player.id };
           }
         } else if (propState.ownerId !== player.id && !propState.mortgaged) {
@@ -425,16 +470,66 @@ class GameManager {
     const targetPlayer = state.getPlayer(targetPlayerId);
     if (!targetPlayer) throw new GameError('That player was not found.');
     if (targetPlayerId === ownerId) throw new GameError('You cannot set a custom price for yourself.');
+
+    // Every change is measured against what this player is charged right
+    // now - their current custom price, or the normal rent if there is
+    // none - and may move it by at most one step (10%) either way.
+    // Removing a custom price is a change too: the rent jumps back to
+    // normal, so it is only allowed once the two are within one step.
+    const normal = this._pricingBaseRent(tile, propState);
+    const hasCustom = typeof propState.customPrices[targetPlayerId] === 'number';
+    const current = hasCustom ? propState.customPrices[targetPlayerId] : normal;
+    let next;
     if (amount !== null) {
       if (!Number.isFinite(amount) || amount < 0) {
         throw new GameError('Custom price must be a non-negative number.');
       }
-      propState.customPrices[targetPlayerId] = Math.floor(amount);
-      state.addLog(`${owner.nickname} set a special rent of $${Math.floor(amount)} for ${targetPlayer.nickname} on ${tile.name}.`, 'CUSTOM_PRICE_SET', { name: owner.nickname, targetName: targetPlayer.nickname, amount: Math.floor(amount), tileId: tile.id });
+      next = Math.floor(amount);
+      if (hasCustom && next === current) throw new GameError(`The special rent is already $${current}.`);
+    } else {
+      if (!hasCustom) throw new GameError('There is no special rent to remove for this player.');
+      next = normal;
+    }
+    const maxStep = priceStepLimit(current);
+    if (Math.abs(next - current) > maxStep) {
+      throw new GameError(amount === null
+        ? `Normal rent is $${normal} - more than 10% away from the current $${current}. Move the price closer in steps first.`
+        : `A single change can move the rent by at most 10% ($${maxStep}): choose between $${Math.max(0, current - maxStep)} and $${current + maxStep}.`);
+    }
+
+    const change = {
+      from: current,
+      to: next,
+      delta: next - current,
+      percent: current > 0 ? Math.round(((next - current) / current) * 1000) / 10 : null,
+      normal,
+      at: this._now(),
+    };
+    const params = {
+      name: owner.nickname, targetName: targetPlayer.nickname, amount: next, from: current, delta: change.delta, percent: change.percent, tileId: tile.id,
+    };
+    if (amount !== null) {
+      propState.customPrices[targetPlayerId] = next;
+      propState.priceChanges[targetPlayerId] = change;
+      state.addLog(`${owner.nickname} changed the special rent for ${targetPlayer.nickname} on ${tile.name}: $${current} -> $${next}.`, 'CUSTOM_PRICE_SET', params);
     } else {
       delete propState.customPrices[targetPlayerId];
-      state.addLog(`${owner.nickname} removed the special rent for ${targetPlayer.nickname} on ${tile.name}.`, 'CUSTOM_PRICE_CLEARED', { name: owner.nickname, targetName: targetPlayer.nickname, tileId: tile.id });
+      propState.priceChanges[targetPlayerId] = { ...change, cleared: true };
+      state.addLog(`${owner.nickname} removed the special rent for ${targetPlayer.nickname} on ${tile.name}.`, 'CUSTOM_PRICE_CLEARED', params);
     }
+    return change;
+  }
+
+  // The rent a visitor pays today without a family price - what a custom
+  // price is measured against. A utility's rent depends on the roll, so it
+  // is measured against the average roll of 7.
+  _pricingBaseRent(tile, propState) {
+    const { state } = this;
+    if (tile.type === TILE_TYPES.UTILITY) {
+      const owned = state.layout.UTILITY_IDS.filter((id) => state.properties[id].ownerId === propState.ownerId).length;
+      return (owned >= 2 ? 10 : 4) * 7;
+    }
+    return this._computeRent(tile, propState, null);
   }
 
   _drawCard(player, deckName) {
@@ -547,6 +642,9 @@ class GameManager {
     const tile = state.layout.board[tileId];
     state.addLog(`${state.currentPlayer.nickname} declined to buy ${tile.name}.`, 'DECLINED_PURCHASE', { name: state.currentPlayer.nickname, tileId: tile.id });
     state.pendingAction = null;
+    // A square nobody buys does not stay on the shelf: every player still
+    // in the game gets to bid for it.
+    this._queueAuction(tileId, 'DECLINED');
   }
 
   acknowledgeCard(playerId) {
@@ -570,6 +668,8 @@ class GameManager {
     if (propState.mortgaged) throw new GameError('Already mortgaged.');
     if (propState.houses > 0) throw new GameError('Sell houses before mortgaging.');
     propState.mortgaged = true;
+    propState.mortgagedRound = state.round;
+    propState.mortgageExpiresRound = state.round + MORTGAGE_ROUNDS + 1;
     player.money += Math.floor(tile.price / 2);
     state.addLog(`${player.nickname} mortgaged ${tile.name}.`, 'MORTGAGED', { name: player.nickname, tileId: tile.id });
   }
@@ -586,6 +686,8 @@ class GameManager {
     if (player.money < cost) throw new GameError('Not enough money to unmortgage.');
     player.money -= cost;
     propState.mortgaged = false;
+    propState.mortgagedRound = null;
+    propState.mortgageExpiresRound = null;
     state.addLog(`${player.nickname} paid off the mortgage on ${tile.name}.`, 'UNMORTGAGED', { name: player.nickname, tileId: tile.id });
   }
 
@@ -646,6 +748,7 @@ class GameManager {
     if (state.pendingAction) {
       throw new GameError('Resolve the pending action before ending your turn.');
     }
+    if (state.auction) throw new GameError('Wait for the auction to finish before ending your turn.');
     if (state.phase !== 'ACTION') throw new GameError('You cannot end your turn right now.');
 
     const player = state.currentPlayer;
@@ -671,15 +774,12 @@ class GameManager {
 
     Object.values(state.properties).forEach((p) => {
       if (p.ownerId === playerId) {
-        p.ownerId = null;
-        p.houses = 0;
-        p.mortgaged = false;
         // A bankrupt owner's "For the Family" prices were specific to
         // their own choices about who to favor - a property returning
         // to the bank (and eventually a new owner) shouldn't silently
         // carry forward pricing decisions that belonged to someone else
-        // and that the new owner never agreed to.
-        p.customPrices = {};
+        // and that the new owner never agreed to. Mortgage timers go too.
+        releaseProperty(p);
       }
     });
     player.bankrupt = true;
@@ -697,6 +797,18 @@ class GameManager {
     // certainly can't fulfil a money obligation) - remove it rather than
     // leaving a stale, unactionable trade sitting in state forever.
     state.trades = state.trades.filter((t) => t.fromPlayerId !== playerId && t.toPlayerId !== playerId);
+
+    // A bankrupt bidder's bids can never be paid: drop them, and let the
+    // best remaining bid lead the auction.
+    if (state.auction) {
+      const auction = state.auction;
+      if (!auction.withdrawn.includes(playerId)) auction.withdrawn.push(playerId);
+      auction.bids = auction.bids.filter((b) => b.playerId !== playerId);
+      const top = auction.bids.reduce((best, b) => (!best || b.amount > best.amount ? b : best), null);
+      auction.highestBid = top ? top.amount : 0;
+      auction.highestBidderId = top ? top.playerId : null;
+      this._closeAuctionIfDecided();
+    }
 
     this.checkWinCondition();
     if (state.phase !== 'GAME_OVER' && state.currentPlayer && state.currentPlayer.id === playerId) {
@@ -865,10 +977,12 @@ class GameManager {
     trade.offerTileIds.forEach((tileId) => {
       state.properties[tileId].ownerId = trade.toPlayerId;
       state.properties[tileId].customPrices = {};
+      state.properties[tileId].priceChanges = {};
     });
     trade.requestTileIds.forEach((tileId) => {
       state.properties[tileId].ownerId = trade.fromPlayerId;
       state.properties[tileId].customPrices = {};
+      state.properties[tileId].priceChanges = {};
     });
     fromPlayer.money += trade.requestMoney - trade.offerMoney;
     toPlayer.money += trade.offerMoney - trade.requestMoney;
@@ -906,6 +1020,202 @@ class GameManager {
     state.addLog(`${fromPlayer?.nickname || 'A player'} cancelled a trade offer.`, 'TRADE_CANCELLED', { name: fromPlayer?.nickname });
     return trade;
   }
+
+  // ---------------- Selling to the bank ----------------
+  //
+  // The way to raise cash for a purchase besides houses and mortgages: the
+  // bank buys a deed back for its mortgage value and the square becomes
+  // free again. Only on the seller's own turn, like building and
+  // mortgaging, and never with buildings still standing in the group.
+
+  sellPropertyToBank(playerId, tileId) {
+    this.assertPlayersTurn(playerId);
+    const { state } = this;
+    const id = Number(tileId);
+    const tile = state.layout.board[id];
+    if (!tile || !OWNABLE_TYPES.includes(tile.type)) throw new GameError('That tile cannot be sold.');
+    const propState = state.properties[id];
+    if (propState.ownerId !== playerId) throw new GameError('You do not own this property.');
+    if (propState.mortgaged) throw new GameError('A mortgaged property cannot be sold - pay off the mortgage first.');
+    if (tile.type === TILE_TYPES.PROPERTY && state.layout.GROUPS[tile.group].some((gid) => state.properties[gid].houses > 0)) {
+      throw new GameError('Sell the houses in this color group first.');
+    }
+    const player = state.getPlayer(playerId);
+    const amount = bankBuybackValue(tile);
+    player.money += amount;
+    releaseProperty(propState);
+    state.addLog(`${player.nickname} sold ${tile.name} to the bank for $${amount}.`, 'SOLD_TO_BANK', { name: player.nickname, amount, tileId: tile.id });
+    return amount;
+  }
+
+  // ---------------- Mortgage timers ----------------
+  //
+  // A mortgaged deed stays with its owner for MORTGAGE_ROUNDS full rounds.
+  // If it is still mortgaged when the next round begins, the bank takes it
+  // back and puts it up for auction; the owner keeps the mortgage money
+  // they already received.
+
+  _forecloseExpiredMortgages() {
+    const { state } = this;
+    Object.keys(state.properties).map(Number).sort((a, b) => a - b).forEach((tileId) => {
+      const propState = state.properties[tileId];
+      if (!propState.ownerId || !propState.mortgaged) return;
+      if (!Number.isInteger(propState.mortgageExpiresRound) || state.round < propState.mortgageExpiresRound) return;
+      const tile = state.layout.board[tileId];
+      const owner = state.getPlayer(propState.ownerId);
+      const previousOwnerId = propState.ownerId;
+      releaseProperty(propState);
+      state.addLog(`The mortgage on ${tile.name} ran out - it goes to auction.`, 'MORTGAGE_EXPIRED', { name: owner?.nickname || '', tileId });
+      this._queueAuction(tileId, 'MORTGAGE_EXPIRED', previousOwnerId);
+    });
+  }
+
+  // ---------------- Auctions ----------------
+  //
+  // Every player still in the game takes part. Bids are checked against
+  // the bidder's cash when they are placed AND again when the auction
+  // closes (money can be spent in between); the best bid that can still
+  // be paid wins. The auction closes when its timer runs out or when
+  // nobody is left to outbid the leader. The timer itself lives on the
+  // server (see socketHandler), so every client counts down to the same
+  // endsAt.
+
+  _isInAuction(tileId) {
+    const { state } = this;
+    return state.auction?.tileId === tileId || state.auctionQueue.some((entry) => entry.tileId === tileId);
+  }
+
+  _queueAuction(tileId, reason, previousOwnerId = null) {
+    const { state } = this;
+    if (this._isInAuction(tileId)) return;
+    const entry = { tileId, reason, previousOwnerId };
+    if (state.auction) state.auctionQueue.push(entry);
+    else this._startAuction(entry);
+  }
+
+  _startAuction({ tileId, reason, previousOwnerId = null }) {
+    const { state } = this;
+    if (state.phase === 'GAME_OVER') return;
+    const participants = state.activePlayers().map((p) => p.id);
+    if (participants.length === 0) return;
+    const now = this._now();
+    state.auction = {
+      id: state.generateAuctionId(),
+      tileId,
+      reason,
+      previousOwnerId,
+      startedAt: now,
+      endsAt: now + AUCTION_DURATION_MS,
+      duration: AUCTION_DURATION_MS,
+      minBid: AUCTION_MIN_BID,
+      minStep: AUCTION_MIN_STEP,
+      highestBid: 0,
+      highestBidderId: null,
+      bids: [],
+      participants,
+      withdrawn: [],
+    };
+    const tile = state.layout.board[tileId];
+    state.addLog(`${tile.name} is up for auction.`, 'AUCTION_STARTED', { tileId, reason });
+  }
+
+  _activeBidders(auction) {
+    return auction.participants.filter((id) => !auction.withdrawn.includes(id) && !this.state.getPlayer(id)?.bankrupt);
+  }
+
+  _getRunningAuction(playerId, auctionId) {
+    const { state } = this;
+    const auction = state.auction;
+    if (!auction || (auctionId && auction.id !== auctionId)) throw new GameError('This auction is no longer running.');
+    if (this._now() >= auction.endsAt) throw new GameError('The auction has already closed.');
+    const player = state.getPlayer(playerId);
+    if (!player || !auction.participants.includes(playerId)) throw new GameError('You are not taking part in this auction.');
+    if (player.bankrupt) throw new GameError('You are bankrupt and cannot bid.');
+    if (auction.withdrawn.includes(playerId)) throw new GameError('You have already dropped out of this auction.');
+    return { auction, player };
+  }
+
+  placeBid(playerId, auctionId, amount) {
+    const { auction, player } = this._getRunningAuction(playerId, auctionId);
+    if (auction.highestBidderId === playerId) throw new GameError('You already hold the highest bid.');
+    const value = Math.floor(Number(amount));
+    if (!Number.isFinite(value)) throw new GameError('Enter a bid amount.');
+    const min = auction.highestBidderId ? auction.highestBid + auction.minStep : auction.minBid;
+    if (value < min) throw new GameError(`The lowest bid you can make now is $${min}.`);
+    if (value > player.money) throw new GameError(`You only have $${player.money} - not enough for a $${value} bid.`);
+    const now = this._now();
+    auction.highestBid = value;
+    auction.highestBidderId = playerId;
+    auction.bids.push({ playerId, amount: value, at: now });
+    if (auction.endsAt - now < AUCTION_EXTEND_MS) auction.endsAt = now + AUCTION_EXTEND_MS;
+    this._closeAuctionIfDecided();
+    return value;
+  }
+
+  withdrawFromAuction(playerId, auctionId) {
+    const { auction } = this._getRunningAuction(playerId, auctionId);
+    if (auction.highestBidderId === playerId) throw new GameError('You hold the highest bid and cannot drop out.');
+    auction.withdrawn.push(playerId);
+    this._closeAuctionIfDecided();
+  }
+
+  // Called by the server's timer (and before every action, so a late bid
+  // can never land on an auction that should already be over).
+  tickAuction(now = this._now()) {
+    const { auction } = this.state;
+    if (!auction || now < auction.endsAt) return false;
+    this._resolveAuction();
+    return true;
+  }
+
+  _closeAuctionIfDecided() {
+    const { auction } = this.state;
+    if (!auction) return false;
+    const active = this._activeBidders(auction);
+    const decided = auction.highestBidderId
+      ? active.every((id) => id === auction.highestBidderId)
+      : active.length === 0;
+    if (decided) this._resolveAuction();
+    return decided;
+  }
+
+  _resolveAuction() {
+    const { state } = this;
+    const auction = state.auction;
+    if (!auction) return;
+    state.auction = null;
+    const tile = state.layout.board[auction.tileId];
+    const propState = state.properties[auction.tileId];
+    const winning = [...auction.bids]
+      .sort((a, b) => b.amount - a.amount || a.at - b.at)
+      .find((bid) => {
+        const bidder = state.getPlayer(bid.playerId);
+        return bidder && !bidder.bankrupt && bidder.money >= bid.amount;
+      });
+
+    if (winning && !propState.ownerId) {
+      const winner = state.getPlayer(winning.playerId);
+      winner.money -= winning.amount;
+      releaseProperty(propState);
+      propState.ownerId = winner.id;
+      state.lastAuctionResult = {
+        auctionId: auction.id, tileId: auction.tileId, reason: auction.reason, winnerId: winner.id, amount: winning.amount, at: this._now(),
+      };
+      state.addLog(`${winner.nickname} won ${tile.name} at auction for $${winning.amount}.`, 'AUCTION_WON', { name: winner.nickname, amount: winning.amount, tileId: tile.id });
+    } else {
+      state.lastAuctionResult = {
+        auctionId: auction.id, tileId: auction.tileId, reason: auction.reason, winnerId: null, amount: 0, at: this._now(),
+      };
+      state.addLog(`Nobody bought ${tile.name} at auction - it stays with the bank.`, 'AUCTION_UNSOLD', { tileId: tile.id });
+    }
+
+    while (!state.auction && state.auctionQueue.length > 0) {
+      const next = state.auctionQueue.shift();
+      if (!state.properties[next.tileId].ownerId) this._startAuction(next);
+    }
+  }
 }
 
-module.exports = { GameManager, GameError, MAX_PLAYERS, MIN_PLAYERS };
+module.exports = {
+  GameManager, GameError, MAX_PLAYERS, MIN_PLAYERS, priceStepLimit, bankBuybackValue,
+};

@@ -10,6 +10,13 @@ const NICKNAME_KEY = 'landmark_nickname';
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || undefined;
 
+// Remembers when each state arrived: with the server's own serverTime it
+// gives the offset between the two clocks, so auction countdowns agree on
+// every screen.
+function stamp(state) {
+  return state ? { ...state, receivedAt: Date.now() } : state;
+}
+
 export function useSocket(authToken) {
   const socketRef = useRef(null);
   const [connected, setConnected] = useState(false);
@@ -49,7 +56,7 @@ export function useSocket(authToken) {
     socket.on('disconnect', () => setConnected(false));
     socket.on('connect_error', (err) => setConnectionError(err.message));
 
-    socket.on('game:state', (state) => setGameState(state));
+    socket.on('game:state', (state) => setGameState(stamp(state)));
     socket.on('game:error', (err) => {
       setGameError(err.message);
       setTimeout(() => setGameError((current) => (current === err.message ? null : current)), 5000);
@@ -77,7 +84,7 @@ export function useSocket(authToken) {
         }, (res) => {
           if (res?.ok) {
             setRoomCode(res.roomCode);
-            setGameState(res.state);
+            setGameState(stamp(res.state));
             setPlayerId(res.playerId);
           } else {
             localStorage.removeItem(ROOM_CODE_KEY);
@@ -113,7 +120,7 @@ export function useSocket(authToken) {
       if (res?.ok) {
         localStorage.setItem(ROOM_CODE_KEY, res.roomCode);
         setRoomCode(res.roomCode);
-        setGameState(res.state);
+        setGameState(stamp(res.state));
         setPlayerId(res.playerId);
         resolve(res);
       } else {
@@ -134,7 +141,7 @@ export function useSocket(authToken) {
       if (res?.ok) {
         localStorage.setItem(ROOM_CODE_KEY, res.roomCode);
         setRoomCode(res.roomCode);
-        setGameState(res.state);
+        setGameState(stamp(res.state));
         setPlayerId(res.playerId);
         resolve(res);
       } else {
@@ -175,6 +182,9 @@ export function useSocket(authToken) {
     declineTrade: (tradeId) => send('game:declineTrade', { tradeId }),
     cancelTrade: (tradeId) => send('game:cancelTrade', { tradeId }),
     setCustomPrice: (tileId, targetPlayerId, amount) => send('game:setCustomPrice', { tileId, targetPlayerId, amount }),
+    sellToBank: (tileId) => send('game:sellToBank', { tileId }),
+    placeBid: (auctionId, amount) => send('game:placeBid', { auctionId, amount }),
+    withdrawAuction: (auctionId) => send('game:withdrawAuction', { auctionId }),
     sendChat: (text, extra = {}) => send('chat:message', { ...extra, text }),
   };
 

@@ -4,6 +4,8 @@
 import { platformEn, platformRu } from './platformTranslations';
 import { communityEn, communityRu } from './communityTranslations';
 import { bunkerEn, bunkerRu } from './bunkerTranslations';
+import { tabletopEn, tabletopRu } from './tabletopTranslations';
+import { monopolyEn, monopolyRu } from './monopolyTranslations';
 
 export const LANGUAGES = {
   en: { label: 'English', nativeLabel: 'English' },
@@ -1063,8 +1065,8 @@ const ru = {
 };
 
 export const TRANSLATIONS = {
-  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn },
-  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu },
+  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn, ...tabletopEn, ...monopolyEn },
+  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu, ...tabletopRu, ...monopolyRu },
 };
 
 if (import.meta.env.DEV) {

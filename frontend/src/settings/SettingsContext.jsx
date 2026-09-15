@@ -21,6 +21,9 @@ export const DEFAULT_SETTINGS = {
   zoomSpeed: 1,
   // Board tokens can be pinned to a comfortable minimum on-screen size.
   largeTokens: false,
+  // Keep the player's own squares lit on the board (and the rest dimmed)
+  // at all times, not only when asked for from the property manager.
+  alwaysHighlightMine: false,
   // Cosmetic sounds the player equipped (game start, victory, rewards).
   cosmeticSounds: true,
 };

@@ -354,6 +354,25 @@
 .motion-off .bunker-anim { animation: none !important; }
 .motion-off .bunker-out { filter: grayscale(0.85) brightness(0.72); }
 
+/* ---------------------------------------------------------------------
+   ЧПОК: black theme cards and white letter cards on a dark table with a
+   low red-violet glow.
+   --------------------------------------------------------------------- */
+.table-chpok {
+  background-color: #0b0a0c;
+  background-image:
+    radial-gradient(ellipse 80% 45% at 50% -10%, rgba(190, 60, 120, 0.16) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 45% at 50% 112%, rgba(201, 152, 47, 0.07) 0%, transparent 60%),
+    linear-gradient(180deg, #151116 0%, #0a090b 100%);
+  color: #f4ecdc;
+}
+@keyframes chpok-flip { 0% { transform: perspective(700px) rotateY(-75deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes chpok-tick { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.14); } }
+.chpok-flip { animation: chpok-flip 0.34s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.chpok-tick { animation: chpok-tick 1s ease-in-out infinite; }
+.chpok-tick-fast { animation: chpok-tick 0.32s ease-in-out infinite; }
+.motion-off .chpok-anim { animation: none !important; }
+
 /* Mentions inside message text. */
 .mention-chip {
   border-radius: 0.375rem;

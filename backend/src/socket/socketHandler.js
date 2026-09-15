@@ -20,18 +20,51 @@ const roomChat = require('../social/roomChat');
 const { AccessError } = access;
 const DISCONNECT_GRACE_MS = 1000 * 60 * 10;
 const disconnectTimers = new Map();
+// One timer per room with a running auction, keyed by auction id and
+// closing time so a bid that extends the auction re-arms it exactly once.
+const auctionTimers = new Map();
 let ioRef = null;
 
 // The state every client receives. The guest key hash is a server-side
 // secret check and never leaves the server. Cosmetics are looks only and
-// are added after the game state is built.
+// are added after the game state is built. serverTime lets every client
+// count down to the same auction deadline whatever its own clock says.
 function roomStatePayload(mgr) {
   const state = mgr.state.toJSON();
   state.players = roomChat.decoratePlayers(
     state.players.map(({ guestKeyHash, ...p }) => ({ ...p, isGuest: !p.accountId })),
     (p) => p.accountId,
   );
+  state.serverTime = Date.now();
   return state;
+}
+
+function clearAuctionTimer(roomCode) {
+  const entry = auctionTimers.get(roomCode);
+  if (entry) {
+    clearTimeout(entry.timer);
+    auctionTimers.delete(roomCode);
+  }
+}
+
+function syncAuctionTimer(io, roomCode) {
+  const mgr = roomManager.getRoom(roomCode);
+  const auction = mgr?.state.auction;
+  const key = auction ? `${auction.id}:${auction.endsAt}` : null;
+  const existing = auctionTimers.get(roomCode);
+  if (existing && existing.key === key) return;
+  clearAuctionTimer(roomCode);
+  if (!auction) return;
+  const timer = setTimeout(() => {
+    auctionTimers.delete(roomCode);
+    const room = roomManager.getRoom(roomCode);
+    if (!room) return;
+    // eslint-disable-next-line no-use-before-define
+    if (room.tickAuction(Date.now())) broadcastState(io, roomCode);
+    else syncAuctionTimer(io, roomCode);
+  }, Math.max(0, auction.endsAt - Date.now()) + 25);
+  timer.unref?.();
+  auctionTimers.set(roomCode, { key, timer });
 }
 
 // Final places: the winner first, then the players still solvent by cash,
@@ -51,6 +84,7 @@ function broadcastState(io, roomCode) {
   const mgr = roomManager.getRoom(roomCode);
   if (!mgr) return;
   roomManager.persist(roomCode);
+  syncAuctionTimer(io, roomCode);
   io.to(roomCode).emit('game:state', roomStatePayload(mgr));
   registry.observe('monopoly', mgr);
 }
@@ -80,6 +114,9 @@ function scheduleAutoSkip(io, roomCode, playerId) {
         if (cp.money < 0) {
           mgr.declareBankruptcy(playerId);
         } else {
+          // An unanswered purchase counts as a pass: the square goes to auction.
+          const pending = mgr.state.pendingAction;
+          if (pending?.type === 'BUY_DECISION' && pending.playerId === playerId) mgr.declinePurchase(playerId, pending.tileId);
           mgr.state.pendingAction = null;
           mgr.state.phase = 'ACTION';
           mgr.endTurn(playerId);
@@ -168,6 +205,7 @@ registry.register({
       clearDisconnectTimer(code, p.id);
       notifyRemoved(ioRef, p.socketId, { gameType: 'monopoly', roomCode: code, reason, dataKeys: DATA_KEYS });
     });
+    clearAuctionTimer(code);
     roomManager.deleteRoom(code, reason);
     return true;
   },
@@ -194,6 +232,8 @@ registry.register({
 
 function registerSocketHandlers(io) {
   ioRef = io;
+  // Rooms restored from disk may have an auction in progress.
+  [...roomManager.rooms.keys()].forEach((code) => syncAuctionTimer(io, code));
   io.on('connection', (socket) => {
     socket.data.roomCode = null;
     socket.data.playerId = null;
@@ -333,13 +373,19 @@ function registerSocketHandlers(io) {
       }
     });
 
+    // An auction whose time is up is closed before anything else is
+    // applied, so a bid arriving a moment after the deadline is refused
+    // rather than raced against the timer.
     const withGame = (handler) => (payload) => {
       const mgr = roomManager.getRoom(socket.data.roomCode);
       if (!mgr) return sendError(socket, 'You are not in an active room.');
+      let closedAuction = false;
       try {
+        closedAuction = mgr.tickAuction(Date.now());
         handler(mgr, payload && typeof payload === 'object' ? payload : {});
         broadcastState(io, mgr.state.roomCode);
       } catch (err) {
+        if (closedAuction) broadcastState(io, mgr.state.roomCode);
         sendError(socket, clientMessage(err, [GameError]));
       }
     };
@@ -363,6 +409,9 @@ function registerSocketHandlers(io) {
     socket.on('game:cancelTrade', withGame((mgr, { tradeId }) => mgr.cancelTrade(socket.data.playerId, tradeId)));
 
     socket.on('game:setCustomPrice', withGame((mgr, { tileId, targetPlayerId, amount }) => mgr.setCustomPrice(socket.data.playerId, tileId, targetPlayerId, amount)));
+    socket.on('game:sellToBank', withGame((mgr, { tileId }) => mgr.sellPropertyToBank(socket.data.playerId, tileId)));
+    socket.on('game:placeBid', withGame((mgr, { auctionId, amount }) => mgr.placeBid(socket.data.playerId, auctionId, amount)));
+    socket.on('game:withdrawAuction', withGame((mgr, { auctionId }) => mgr.withdrawFromAuction(socket.data.playerId, auctionId)));
 
     socket.on('chat:message', ({ text, emote } = {}) => {
       const mgr = roomManager.getRoom(socket.data.roomCode);

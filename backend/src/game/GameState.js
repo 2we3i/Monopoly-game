@@ -10,6 +10,21 @@ const GO_SALARY = 200;
 const MAX_JAIL_TURNS = 3;
 const JAIL_FINE = 50;
 
+// A mortgaged deed goes back on the market after this many FULL rounds
+// of the table (the round it was mortgaged in does not count).
+const MORTGAGE_ROUNDS = 10;
+// Auctions run on the server's clock; tests shorten them through the
+// environment instead of waiting half a minute.
+const AUCTION_DURATION_MS = Number(process.env.MONOPOLY_AUCTION_MS) || 30000;
+// A bid in the closing seconds keeps the auction open at least this long,
+// so an auction cannot be won by bidding in the last instant.
+const AUCTION_EXTEND_MS = Math.min(10000, AUCTION_DURATION_MS);
+// After a server restart nobody is connected yet: an auction that was
+// running gets at least this long for the players to come back.
+const AUCTION_RESUME_MS = Math.min(15000, AUCTION_DURATION_MS);
+const AUCTION_MIN_BID = 10;
+const AUCTION_MIN_STEP = 10;
+
 const PLAYER_COLORS = [
   '#e63946', '#2a9d8f', '#f4a261', '#457b9d',
   '#a663cc', '#ffb703', '#06d6a0', '#ef476f',
@@ -65,6 +80,15 @@ class GameState {
     // whatever trades are relevant to them, with no separate fetch.
     this.trades = [];
     this._nextTradeId = 1;
+    // Full rounds of the table: a round ends when turn order wraps back to
+    // the start. Mortgage timers are measured in these.
+    this.round = 1;
+    // At most one auction runs at a time; squares that come up for sale
+    // while one is running wait in the queue, in order.
+    this.auction = null;
+    this.auctionQueue = [];
+    this.lastAuctionResult = null;
+    this._nextAuctionId = 1;
 
     this.layout.board.forEach((tile) => {
       if (tile.type === TILE_TYPES.PROPERTY || tile.type === TILE_TYPES.RAILROAD || tile.type === TILE_TYPES.UTILITY) {
@@ -74,8 +98,18 @@ class GameState {
         // different amounts on the same property. Empty by default;
         // absence of an entry for a given player means "use the normal
         // computed rent", never a silent $0.
+        // priceChanges keeps the latest change of each custom price (from,
+        // to, delta, percent) so both the owner and the visitor can see how
+        // far it moved. mortgagedRound / mortgageExpiresRound are the
+        // mortgage timer, in rounds.
         this.properties[tile.id] = {
-          ownerId: null, houses: 0, mortgaged: false, customPrices: {},
+          ownerId: null,
+          houses: 0,
+          mortgaged: false,
+          customPrices: {},
+          priceChanges: {},
+          mortgagedRound: null,
+          mortgageExpiresRound: null,
         };
       }
     });
@@ -84,6 +118,12 @@ class GameState {
   generateTradeId() {
     const id = `trade-${this._nextTradeId}`;
     this._nextTradeId += 1;
+    return id;
+  }
+
+  generateAuctionId() {
+    const id = `auction-${this._nextAuctionId}`;
+    this._nextAuctionId += 1;
     return id;
   }
 
@@ -129,6 +169,12 @@ class GameState {
       createdAt: this.createdAt,
       lastMove: this.lastMove,
       trades: this.trades,
+      _nextTradeId: this._nextTradeId,
+      round: this.round,
+      auction: this.auction,
+      auctionQueue: this.auctionQueue,
+      lastAuctionResult: this.lastAuctionResult,
+      _nextAuctionId: this._nextAuctionId,
     };
   }
 
@@ -136,15 +182,27 @@ class GameState {
     const gs = new GameState(data.roomCode, data.modeId || DEFAULT_LAYOUT_ID);
     gs.players = data.players;
     gs.properties = data.properties;
+    gs.round = Number.isInteger(data.round) && data.round > 0 ? data.round : 1;
     // Defensive migration: a room persisted before customPrices existed
     // would restore property objects missing that field entirely. Rather
     // than have every downstream read of propState.customPrices need its
     // own null-check, backfill it once here so the invariant "every
     // property object always has a customPrices object" holds for the
     // rest of the codebase, whether the room is brand new or was loaded
-    // from disk after a server restart.
+    // from disk after a server restart. The same goes for the price
+    // history and the mortgage timer: a deed mortgaged before timers
+    // existed starts its ten rounds from the moment the room comes back.
     Object.values(gs.properties).forEach((p) => {
       if (!p.customPrices) p.customPrices = {};
+      if (!p.priceChanges) p.priceChanges = {};
+      if (p.mortgaged && !Number.isInteger(p.mortgageExpiresRound)) {
+        p.mortgagedRound = gs.round;
+        p.mortgageExpiresRound = gs.round + MORTGAGE_ROUNDS + 1;
+      }
+      if (!p.mortgaged) {
+        p.mortgagedRound = null;
+        p.mortgageExpiresRound = null;
+      }
     });
     gs.currentPlayerIndex = data.currentPlayerIndex;
     gs.phase = data.phase;
@@ -165,6 +223,13 @@ class GameState {
     // fresh id after restart never collides with an already-used one.
     gs.trades = data.trades || [];
     gs._nextTradeId = data._nextTradeId || (gs.trades.length + 1);
+    gs.auction = data.auction || null;
+    if (gs.auction) {
+      gs.auction.endsAt = Math.max(gs.auction.endsAt || 0, Date.now() + AUCTION_RESUME_MS);
+    }
+    gs.auctionQueue = Array.isArray(data.auctionQueue) ? data.auctionQueue : [];
+    gs.lastAuctionResult = data.lastAuctionResult || null;
+    gs._nextAuctionId = data._nextAuctionId || 1;
     return gs;
   }
 }
@@ -176,5 +241,11 @@ module.exports = {
   MAX_JAIL_TURNS,
   JAIL_FINE,
   PLAYER_COLORS,
+  MORTGAGE_ROUNDS,
+  AUCTION_DURATION_MS,
+  AUCTION_EXTEND_MS,
+  AUCTION_RESUME_MS,
+  AUCTION_MIN_BID,
+  AUCTION_MIN_STEP,
   makePlayer,
 };

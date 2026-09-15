@@ -33,7 +33,20 @@ function main() {
   let wrapObserved = false;
   const lastPositions = { p1: 0, p2: 0 };
 
+  // A passed square (or an expired mortgage) now goes to auction; this
+  // simulation drops out of every auction so the game keeps moving.
+  const settleAuction = () => {
+    while (mgr.state.auction) {
+      const { auction } = mgr.state;
+      const quitter = auction.participants.find((id) => !auction.withdrawn.includes(id)
+        && id !== auction.highestBidderId && !mgr.state.getPlayer(id).bankrupt);
+      if (!quitter) break;
+      mgr.withdrawFromAuction(quitter, auction.id);
+    }
+  };
+
   for (let turn = 0; turn < 300 && mgr.state.phase !== 'GAME_OVER'; turn++) {
+    settleAuction();
     const actor = mgr.state.currentPlayer;
     if (!actor || actor.bankrupt) break;
 
@@ -65,6 +78,7 @@ function main() {
         boughtSomething = true;
       } else {
         mgr.declinePurchase(actor.id, mgr.state.pendingAction.tileId);
+        settleAuction();
       }
     }
 

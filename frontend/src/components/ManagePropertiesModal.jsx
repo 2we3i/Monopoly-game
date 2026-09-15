@@ -6,7 +6,7 @@
 
 import { useMemo } from 'react';
 import {
-  TILE_TYPES, formatMoney, getTileName, mortgageValue, netWorth,
+  MORTGAGE_ROUNDS, TILE_TYPES, formatMoney, getTileName, mortgageRoundsLeft, mortgageValue, netWorth,
   ownedTileIds, tileAccentColor, unmortgageCost,
 } from '../boardData';
 import { useTranslation } from '../i18n/LanguageContext';
@@ -36,6 +36,7 @@ function ActionButton({ children, onClick, disabled, title, tone = 'ghost' }) {
 
 export default function ManagePropertiesModal({
   gameState, playerId, isMyTurn, onClose, onSelectTile, onBuildHouse, onSellHouse, onMortgage, onUnmortgage,
+  highlightOn = false, alwaysHighlight = false, onToggleHighlight,
 }) {
   const { t, language } = useTranslation();
   const { board, properties, players } = gameState;
@@ -77,6 +78,24 @@ export default function ManagePropertiesModal({
       subtitle={t('manage.subtitle')}
       icon={<Icon.bank className="h-5 w-5" />}
     >
+      {/* Show these deeds on the board itself, wherever the camera is. */}
+      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 py-2">
+        <Icon.target className="h-4 w-4 shrink-0 text-brass-light" />
+        <p className="min-w-0 flex-1 basis-40 text-[12px] leading-snug text-parch/60">
+          {alwaysHighlight ? t('highlight.always') : t('highlight.hint')}
+        </p>
+        <button
+          type="button"
+          aria-pressed={highlightOn}
+          disabled={alwaysHighlight || totalTiles === 0 || !onToggleHighlight}
+          onClick={onToggleHighlight}
+          className={`${highlightOn ? 'btn-primary' : 'btn-ghost'} shrink-0 px-3 py-1.5 text-[12.5px]`}
+        >
+          <Icon.eye className="h-4 w-4" />
+          {highlightOn ? t('highlight.buttonOn') : t('highlight.button')}
+        </button>
+      </div>
+
       <div className="mb-3 grid grid-cols-3 gap-2">
         <div className="panel-flat px-3 py-2">
           <p className="section-label">{t('manage.cash')}</p>
@@ -126,6 +145,7 @@ export default function ManagePropertiesModal({
                 <div className="divide-y divide-white/[0.06]">
                   {group.tiles.map((tile) => {
                     const ps = properties[tile.id];
+                    const roundsLeft = mortgageRoundsLeft(ps, gameState.round);
                     const canBuild = group.kind === TILE_TYPES.PROPERTY && complete && !ps.mortgaged
                       && ps.houses < 5 && ps.houses <= minHouses && isMyTurn && (me?.money || 0) >= tile.houseCost;
                     const canSell = group.kind === TILE_TYPES.PROPERTY && ps.houses > 0 && ps.houses >= maxHouses && isMyTurn;
@@ -139,7 +159,15 @@ export default function ManagePropertiesModal({
                         >
                           <span className="flex items-center gap-1.5">
                             <span className="truncate text-[13px] font-semibold text-parch">{getTileName(tile, language)}</span>
-                            {ps.mortgaged && <span className="pill shrink-0 bg-rent/25 text-rent-light">{t('property.mortgagedShort')}</span>}
+                            {ps.mortgaged && (
+                              <span
+                                className={`pill shrink-0 ${roundsLeft === 0 ? 'bg-rent text-white' : 'bg-rent/25 text-rent-light'}`}
+                                title={roundsLeft === 0 ? t('mortgageTimer.explainLast') : t('mortgageTimer.explain', { count: roundsLeft })}
+                              >
+                                {t('property.mortgagedShort')}
+                                {roundsLeft != null && ` · ${roundsLeft === 0 ? t('mortgageTimer.lastRound') : t('mortgageTimer.tileShort', { count: roundsLeft })}`}
+                              </span>
+                            )}
                           </span>
                           <span className="flex items-center gap-2 text-[11px] text-parch/40">
                             <span className="tnum">${tile.price}</span>
@@ -192,7 +220,7 @@ export default function ManagePropertiesModal({
                             <ActionButton
                               disabled={!isMyTurn || ps.houses > 0}
                               onClick={() => onMortgage(tile.id)}
-                              title={t('property.mortgageFor', { amount: mortgageValue(tile) })}
+                              title={`${t('property.mortgageFor', { amount: mortgageValue(tile) })} · ${t('mortgageTimer.mortgageHint', { count: MORTGAGE_ROUNDS })}`}
                             >
                               <Icon.cash className="h-3 w-3" />
                               <span className="tnum">+${mortgageValue(tile)}</span>

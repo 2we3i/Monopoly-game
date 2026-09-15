@@ -125,7 +125,24 @@ async function main() {
   let sawRent = false;
   let sawDoubles = false;
 
+  // A passed square (or an expired mortgage) now goes to auction; this
+  // simulation drops out of every auction so the game keeps moving.
+  const settleAuction = async () => {
+    while (state.auction && state.phase !== 'GAME_OVER') {
+      const { auction } = state;
+      const quitter = auction.participants.find((id) => !auction.withdrawn.includes(id)
+        && id !== auction.highestBidderId && !state.players.find((p) => p.id === id).bankrupt);
+      if (!quitter) break;
+      const tracker = trackerFor(quitter);
+      const version = tracker.version;
+      socketFor(quitter).emit('game:withdrawAuction', { auctionId: auction.id });
+      state = await tracker.waitForUpdate(version);
+    }
+  };
+
   for (let turn = 0; turn < 60 && state.phase !== 'GAME_OVER'; turn++) {
+    await settleAuction();
+    if (state.phase === 'GAME_OVER') break;
     const actorId = currentId();
     const actorSocket = socketFor(actorId);
     const actorTracker = trackerFor(actorId);
@@ -147,6 +164,7 @@ async function main() {
         actorSocket.emit('game:declinePurchase', { tileId: state.pendingAction.tileId });
       }
       state = await actorTracker.waitForUpdate(v1);
+      await settleAuction();
     }
 
     if (state.pendingAction?.type === 'CARD_REVEAL' && state.pendingAction.playerId === actorId) {

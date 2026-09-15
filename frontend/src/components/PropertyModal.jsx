@@ -3,11 +3,11 @@
 // it, and every action its owner can take on it.
 
 import {
-  TILE_TYPES, currentRent, getTileName, groupTileIds, mortgageValue,
-  railroadOwnedCount, tileAccentColor, unmortgageCost, utilityMultiplier,
+  MORTGAGE_ROUNDS, TILE_TYPES, currentRent, getTileName, groupTileIds, mortgageRoundsLeft, mortgageValue,
+  priceChangeFor, railroadOwnedCount, tileAccentColor, unmortgageCost, utilityMultiplier,
 } from '../boardData';
 import { useTranslation } from '../i18n/LanguageContext';
-import CustomPricingSection from './CustomPricingSection';
+import CustomPricingSection, { PriceChangeBadge } from './CustomPricingSection';
 import Modal from './Modal';
 import PlayerAvatar from './PlayerAvatar';
 import { hexToRgba, isLightColor } from '../colorUtils';
@@ -38,6 +38,9 @@ export default function PropertyModal({
   const accent = tileAccentColor(tile);
   const ownable = !!propState;
   const rentNow = currentRent(tile, propState, board, properties);
+  const mortgageLeft = mortgageRoundsLeft(propState, gameState.round);
+  const inAuction = gameState.auction?.tileId === tile.id;
+  const visitorChange = !isOwner ? priceChangeFor(propState, myPlayerId) : null;
 
   const groupIds = tile.type === TILE_TYPES.PROPERTY ? groupTileIds(board, tile.group) : [];
   const groupOwnedByMe = groupIds.length > 0 && groupIds.every((id) => properties[id]?.ownerId === myPlayerId);
@@ -183,6 +186,47 @@ export default function PropertyModal({
         </div>
       )}
 
+      {/* The mortgage timer: how long the owner has left to pay it off. */}
+      {ownable && propState.mortgaged && mortgageLeft != null && (
+        <div className={`mt-2 flex items-start gap-2.5 rounded-xl border p-2.5 ${mortgageLeft === 0 ? 'border-rent/50 bg-rent/15' : 'border-white/[0.08] bg-white/[0.03]'}`}>
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${mortgageLeft === 0 ? 'bg-rent text-white' : 'bg-white/10 text-parch/70'}`}>
+            <Icon.lock className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[12.5px] font-bold text-parch">
+              {t('mortgageTimer.title')} · {mortgageLeft === 0 ? t('mortgageTimer.lastRound') : t('mortgageTimer.roundsLeft', { count: mortgageLeft })}
+            </p>
+            <p className="text-[11px] leading-snug text-parch/50">
+              {mortgageLeft === 0 ? t('mortgageTimer.explainLast') : t('mortgageTimer.explain', { count: mortgageLeft })}
+            </p>
+            <div className="mt-1.5 flex gap-[3px]" aria-hidden="true">
+              {Array.from({ length: MORTGAGE_ROUNDS }).map((_, i) => (
+                <span key={i} className={`h-1.5 flex-1 rounded-full ${i < MORTGAGE_ROUNDS - mortgageLeft ? 'bg-rent-light' : 'bg-white/15'}`} />
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {inAuction && (
+        <p className="mt-2 flex items-center gap-2 rounded-xl border border-brass/45 bg-brass/10 px-3 py-2 text-[12.5px] font-bold text-brass-light">
+          <Icon.bank className="h-4 w-4" />
+          {t('auction.title')}
+        </p>
+      )}
+
+      {/* A family price that applies to the viewer: what they pay here and how it last moved. */}
+      {visitorChange && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-brass/35 bg-brass/10 px-3 py-2">
+          <Icon.users className="h-4 w-4 text-brass-light" />
+          <span className="text-[12.5px] font-bold text-parch">
+            {t('familyPrice.yourPrice')}: <span className="text-brass-light tnum">${visitorChange.to}</span>
+          </span>
+          {visitorChange.from != null && <span className="text-[11px] text-parch/45 tnum">{t('familyPrice.was', { amount: visitorChange.from })}</span>}
+          <PriceChangeBadge change={visitorChange} />
+        </div>
+      )}
+
       {/* Owner actions */}
       {isOwner && (
         <div className="mt-3 flex flex-col gap-2">
@@ -233,7 +277,7 @@ export default function PropertyModal({
           <CustomPricingSection
             tile={tile}
             propState={propState}
-            players={players}
+            gameState={gameState}
             myPlayerId={myPlayerId}
             onSetCustomPrice={onSetCustomPrice}
           />

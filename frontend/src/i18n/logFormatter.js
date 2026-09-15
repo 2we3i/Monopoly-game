@@ -37,8 +37,15 @@ const LOG_TEMPLATES = {
   TRADE_ACCEPTED: { en: '{name} and {otherName} completed a trade.', ru: '{name} и {otherName} завершили сделку.' },
   TRADE_DECLINED: { en: '{name} declined a trade from {otherName}.', ru: '{name} отклонил сделку от {otherName}.' },
   TRADE_CANCELLED: { en: '{name} cancelled a trade offer.', ru: '{name} отменил предложение сделки.' },
-  CUSTOM_PRICE_SET: { en: '{name} set a special rent of ${amount} for {targetName} on {tileName}.', ru: '{name} установил особую аренду ${amount} для {targetName} на {tileName}.' },
+  CUSTOM_PRICE_SET: { en: '{name} changed the special rent for {targetName} on {tileName}: ${from} → ${amount}.', ru: '{name} изменил особую аренду для {targetName} на {tileName}: ${from} → ${amount}.' },
+  // Entries written before price changes recorded where they started from.
+  CUSTOM_PRICE_SET_LEGACY: { en: '{name} set a special rent of ${amount} for {targetName} on {tileName}.', ru: '{name} установил особую аренду ${amount} для {targetName} на {tileName}.' },
   CUSTOM_PRICE_CLEARED: { en: '{name} removed the special rent for {targetName} on {tileName}.', ru: '{name} убрал особую аренду для {targetName} на {tileName}.' },
+  AUCTION_STARTED: { en: '{tileName} is up for auction.', ru: '{tileName} выставлено на аукцион.' },
+  AUCTION_WON: { en: '{name} won {tileName} at auction for ${amount}.', ru: '{name} выиграл {tileName} на аукционе за ${amount}.' },
+  AUCTION_UNSOLD: { en: 'Nobody bought {tileName} at auction — it stays with the bank.', ru: 'Никто не купил {tileName} на аукционе — поле осталось у банка.' },
+  MORTGAGE_EXPIRED: { en: 'The mortgage on {tileName} ran out — the square goes to auction.', ru: 'Залог на {tileName} истёк — поле уходит на аукцион.' },
+  SOLD_TO_BANK: { en: '{name} sold {tileName} to the bank for ${amount}.', ru: '{name} продал {tileName} банку за ${amount}.' },
 };
 
 function interpolate(template, vars) {
@@ -49,7 +56,9 @@ export function formatLogEntry(entry, t, language, board) {
   if (!entry.type) {
     return entry.message;
   }
-  const template = LOG_TEMPLATES[entry.type];
+  const template = entry.type === 'CUSTOM_PRICE_SET' && entry.params?.from == null
+    ? LOG_TEMPLATES.CUSTOM_PRICE_SET_LEGACY
+    : LOG_TEMPLATES[entry.type];
   if (!template) return entry.message;
 
   const localized = template[language] || template.en;

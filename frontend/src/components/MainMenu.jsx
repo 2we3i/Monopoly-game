@@ -13,6 +13,7 @@ import SocialBar from './social/SocialBar';
 import { DashIcon } from './ui/dash';
 import { navigate } from '../lib/router';
 import { BunkerArt } from './bunker/bunkerText';
+import { ChpokArt, Chpok2Art } from './tabletop/chpokArt';
 
 function MonopolyArt() {
   return (
@@ -107,19 +108,22 @@ function CitadelsArt() {
 }
 
 const GAME_ART = {
-  monopoly: MonopolyArt, mafia: MafiaArt, citadels: CitadelsArt, bunker: BunkerArt,
+  monopoly: MonopolyArt, mafia: MafiaArt, citadels: CitadelsArt, bunker: BunkerArt, chpok: ChpokArt, chpok2: Chpok2Art,
 };
 const GAME_ACCENT = {
   monopoly: 'from-brass/25 to-transparent',
   mafia: 'from-rent/25 to-transparent',
   citadels: 'from-violet-500/25 to-transparent',
   bunker: 'from-orange-500/15 to-transparent',
+  chpok: 'from-rose-500/20 to-transparent',
+  chpok2: 'from-fuchsia-500/15 to-transparent',
 };
 const GAME_EMOJI = {
-  monopoly: '🎲', mafia: '🔪', citadels: '🏰', bunker: '☢️',
+  monopoly: '🎲', mafia: '🔪', citadels: '🏰', bunker: '☢️', chpok: '🔞', chpok2: '🔞',
 };
 
-function GameCard({ game, onPlay, onConfigure, isGuest }) {
+// Also used by the board-games section, which has nothing to configure.
+export function GameCard({ game, onPlay, onConfigure, isGuest }) {
   const { t } = useTranslation();
   const Art = GAME_ART[game.id] || MonopolyArt;
   const unavailable = game.available === false;
@@ -165,16 +169,18 @@ function GameCard({ game, onPlay, onConfigure, isGuest }) {
             {isGuest ? <Icon.lock className="h-4 w-4" /> : <Icon.chevronRight className="h-4 w-4" />}
             {isGuest ? t('menu.createNeedsAccount') : t('menu.play')}
           </button>
-          <button
-            type="button"
-            disabled={unavailable}
-            onClick={() => onConfigure(game)}
-            title={t('menu.configure')}
-            aria-label={t('menu.configure')}
-            className="btn-ghost px-3 py-3"
-          >
-            <Icon.settings className="h-4 w-4" />
-          </button>
+          {onConfigure && (
+            <button
+              type="button"
+              disabled={unavailable}
+              onClick={() => onConfigure(game)}
+              title={t('menu.configure')}
+              aria-label={t('menu.configure')}
+              className="btn-ghost px-3 py-3"
+            >
+              <Icon.settings className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
     </article>
@@ -221,7 +227,7 @@ export default function MainMenu({
         </span>
         <h1 className="font-display text-[19px] font-black tracking-tight text-parch 4xl:text-[26px]">{t('app.title')}</h1>
         <nav className="ml-2 hidden items-center gap-1 md:flex" aria-label={t('nav.pages')}>
-          {[['shop', 'bag'], ['leaderboard', 'trophy'], ...(auth?.isLoggedIn ? [['inventory', 'box']] : [])].map(([id, icon]) => (
+          {[['tabletop', 'gamepad'], ['shop', 'bag'], ['leaderboard', 'trophy'], ...(auth?.isLoggedIn ? [['inventory', 'box']] : [])].map(([id, icon]) => (
             <button key={id} type="button" onClick={() => navigate(`/${id}`)} className="btn-quiet px-2.5 py-1.5 text-[13px] 4xl:px-3.5 4xl:text-[16px]">
               <DashIcon name={icon} className="h-4 w-4" />
               {t(`nav.${id}`)}
@@ -261,6 +267,41 @@ export default function MainMenu({
           {games.map((game) => (
             <GameCard key={game.id} game={game} onPlay={onPlay} onConfigure={onConfigure} isGuest={isGuest} />
           ))}
+        </section>
+
+        {/* Board games played around one device. The teaser stays neutral:
+            the 18+ descriptions live behind the age question. */}
+        <section className="mt-8 4xl:mt-12">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <h2 className="font-display text-[22px] font-black leading-tight text-parch 4xl:text-[30px]">{t('tabletop.section')}</h2>
+            <span className="rounded-full bg-rent/85 px-2 py-0.5 text-[11px] font-black text-white">18+</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/tabletop')}
+            className="group flex w-full flex-col overflow-hidden rounded-2xl border border-white/10 bg-felt-700/70 text-left shadow-glass backdrop-blur-xl transition-all duration-300 hover:-translate-y-1 hover:border-white/20 hover:shadow-deep sm:flex-row"
+          >
+            <div className="relative h-32 w-full shrink-0 overflow-hidden sm:h-auto sm:w-64 4xl:w-96">
+              <div className="absolute inset-0 transition-transform duration-500 group-hover:scale-[1.04]">
+                <ChpokArt />
+              </div>
+            </div>
+            <div className="flex flex-1 flex-col gap-2.5 p-4 4xl:p-6">
+              <div>
+                <p className="section-label">{t('tabletop.seriesTitle')}</p>
+                <p className="mt-1 text-[13px] leading-snug text-parch/55 4xl:text-[16.5px]">{t('tabletop.menuTeaser')}</p>
+              </div>
+              <ul className="flex flex-wrap gap-1.5">
+                {['chpok', 'chpok2'].map((id) => (
+                  <li key={id} className="pill bg-white/[0.06] text-parch/75">{t(`menu.${id}.title`)}</li>
+                ))}
+              </ul>
+              <span className="mt-auto inline-flex items-center gap-1.5 text-[14px] font-semibold text-brass-light 4xl:text-[17px]">
+                {t('tabletop.open')}
+                <Icon.chevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </div>
+          </button>
         </section>
 
         <section className="mx-auto mt-8 max-w-md 4xl:mt-12 4xl:max-w-xl">

@@ -26,6 +26,10 @@ function primaryActionFor({ gameState, me, isMyTurn, actions, t }) {
   }
   if (!isMyTurn) return null;
   if (pending) return null;
+  // The server refuses rolling and ending the turn until the auction closes.
+  if (gameState.auction) {
+    return { key: 'auction', label: t('auction.title'), icon: Icon.bank, disabled: true, muted: true, hint: t('auction.blockedHint') };
+  }
 
   if (gameState.phase === 'ROLLING') {
     return {
@@ -56,7 +60,7 @@ export default function ActionDock({
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const primary = primaryActionFor({ gameState, me, isMyTurn, actions, t });
   const inDebt = !!me && me.money < 0;
-  const showJail = isMyTurn && gameState.phase === 'ROLLING' && me?.inJail && !gameState.pendingAction;
+  const showJail = isMyTurn && gameState.phase === 'ROLLING' && me?.inJail && !gameState.pendingAction && !gameState.auction;
 
   // Space / Enter fires whatever the dock's primary button is, so a whole
   // turn can be played without moving the mouse.
@@ -178,7 +182,7 @@ export default function ActionDock({
             <Icon.trade className="h-4 w-4" />
             <span className="hidden sm:inline">{t('dock.trade')}</span>
             {tradeCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brass px-1 text-[10px] font-black text-ink ring-2 ring-felt-700">
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] animate-pulse items-center justify-center rounded-full bg-brass px-1 text-[10px] font-black text-ink ring-2 ring-felt-700">
                 {tradeCount > 9 ? '9+' : tradeCount}
               </span>
             )}

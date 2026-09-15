@@ -6,8 +6,9 @@
 
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-  TILE_TYPES, TILE_W, boardInnerRect, boardPixelSize, computeGroupOwners, currentRent,
-  getTileName, tileAccentColor, tileCenter, tileOrientation, tileRect, utilityMultiplier,
+  TILE_TYPES, TILE_W, boardInnerRect, boardPixelSize, computeGroupOwners, currentRent, formatSignedMoney,
+  formatSignedPercent, getTileName, mortgageRoundsLeft, priceChangeFor, tileAccentColor, tileCenter,
+  tileOrientation, tileRect, utilityMultiplier,
 } from '../boardData';
 import { useTranslation } from '../i18n/LanguageContext';
 import { useSettings } from '../settings/SettingsContext';
@@ -39,6 +40,7 @@ function detailFor(scale) {
 
 const BoardSurface = memo(function BoardSurface({
   board, properties, players, sideLength, detail, selectedTileId, onSelectTile, onHoverTile, language, art,
+  viewerId, highlightOwnerId, round, auctionTileId, t,
 }) {
   const size = boardPixelSize(sideLength);
   const inner = boardInnerRect(sideLength);
@@ -76,12 +78,22 @@ const BoardSurface = memo(function BoardSurface({
       {board.map((tile) => {
         const propState = properties[tile.id];
         const owner = propState?.ownerId ? playerById[propState.ownerId] : null;
+        // Highlighting lights up every square the player owns and dims all
+        // the others, special squares included.
+        const highlight = highlightOwnerId
+          ? (propState?.ownerId === highlightOwnerId ? 'mine' : 'dim')
+          : null;
         return (
           <BoardTile
             key={tile.id}
             tile={tile}
             propState={propState}
             owner={owner}
+            priceChange={priceChangeFor(propState, viewerId)}
+            mortgageRounds={mortgageRoundsLeft(propState, round)}
+            highlight={highlight}
+            inAuction={auctionTileId === tile.id}
+            t={t}
             monopoly={tile.type === TILE_TYPES.PROPERTY && !!groupOwners[tile.group]}
             orientation={tileOrientation(tile.id, sideLength)}
             rect={tileRect(tile.id, sideLength)}
@@ -339,7 +351,7 @@ function BoardCenter({ sideLength, freeParkingPot, diceSlot, currentPlayer, isMy
 
 // --- Hover tooltip --------------------------------------------------
 
-function TileTooltip({ hover, gameState, language, t }) {
+function TileTooltip({ hover, gameState, language, t, viewerId }) {
   if (!hover) return null;
   const tile = gameState.board[hover.tileId];
   if (!tile) return null;
@@ -347,6 +359,9 @@ function TileTooltip({ hover, gameState, language, t }) {
   const owner = propState?.ownerId ? gameState.players.find((p) => p.id === propState.ownerId) : null;
   const rent = currentRent(tile, propState, gameState.board, gameState.properties);
   const ownable = !!propState;
+  const mortgageLeft = mortgageRoundsLeft(propState, gameState.round);
+  const change = priceChangeFor(propState, viewerId);
+  const changePercent = change ? formatSignedPercent(change.percent) : null;
 
   return (
     <div
@@ -401,9 +416,26 @@ function TileTooltip({ hover, gameState, language, t }) {
               </dd>
             </div>
           )}
+          {change && (
+            <div className="flex justify-between gap-3">
+              <dt className="text-parch/50">{change.asOwner ? t('familyPrice.lastChange') : t('familyPrice.yourPrice')}</dt>
+              <dd className="text-right font-semibold text-parch tnum">
+                ${change.to}{' '}
+                <span className={change.delta > 0 ? 'text-rent-light' : change.delta < 0 ? 'text-go-light' : 'text-parch/50'}>
+                  {formatSignedMoney(change.delta)}{changePercent ? ` (${changePercent})` : ''}
+                </span>
+              </dd>
+            </div>
+          )}
           {propState?.mortgaged && (
             <p className="mt-1 rounded bg-rent/20 px-2 py-1 text-center text-[11px] font-bold uppercase text-rent-light">
               {t('property.mortgaged')}
+              {mortgageLeft != null && ` · ${mortgageLeft === 0 ? t('mortgageTimer.lastRound') : t('mortgageTimer.roundsLeft', { count: mortgageLeft })}`}
+            </p>
+          )}
+          {gameState.auction?.tileId === tile.id && (
+            <p className="mt-1 rounded bg-brass/20 px-2 py-1 text-center text-[11px] font-bold uppercase text-brass-light">
+              {t('auction.title')}
             </p>
           )}
         </dl>
@@ -419,7 +451,7 @@ function TileTooltip({ hover, gameState, language, t }) {
 // --- Zoom / pan viewport --------------------------------------------
 
 export default function Board({
-  gameState, onSelectTile, selectedTileId, isMyTurn, diceSlot, overlay,
+  gameState, onSelectTile, selectedTileId, isMyTurn, diceSlot, overlay, viewerId = null, highlightOwnerId = null,
 }) {
   const { language, t } = useTranslation();
   const { settings } = useSettings();
@@ -726,6 +758,11 @@ export default function Board({
             onHoverTile={handleHoverTile}
             language={language}
             art={settings.tileArt}
+            viewerId={viewerId}
+            highlightOwnerId={highlightOwnerId}
+            round={gameState.round}
+            auctionTileId={gameState.auction?.tileId ?? null}
+            t={t}
           />
           <BoardCenter
             sideLength={sideLength}
@@ -791,7 +828,7 @@ export default function Board({
         </button>
       </div>
 
-      {!isPanning && <TileTooltip hover={hover} gameState={gameState} language={language} t={t} />}
+      {!isPanning && <TileTooltip hover={hover} gameState={gameState} language={language} t={t} viewerId={viewerId} />}
     </div>
   );
 }

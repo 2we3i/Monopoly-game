@@ -1,9 +1,11 @@
 // GameUI.jsx
 // The game screen shell: a board that owns most of the space, one dock
 // that holds every action, and one sidebar that answers "who else is in
-// this game, what are they offering, what are they saying".
+// this game, what are they offering, what are they saying". Things that
+// need everyone's attention right now - an auction, a trade offer for this
+// player - are drawn over it so they cannot be missed.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Board from './Board';
 import Dice from './Dice';
 import PlayerCard from './PlayerCard';
@@ -17,10 +19,14 @@ import ActivityLog from './ActivityLog';
 import SettingsModal from './SettingsModal';
 import PlayerAvatar from './PlayerAvatar';
 import Modal from './Modal';
+import AuctionPanel from './AuctionPanel';
+import TradeAlert from './TradeAlert';
+import RaiseFundsModal from './RaiseFundsModal';
 import { formatMoney, getTileName, netWorth, ownedTileIds, tileAccentColor } from '../boardData';
-import { isLightColor } from '../colorUtils';
+import { hexToRgba, isLightColor } from '../colorUtils';
 import { useTranslation } from '../i18n/LanguageContext';
 import { useSettings } from '../settings/SettingsContext';
+import { usePendingAction } from '../hooks/usePendingAction';
 import Icon from './icons';
 import SocialBar from './social/SocialBar';
 import { StyledName, VictoryMark, useLook } from '../cosmetics/Cosmetics';
@@ -31,7 +37,9 @@ function PlayerVictoryMark({ player, place }) {
   return <VictoryMark item={look.tokenVictory} place={place} />;
 }
 
-function TopBar({ gameState, me, onLeave, onOpenSettings }) {
+function TopBar({
+  gameState, me, onLeave, onOpenSettings, incomingTrades, onOpenTrades,
+}) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
 
@@ -74,6 +82,23 @@ function TopBar({ gameState, me, onLeave, onOpenSettings }) {
 
       <div className="flex-1" />
 
+      {/* Offers waiting for an answer, visible from anywhere in the game. */}
+      {incomingTrades > 0 && (
+        <button
+          type="button"
+          onClick={() => onOpenTrades(null)}
+          title={t('tradeAlert.badge', { count: incomingTrades })}
+          aria-label={t('tradeAlert.badge', { count: incomingTrades })}
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-brass/60 bg-brass/20 px-2.5 py-1.5 text-[12.5px] font-bold text-brass-light transition-colors hover:bg-brass/30"
+        >
+          <Icon.trade className="h-4 w-4" />
+          <span className="hidden sm:inline">{t('dock.trade')}</span>
+          <span className="flex h-4 min-w-[16px] animate-pulse items-center justify-center rounded-full bg-brass px-1 text-[10px] font-black text-ink">
+            {incomingTrades > 9 ? '9+' : incomingTrades}
+          </span>
+        </button>
+      )}
+
       {me && (
         <div className="flex shrink-0 items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1">
           <PlayerAvatar player={me} sizeClassName="h-6 w-6" ringClassName="ring-1 ring-white/25" />
@@ -111,10 +136,17 @@ function TopBar({ gameState, me, onLeave, onOpenSettings }) {
   );
 }
 
-function BuyPrompt({ tile, player, onBuy, onDecline }) {
+// The buy decision. A player who cannot afford the square is not turned
+// away: they see how much is missing and can raise it themselves; passing
+// sends the square to auction for everyone.
+function BuyPrompt({
+  tile, player, onBuy, onDecline, onRaise, stamp,
+}) {
   const { t, language } = useTranslation();
+  const [pending, run] = usePendingAction(stamp);
   const accent = tileAccentColor(tile);
   const affordable = player.money >= tile.price;
+  const short = tile.price - player.money;
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-3 z-40 flex justify-center px-3">
       <div className="pointer-events-auto w-full max-w-md animate-slide-up overflow-hidden rounded-2xl border border-brass/40 bg-felt-700/95 shadow-deep backdrop-blur-2xl">
@@ -129,17 +161,34 @@ function BuyPrompt({ tile, player, onBuy, onDecline }) {
           <div className="min-w-0 flex-1">
             <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-brass-light">{t('buy.landedOnUnowned')}</p>
             <h3 className="truncate font-display text-[19px] font-black leading-tight text-parch">{getTileName(tile, language)}</h3>
-            <p className="text-[12px] text-parch/50">
-              {t('buy.balanceAfter', { price: tile.price, rest: formatMoney(player.money - tile.price) })}
-            </p>
+            {affordable ? (
+              <p className="text-[12px] text-parch/50">
+                {t('buy.balanceAfter', { price: tile.price, rest: formatMoney(player.money - tile.price) })}
+              </p>
+            ) : (
+              <p className="text-[12px] font-semibold text-rent-light">
+                {t('buy.shortBy', { amount: short })}
+                <span className="font-normal text-parch/45"> · ${tile.price} · {t('buy.balance', { money: formatMoney(player.money) })}</span>
+              </p>
+            )}
           </div>
         </div>
+        <p className="border-t border-white/[0.06] px-4 py-1.5 text-[11px] leading-snug text-parch/40">{t('buy.passHint')}</p>
         <div className="flex gap-2 border-t border-white/[0.08] bg-black/20 p-3">
-          <button type="button" onClick={onDecline} className="btn-ghost flex-1 py-3">{t('buy.pass')}</button>
-          <button type="button" onClick={onBuy} disabled={!affordable} className="btn-primary flex-[1.4] py-3 text-[15px]">
-            <Icon.check className="h-5 w-5" />
-            {affordable ? t('buy.buyForPrice', { price: tile.price }) : t('buy.cantAfford')}
+          <button type="button" disabled={!!pending} onClick={() => run('pass', onDecline)} className="btn-ghost flex-1 py-3">
+            {pending === 'pass' ? '…' : t('buy.passToAuction')}
           </button>
+          {affordable ? (
+            <button type="button" disabled={!!pending} onClick={() => run('buy', onBuy)} className="btn-primary flex-[1.4] py-3 text-[15px]">
+              <Icon.check className="h-5 w-5" />
+              {pending === 'buy' ? '…' : t('buy.buyForPrice', { price: tile.price })}
+            </button>
+          ) : (
+            <button type="button" onClick={onRaise} className="btn-primary flex-[1.4] py-3 text-[15px]">
+              <Icon.cash className="h-5 w-5" />
+              {t('buy.raiseFunds')}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -289,6 +338,55 @@ function GameSnapshot({ gameState }) {
   );
 }
 
+// Short-lived notices about auctions: one when an auction opens, one with
+// its result. Only changes that happen while the screen is open announce
+// themselves - a reload does not replay old results.
+function useAuctionToasts(gameState, playerId) {
+  const { t, language } = useTranslation();
+  const [toasts, setToasts] = useState([]);
+  const auctionId = gameState.auction?.id ?? null;
+  const resultId = gameState.lastAuctionResult?.auctionId ?? null;
+  const seenAuction = useRef(auctionId);
+  const seenResult = useRef(resultId);
+
+  const push = useCallback((text, tone) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setToasts((list) => [...list.slice(-2), { id, text, tone }]);
+    setTimeout(() => setToasts((list) => list.filter((toast) => toast.id !== id)), 6000);
+  }, []);
+
+  useEffect(() => {
+    if (resultId && resultId !== seenResult.current) {
+      const result = gameState.lastAuctionResult;
+      const tile = getTileName(gameState.board[result.tileId], language);
+      const winner = gameState.players.find((p) => p.id === result.winnerId);
+      if (!winner) push(t('auction.resultUnsold', { tile }), 'muted');
+      else if (winner.id === playerId) push(t('auction.resultYouWon', { tile, amount: result.amount }), 'go');
+      else push(t('auction.resultWon', { name: winner.nickname, tile, amount: result.amount }), 'go');
+    }
+    seenResult.current = resultId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resultId]);
+
+  useEffect(() => {
+    if (auctionId && auctionId !== seenAuction.current) {
+      const tile = getTileName(gameState.board[gameState.auction.tileId], language);
+      push(t('auction.startedToast', { tile }), 'brass');
+    }
+    seenAuction.current = auctionId;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auctionId]);
+
+  const dismiss = useCallback((id) => setToasts((list) => list.filter((toast) => toast.id !== id)), []);
+  return [toasts, dismiss];
+}
+
+const TOAST_TONES = {
+  brass: 'border-brass/60 bg-felt-700/95 text-brass-light',
+  go: 'border-go-light/50 bg-felt-700/95 text-go-light',
+  muted: 'border-white/15 bg-felt-700/95 text-parch/75',
+};
+
 export default function GameUI({ gameState, playerId, actions, onLeave, chatMessages, sendChat }) {
   const { t } = useTranslation();
   const { settings } = useSettings();
@@ -299,8 +397,41 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
   const [manageOpen, setManageOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [expandedPlayerId, setExpandedPlayerId] = useState(null);
+  const [raiseOpen, setRaiseOpen] = useState(false);
+  const [tradeFocus, setTradeFocus] = useState(null); // { id, at } | null
   const lastSeenChatLength = useRef(chatMessages.length);
   const isFirstChatRender = useRef(true);
+  const sidebarRef = useRef(null);
+
+  // "Highlight my properties", switched on from the property manager, is
+  // remembered for this room for the rest of the browser session; the
+  // "always" setting is a personal preference kept in local settings.
+  const highlightKey = `landmark_highlight_${gameState.roomCode}`;
+  const [manualHighlight, setManualHighlight] = useState(() => {
+    try {
+      return sessionStorage.getItem(highlightKey) === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(highlightKey, manualHighlight ? '1' : '0');
+    } catch {
+      /* storage blocked - the highlight still works for this page */
+    }
+  }, [highlightKey, manualHighlight]);
+  const highlightMine = settings.alwaysHighlightMine || manualHighlight;
+
+  // On a phone the board is short: a running auction fills it, and a full
+  // trade alert on top would cover the auction's clock and current bid.
+  const [narrow, setNarrow] = useState(() => window.matchMedia('(max-width: 1023px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1023px)');
+    const onChange = () => setNarrow(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   const me = gameState.players.find((p) => p.id === playerId);
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
@@ -310,11 +441,39 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
   const myTrades = gameState.trades.filter((tr) => tr.fromPlayerId === playerId || tr.toPlayerId === playerId);
   const incomingTrades = myTrades.filter((tr) => tr.toPlayerId === playerId).length;
   const myPropertyCount = useMemo(() => ownedTileIds(playerId, gameState.properties).length, [playerId, gameState.properties]);
+  const [toasts, dismissToast] = useAuctionToasts(gameState, playerId);
+
+  const myBuyDecision = gameState.pendingAction?.type === 'BUY_DECISION' && gameState.pendingAction.playerId === playerId
+    ? gameState.pendingAction
+    : null;
+  const buyTileId = myBuyDecision ? myBuyDecision.tileId : null;
+  useEffect(() => {
+    if (buyTileId == null) setRaiseOpen(false);
+  }, [buyTileId]);
 
   const openTradeWith = (player) => {
     setComposer({ target: player });
     setSidebarTab('trades');
   };
+
+  // Straight to an offer: close whatever is on top, open the Trades tab,
+  // and mark the offer (the sidebar sits under the board on small screens,
+  // so it is scrolled into view as well).
+  const openTrades = useCallback((tradeId) => {
+    const incoming = gameState.trades.filter((tr) => tr.toPlayerId === playerId);
+    const id = tradeId || incoming[incoming.length - 1]?.id || null;
+    setComposer(null);
+    setManageOpen(false);
+    setSettingsOpen(false);
+    setSelectedTileId(null);
+    setSidebarTab('trades');
+    setTradeFocus(id ? { id, at: Date.now() } : null);
+    if (window.innerWidth < 1024) sidebarRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [gameState.trades, playerId]);
+
+  useEffect(() => {
+    if (sidebarTab !== 'trades') setTradeFocus(null);
+  }, [sidebarTab]);
 
   useEffect(() => {
     if (isFirstChatRender.current) {
@@ -351,7 +510,14 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
 
   return (
     <div className="table-felt flex min-h-screen flex-col overflow-x-hidden lg:h-screen lg:overflow-hidden">
-      <TopBar gameState={gameState} me={me} onLeave={onLeave} onOpenSettings={() => setSettingsOpen(true)} />
+      <TopBar
+        gameState={gameState}
+        me={me}
+        onLeave={onLeave}
+        onOpenSettings={() => setSettingsOpen(true)}
+        incomingTrades={incomingTrades}
+        onOpenTrades={openTrades}
+      />
 
       <main className="flex min-h-0 flex-1 flex-col gap-2.5 p-2.5 lg:flex-row">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-2.5">
@@ -361,6 +527,8 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
               onSelectTile={setSelectedTileId}
               selectedTileId={selectedTileId}
               isMyTurn={isMyTurn}
+              viewerId={playerId}
+              highlightOwnerId={highlightMine && me ? playerId : null}
               diceSlot={<Dice lastRoll={gameState.lastRoll} />}
               overlay={(
                 <>
@@ -369,17 +537,43 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
                       <ActivityLog log={gameState.log} board={gameState.board} />
                     </div>
                   )}
+
+                  {highlightMine && me && (
+                    <div className="pointer-events-none absolute left-3 top-3 z-30 flex max-w-[calc(100%-1.5rem)]">
+                      <div
+                        className="pointer-events-auto flex items-center gap-2 rounded-full border bg-felt-800/90 py-1 pl-2.5 pr-1 text-[12px] font-semibold shadow-lift backdrop-blur-md"
+                        style={{ borderColor: hexToRgba(me.color, 0.65) }}
+                      >
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: me.color, boxShadow: `0 0 8px ${me.color}` }} />
+                        <span className="truncate text-parch">{t('highlight.active', { count: myPropertyCount })}</span>
+                        {settings.alwaysHighlightMine ? (
+                          <button type="button" onClick={() => setSettingsOpen(true)} className="shrink-0 rounded-full px-2 py-0.5 text-[11px] text-parch/60 hover:bg-white/10 hover:text-parch">
+                            {t('highlight.settings')}
+                          </button>
+                        ) : (
+                          <button type="button" onClick={() => setManualHighlight(false)} className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-bold text-parch hover:bg-white/20">
+                            {t('highlight.off')}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* The buy decision belongs over the board, right above
                       the dock - not over the whole window, where it would
                       also cover the sidebar on a wide screen. */}
-                  {gameState.pendingAction?.type === 'BUY_DECISION' && gameState.pendingAction.playerId === playerId && (
+                  {myBuyDecision && !gameState.auction && me && (
                     <BuyPrompt
-                      tile={gameState.board[gameState.pendingAction.tileId]}
+                      tile={gameState.board[myBuyDecision.tileId]}
                       player={me}
-                      onBuy={() => actions.buyProperty(gameState.pendingAction.tileId)}
-                      onDecline={() => actions.declinePurchase(gameState.pendingAction.tileId)}
+                      stamp={gameState.receivedAt}
+                      onBuy={() => actions.buyProperty(myBuyDecision.tileId)}
+                      onDecline={() => actions.declinePurchase(myBuyDecision.tileId)}
+                      onRaise={() => setRaiseOpen(true)}
                     />
                   )}
+
+                  {gameState.auction && <AuctionPanel gameState={gameState} playerId={playerId} actions={actions} />}
                 </>
               )}
             />
@@ -398,7 +592,7 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
           />
         </section>
 
-        <aside className="panel flex min-h-0 w-full shrink-0 flex-col lg:h-auto lg:w-[22rem] xl:w-[24rem] 3xl:w-[27rem] 4xl:w-[34rem] 5xl:w-[40rem]">
+        <aside ref={sidebarRef} className="panel flex min-h-0 w-full shrink-0 flex-col lg:h-auto lg:w-[22rem] xl:w-[24rem] 3xl:w-[27rem] 4xl:w-[34rem] 5xl:w-[40rem]">
           <div role="tablist" className="flex shrink-0 border-b border-white/[0.08]">
             <SidebarTab
               active={sidebarTab === 'players'}
@@ -449,6 +643,7 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
               <TradePanel
                 gameState={gameState}
                 playerId={playerId}
+                focus={tradeFocus}
                 onOpenComposer={(target) => setComposer({ target })}
                 onAcceptTrade={actions.acceptTrade}
                 onDeclineTrade={actions.declineTrade}
@@ -505,6 +700,23 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
           onSellHouse={actions.sellHouse}
           onMortgage={actions.mortgage}
           onUnmortgage={actions.unmortgage}
+          highlightOn={highlightMine}
+          alwaysHighlight={settings.alwaysHighlightMine}
+          onToggleHighlight={() => {
+            setManualHighlight((on) => !on);
+            // Close the manager so the lit-up board is actually visible.
+            setManageOpen(false);
+          }}
+        />
+      )}
+
+      {raiseOpen && myBuyDecision && (
+        <RaiseFundsModal
+          gameState={gameState}
+          playerId={playerId}
+          tileId={myBuyDecision.tileId}
+          actions={actions}
+          onClose={() => setRaiseOpen(false)}
         />
       )}
 
@@ -513,6 +725,36 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
       {gameState.phase === 'GAME_OVER' && (
         <GameOverScreen gameState={gameState} playerId={playerId} onLeave={onLeave} />
       )}
+
+      {/* Above everything, dialogs included: a trade offer for this player
+          and short auction notices. */}
+      <div className="pointer-events-none fixed inset-x-0 top-14 z-[60] flex flex-col items-center gap-2 px-3">
+        <div className="w-full max-w-md">
+          {me && gameState.phase !== 'GAME_OVER' && (
+            <TradeAlert
+              gameState={gameState}
+              playerId={playerId}
+              onAccept={actions.acceptTrade}
+              onDecline={actions.declineTrade}
+              onDetails={openTrades}
+              compact={narrow && !!gameState.auction}
+            />
+          )}
+        </div>
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            role="status"
+            className={`pointer-events-auto flex max-w-md animate-slide-up items-center gap-2 rounded-full border px-3.5 py-2 text-[13px] font-semibold shadow-deep backdrop-blur-xl ${TOAST_TONES[toast.tone] || TOAST_TONES.muted}`}
+          >
+            <Icon.bank className="h-4 w-4 shrink-0" />
+            <span className="min-w-0">{toast.text}</span>
+            <button type="button" onClick={() => dismissToast(toast.id)} aria-label={t('common.close')} className="shrink-0 rounded-full p-0.5 opacity-60 hover:bg-white/10 hover:opacity-100">
+              <Icon.close className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
