@@ -16,6 +16,7 @@ const {
   notifyRemoved, clientMessage, errorPayload, idString,
 } = require('./roomSockets');
 const roomChat = require('../social/roomChat');
+const liveRoom = require('./liveRoom');
 
 const { AccessError } = access;
 const MODE_ID = 'catan.classic';
@@ -37,6 +38,14 @@ function intId(value, max = 1000) {
 function clientState(game, viewerId) {
   const state = game.toClientJSON(viewerId);
   state.players = roomChat.decoratePlayers(state.players, (p) => game.getPlayer(p.id)?.accountId);
+  return liveRoom.decorate(state, game.roomCode);
+}
+
+// Watchers see the island as an onlooker does: every road and settlement,
+// but nobody's resource or development cards.
+function spectatorState(game) {
+  const state = clientState(game, null);
+  state.spectating = true;
   return state;
 }
 
@@ -47,6 +56,7 @@ function broadcast(io, roomCode) {
   game.players.forEach((p) => {
     if (p.socketId) io.to(p.socketId).emit('catan:state', clientState(game, p.id));
   });
+  liveRoom.sendToSpectators(io, roomCode, 'catan:state', () => spectatorState(game));
   registry.observe('catan', game);
 }
 
@@ -89,6 +99,35 @@ function stageOf(phase) {
 }
 
 const DATA_KEYS = ['catanRoom', 'catanPlayerId', 'catanAccountId'];
+
+// One seat stops being a seat: the player gave up, walked out, or their
+// twenty seconds of grace ran out. The engine turns that into whatever it
+// means at this table; the reason is kept, so everyone can be told which
+// of the three it was.
+function dropPlayer(io, roomCode, playerId, reason) {
+  const game = roomManager.getCatanRoom(roomCode);
+  if (!game) return;
+  const player = game.getPlayer(playerId);
+  if (!player || player.exitReason) return;
+  const { nickname } = player;
+  liveRoom.disarmDrop(roomCode, playerId);
+  liveRoom.markExit(game, playerId, reason);
+  game.removePlayer(playerId);
+
+  if (game.players.length === 0 || game.players.every((p) => p.left)) {
+    clearTimer(roomCode);
+    liveRoom.disarmRoom(roomCode);
+    roomManager.deleteCatanRoom(roomCode, 'empty');
+    liveRoom.closeSpectators(io, roomCode, 'catan', 'empty');
+    return;
+  }
+  io.to(roomCode).emit('catan:system', {
+    type: reason === 'surrender' ? 'PLAYER_SURRENDERED' : 'PLAYER_DROPPED',
+    params: { name: nickname },
+  });
+  broadcast(io, roomCode);
+  schedule(io, roomCode);
+}
 
 registry.register({
   type: 'catan',
@@ -159,6 +198,8 @@ registry.register({
     game.players.forEach((p) => notifyRemoved(ioRef, p.socketId, {
       gameType: 'catan', roomCode: code, reason, dataKeys: DATA_KEYS,
     }));
+    liveRoom.disarmRoom(code);
+    liveRoom.closeSpectators(ioRef, code, 'catan', reason);
     roomManager.deleteCatanRoom(code, reason);
     return true;
   },
@@ -167,11 +208,8 @@ registry.register({
     const player = game?.getPlayer(playerId);
     if (!player) return false;
     notifyRemoved(ioRef, player.socketId, { gameType: 'catan', roomCode: code, reason, dataKeys: DATA_KEYS });
-    game.removePlayer(playerId);
-    if (game.players.length === 0 || game.players.every((p) => p.left)) {
-      this.close(code, reason);
-      return true;
-    }
+    dropPlayer(ioRef, code, playerId, 'kicked');
+    if (!roomManager.getCatanRoom(code)) return true;
     broadcast(ioRef, code);
     schedule(ioRef, code);
     return true;
@@ -213,6 +251,9 @@ function registerCatanHandlers(io) {
           accountId: identity.accountId, nickname: identity.nickname,
         });
         const player = game.addPlayer({ ...identity, socketId: socket.id });
+        // Back inside the twenty seconds: nothing happened at all.
+        liveRoom.disarmDrop(game.roomCode, player.id);
+        liveRoom.unwatch(socket);
         socket.join(game.roomCode);
         socket.data.catanRoom = game.roomCode;
         socket.data.catanPlayerId = player.id;
@@ -242,6 +283,9 @@ function registerCatanHandlers(io) {
         const existing = game.getPlayer(identity.playerId);
         if (existing) {
           access.assertCanClaimSeat(existing, identity);
+          // Out is out: a seat somebody gave up cannot be taken back, and
+          // the client turns this refusal into a place in the gallery.
+          liveRoom.assertSeatReclaimable(existing);
         } else if (!identity.nickname) {
           throw new CatanError('Nickname is required.');
         }
@@ -318,29 +362,98 @@ function registerCatanHandlers(io) {
       roomChat.notifyMentions(message, { players: game.players, context: { kind: 'room', gameType: 'catan', roomCode: game.roomCode } });
     });
 
+    // --- watching -----------------------------------------------------
+
+    // Anyone may watch a room without taking a seat, before or after the
+    // game started. A watcher is sent the payload built for no viewer at
+    // all, so nothing private is in it, and has no events with which to
+    // act on the game.
+    socket.on('catan:spectate', (payload, cb) => {
+      try {
+        const {
+          roomCode, nickname, playerId, token, guestKey,
+        } = payload || {};
+        const game = roomManager.getCatanRoom(roomCode);
+        if (!game) throw new CatanError('Room not found. Check the code and try again.');
+        const identity = access.resolveIdentity({
+          token, playerId, nickname, guestKey,
+        });
+        if (bans.isBanned(game.roomCode, identity.playerId)) {
+          throw new AccessError('You were removed from this room.', 'BANNED');
+        }
+        const own = game.getPlayer(identity.playerId);
+        if (own && !own.left) throw new CatanError('You are playing in this room.');
+        const viewer = liveRoom.watch(socket, game.roomCode, 'catan', identity);
+        if (!viewer) throw new CatanError('This room has too many spectators already.');
+        cb?.({ ok: true, roomCode: game.roomCode, spectator: true, state: spectatorState(game) });
+        broadcast(io, game.roomCode);
+      } catch (err) {
+        cb?.(errorPayload(err, [CatanError]));
+      }
+    });
+
+    socket.on('catan:unspectate', () => {
+      const watched = liveRoom.unwatch(socket);
+      if (watched) broadcast(io, watched);
+    });
+
+    // --- giving up ----------------------------------------------------
+
+    // The client has already asked for a confirmation by the time this
+    // arrives. Surrendering is final; the player stays on as a watcher.
+    socket.on('catan:surrender', (payload, cb) => {
+      const roomCode = socket.data.catanRoom;
+      const playerId = socket.data.catanPlayerId;
+      try {
+        const game = roomManager.getCatanRoom(roomCode);
+        const player = game?.getPlayer(playerId);
+        if (!game || !player) throw new CatanError('You are not in a Catan room.');
+        if (player.exitReason) throw new CatanError('You have already left this game.');
+        const seat = {
+          playerId, nickname: player.nickname, accountId: player.accountId, avatarUrl: player.avatarUrl,
+        };
+        dropPlayer(io, roomCode, playerId, 'surrender');
+        if (roomManager.getCatanRoom(roomCode)) {
+          liveRoom.watch(socket, roomCode, 'catan', seat);
+          broadcast(io, roomCode);
+        }
+        cb?.({ ok: true });
+      } catch (err) {
+        const message = clientMessage(err, [CatanError]);
+        sendError(socket, message);
+        cb?.({ ok: false, error: message });
+      }
+    });
+
     socket.on('catan:leave', () => {
       const roomCode = socket.data.catanRoom;
       const playerId = socket.data.catanPlayerId;
       DATA_KEYS.forEach((k) => { socket.data[k] = null; });
+      liveRoom.unwatch(socket);
       const game = roomManager.getCatanRoom(roomCode);
       if (!game) return;
       socket.leave(roomCode);
-      game.removePlayer(playerId);
-      if (game.players.length === 0 || game.players.every((p) => p.left)) {
-        clearTimer(roomCode);
-        roomManager.deleteCatanRoom(roomCode, 'empty');
-        return;
-      }
-      broadcast(io, roomCode);
-      schedule(io, roomCode);
+      dropPlayer(io, roomCode, playerId, 'left');
     });
 
     socket.on('disconnect', () => {
       const roomCode = socket.data.catanRoom;
       const playerId = socket.data.catanPlayerId;
+      const watched = liveRoom.unwatch(socket);
+      if (watched) broadcast(io, watched);
       const game = roomManager.getCatanRoom(roomCode);
       if (!game || !playerId) return;
+      const player = game.getPlayer(playerId);
+      if (!player || player.exitReason) return;
+      // A socket that closed AFTER its owner had already reconnected is
+      // stale: the seat now answers to a different socket, and treating
+      // this close as a disconnect would knock a player who is sitting
+      // right there offline - and start a countdown on them.
+      if (player.socketId !== socket.id) return;
       game.setConnected(playerId, false);
+      // Not a departure yet: twenty seconds to come back, counted down on
+      // every screen in the room.
+      liveRoom.armDrop(roomCode, playerId, () => dropPlayer(io, roomCode, playerId, 'timeout'));
       broadcast(io, roomCode);
       schedule(io, roomCode);
     });

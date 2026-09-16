@@ -1,23 +1,14 @@
 // ThroneGame.jsx
-// The Iron Throne table. The lords sit around one device (hot seat), and
-// any house can be handed to the computer. Setup picks the houses, who
-// plays them and how long the war lasts; the table puts the map in the
-// middle with the turn, resources and houses on one side and the chosen
-// territory, cards, diplomacy and chronicle on the other.
-//
-// Interaction on the map:
-//   click a territory      select it (info + actions in the right panel)
-//   own army selected      highlighted lands are where it can go - blue a
-//                          march, gold a free capture, red a battle
-//   click a highlight      march at once; a capture or battle asks first
-//   tactic card            highlighted targets, click one to play it
-//   Escape                 cancel the card / the pending attack / selection
+// The hot-seat Iron Throne table. The lords sit around one device, and any
+// house can be handed to the computer. Setup picks the houses, who plays
+// them and how long the war lasts; the table puts the map in the middle
+// with the turn, resources and houses on one side and the chosen territory,
+// cards, diplomacy and chronicle on the other. Online rooms use the same
+// map, panels and controls (ThroneOnline.jsx).
 //
 // The campaign is kept in localStorage - a strategy game outlives a tab.
 
-import {
-  useCallback, useEffect, useMemo, useState,
-} from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '../../../i18n/LanguageContext';
 import { navigate } from '../../../lib/router';
 import LanguageSwitcher from '../../LanguageSwitcher';
@@ -25,8 +16,8 @@ import Modal from '../../Modal';
 import Icon from '../../icons';
 import { DashIcon } from '../../ui/dash';
 import {
-  CARD_TARGET, ENGINE_VERSION, HOUSES, HOUSE_IDS, MIN_HOUSES, ROUND_OPTIONS, TARGET_OPTIONS, act, aiStep,
-  cardTargets, createGame, currentHouse, freeUnits, moveTargets, standings,
+  ENGINE_VERSION, HOUSES, HOUSE_IDS, MIN_HOUSES, ROUND_OPTIONS, TARGET_OPTIONS, act, aiStep, createGame, currentHouse,
+  standings,
 } from './engine';
 import { SEA, TERRITORY } from './westeros';
 import ThroneMap from './ThroneMap';
@@ -35,6 +26,7 @@ import {
   RulesModal, SeaPanel, TerritoryPanel, ThronePanel, TurnBanner, useThroneText,
 } from './ThronePanels';
 import { IronThroneBadge, SigilBadge } from './throneArt';
+import useThroneControls from './useThroneControls';
 
 const STORAGE_KEY = 'landmark_tabletop_throne';
 const AI_DELAY = 280;
@@ -251,11 +243,6 @@ export default function ThroneGame() {
   const [saved] = useState(loadSaved);
   const [setup, setSetup] = useState(() => (validSetup(saved?.setup) ? saved.setup : DEFAULT_SETUP));
   const [game, setGame] = useState(() => (saved?.game?.v === ENGINE_VERSION && saved.game.game === 'throne' ? saved.game : null));
-  const [selected, setSelected] = useState(null);
-  const [sendPick, setSendPick] = useState(null);
-  const [pending, setPending] = useState(null);
-  const [targeting, setTargeting] = useState(null);
-  const [seenBattle, setSeenBattle] = useState(() => saved?.game?.battle?.id ?? null);
   const [readyFor, setReadyFor] = useState(() => (saved?.game ? saved.game.turnNo : null));
   const [rules, setRules] = useState(false);
   const [confirm, setConfirm] = useState(null);
@@ -264,33 +251,13 @@ export default function ThroneGame() {
 
   const cur = game ? currentHouse(game) : null;
   const humanTurn = !!game && game.phase === 'play' && game.houses[cur].control === 'human' && !game.proposal;
-  const battle = game?.battle && game.battle.id !== seenBattle ? game.battle : null;
+  const dispatch = useCallback((action) => setGame((g) => (g ? act(g, action) : g)), []);
+  const controls = useThroneControls({
+    game, canAct: humanTurn, dispatch, initialSeenBattle: saved?.game?.battle?.id ?? null,
+  });
+  const { battle, setSeenBattle } = controls;
   const humans = game ? game.order.filter((h) => game.houses[h].control === 'human' && !game.houses[h].out) : [];
   const needsPass = humanTurn && humans.length > 1 && readyFor !== game.turnNo && !battle;
-
-  const dispatch = useCallback((action) => setGame((g) => (g ? act(g, action) : g)), []);
-
-  // A new turn starts clean.
-  const turnNo = game?.turnNo;
-  useEffect(() => {
-    setPending(null);
-    setTargeting(null);
-    if (game && game.houses[currentHouse(game)].control === 'human') {
-      const seat = HOUSES[currentHouse(game)].seat;
-      setSelected(game.lands[seat].owner === currentHouse(game) ? seat : null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [turnNo]);
-
-  // The troops to send default to everything free in the selected land; a
-  // choice made with the steppers sticks to that land and never exceeds
-  // what is still free after the state changes.
-  const selLand = game && selected && game.lands[selected];
-  const free = selLand ? freeUnits(selLand) : { f: 0, k: 0 };
-  const send = sendPick && sendPick.id === selected
-    ? { f: Math.min(sendPick.f, free.f), k: Math.min(sendPick.k, free.k) }
-    : free;
-  const setSend = (next) => setSendPick({ id: selected, f: next.f, k: next.k });
 
   // Computer houses play one visible step at a time.
   useEffect(() => {
@@ -303,84 +270,7 @@ export default function ThroneGame() {
     }
     const id = setTimeout(() => setGame((g) => (g ? aiStep(g) : g)), AI_DELAY);
     return () => clearTimeout(id);
-  }, [game, cur, battle]);
-
-  const targets = useMemo(() => {
-    const map = new Map();
-    if (!humanTurn) return map;
-    const me = game.houses[cur];
-    if (targeting != null) {
-      (cardTargets(game, me.hand[targeting]) || []).forEach((id) => map.set(id, 'card'));
-      return map;
-    }
-    if (selLand && selLand.owner === cur && me.commands > 0 && send.f + send.k > 0) {
-      moveTargets(game, selected).forEach((m) => map.set(m.id, m.kind));
-    }
-    return map;
-  }, [game, humanTurn, cur, targeting, selLand, selected, send]);
-
-  const onLand = (id) => {
-    if (!humanTurn) {
-      setSelected(id);
-      return;
-    }
-    if (targeting != null) {
-      if (targets.has(id)) {
-        dispatch({ type: 'playCard', index: targeting, target: id });
-        setTargeting(null);
-      }
-      return;
-    }
-    const kind = targets.get(id);
-    if (kind === 'move') {
-      dispatch({
-        type: 'move', from: selected, to: id, f: send.f, k: send.k,
-      });
-      setPending(null);
-      return;
-    }
-    if (kind) {
-      const voyage = moveTargets(game, selected).find((m) => m.id === id)?.voyage;
-      setPending({
-        from: selected, to: id, kind, voyage,
-      });
-      return;
-    }
-    setPending(null);
-    setSelected(id);
-  };
-
-  const confirmPending = () => {
-    if (!pending) return;
-    dispatch({
-      type: 'move', from: pending.from, to: pending.to, f: send.f, k: send.k,
-    });
-    setPending(null);
-  };
-
-  const playCard = (index) => {
-    const card = game.houses[cur].hand[index];
-    if (CARD_TARGET[card]) {
-      setTargeting(index);
-      setPending(null);
-    } else {
-      dispatch({ type: 'playCard', index });
-    }
-  };
-
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.target.closest?.('input, textarea')) return;
-      if (e.key === 'Escape') {
-        if (targeting != null) setTargeting(null);
-        else if (pending) setPending(null);
-        else setSelected(null);
-      }
-      if (e.key === 'Enter' && pending && !battle) confirmPending();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
+  }, [game, cur, battle, setSeenBattle]);
 
   const start = () => {
     const g = createGame({
@@ -388,7 +278,7 @@ export default function ThroneGame() {
     });
     setSeenBattle(null);
     setReadyFor(g.turnNo);
-    setSelected(null);
+    controls.resetSelection();
     setGame(g);
   };
 
@@ -396,21 +286,22 @@ export default function ThroneGame() {
 
   let selection = null;
   if (game) {
+    const { selected } = controls;
     if (selected === 'throne') selection = <ThronePanel s={game} />;
-    else if (selected && SEA[selected]) selection = <SeaPanel s={game} id={selected} onSelect={setSelected} />;
+    else if (selected && SEA[selected]) selection = <SeaPanel s={game} id={selected} onSelect={controls.setSelected} />;
     else if (selected && TERRITORY[selected]) {
       selection = (
         <TerritoryPanel
           s={game}
           id={selected}
           humanTurn={humanTurn}
-          send={send}
-          onSend={setSend}
-          pending={pending}
-          onConfirm={confirmPending}
-          onCancel={() => setPending(null)}
+          send={controls.send}
+          onSend={controls.setSend}
+          pending={controls.pending}
+          onConfirm={controls.confirmPending}
+          onCancel={controls.cancelPending}
           onAction={dispatch}
-          onSelect={(id) => { setPending(null); setSelected(id); }}
+          onSelect={controls.setSelected}
         />
       );
     } else {
@@ -472,22 +363,22 @@ export default function ThroneGame() {
           <aside className="scrollbar-thin order-2 flex flex-col gap-2 lg:order-1 lg:min-h-0 lg:overflow-y-auto">
             <TurnBanner s={game} humanTurn={humanTurn} onEndTurn={() => dispatch({ type: 'endTurn' })} aiBusy={!humanTurn} />
             <ResourcesPanel s={game} />
-            <HouseRoster s={game} onSelectHouse={(h) => setSelected(HOUSES[h].seat)} />
+            <HouseRoster s={game} onSelectHouse={(h) => controls.setSelected(HOUSES[h].seat)} />
             <EventPanel s={game} />
           </aside>
 
           <section className="relative order-1 h-[62vh] min-h-[340px] shrink-0 lg:order-2 lg:h-auto lg:min-h-0">
             <ThroneMap
               state={game}
-              selected={selected}
-              targets={targets}
-              onLand={onLand}
-              onSea={(id) => { if (targeting == null) { setPending(null); setSelected(id); } }}
-              onThrone={() => { if (targeting == null) setSelected('throne'); }}
+              selected={controls.selected}
+              targets={controls.targets}
+              onLand={controls.onLand}
+              onSea={controls.onSea}
+              onThrone={controls.onThrone}
             >
-              {targeting != null && (
+              {controls.targeting != null && (
                 <p className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-[#c9a0f2]/40 bg-black/70 px-3 py-1 text-[12px] text-[#e3cffa]">
-                  {t('throne.ui.pickTarget', { card: t(`throne.card.${game.houses[cur].hand[targeting]}.name`) })}
+                  {t('throne.ui.pickTarget', { card: t(`throne.card.${game.houses[cur].hand[controls.targeting]}.name`) })}
                 </p>
               )}
               {needsPass && <PassDevice house={cur} onReady={() => setReadyFor(game.turnNo)} />}
@@ -497,7 +388,7 @@ export default function ThroneGame() {
 
           <aside className="scrollbar-thin order-3 flex flex-col gap-2 lg:min-h-0 lg:overflow-y-auto">
             {selection}
-            <HandPanel s={game} humanTurn={humanTurn} targeting={targeting} onPlay={playCard} onBuy={() => dispatch({ type: 'buyCard' })} onCancelTarget={() => setTargeting(null)} />
+            <HandPanel s={game} humanTurn={humanTurn} targeting={controls.targeting} onPlay={controls.playCard} onBuy={() => dispatch({ type: 'buyCard' })} onCancelTarget={controls.cancelTargeting} />
             <DiplomacyPanel s={game} humanTurn={humanTurn} onPropose={(to) => dispatch({ type: 'propose', to })} onBetray={(other) => dispatch({ type: 'betray', other })} />
             <LogPanel s={game} className="max-h-[420px] lg:max-h-none lg:min-h-[260px] lg:flex-1" />
           </aside>
@@ -505,7 +396,7 @@ export default function ThroneGame() {
       )}
 
       {game?.proposal && <ProposalDialog s={game} onRespond={(accept) => dispatch({ type: 'respond', accept })} />}
-      {battle && !game.proposal && <BattleReport report={battle} onClose={() => setSeenBattle(battle.id)} />}
+      {battle && !game.proposal && <BattleReport report={battle} onClose={controls.closeBattle} />}
       {rules && <RulesModal onClose={() => setRules(false)} />}
       {confirm === 'new' && (
         <ConfirmDialog

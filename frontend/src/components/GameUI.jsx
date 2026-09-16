@@ -29,6 +29,7 @@ import { useSettings } from '../settings/SettingsContext';
 import { usePendingAction } from '../hooks/usePendingAction';
 import Icon from './icons';
 import SocialBar from './social/SocialBar';
+import { SpectatorBanner, SpectatorStrip, SurrenderButton } from './room/RoomStatus';
 import { StyledName, VictoryMark, useLook } from '../cosmetics/Cosmetics';
 import { useOutcomeEffects, useTurnSound } from '../cosmetics/useGameCosmetics';
 
@@ -38,7 +39,7 @@ function PlayerVictoryMark({ player, place }) {
 }
 
 function TopBar({
-  gameState, me, onLeave, onOpenSettings, incomingTrades, onOpenTrades,
+  gameState, me, onLeave, onOpenSettings, incomingTrades, onOpenTrades, onSurrender, spectating,
 }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
@@ -123,6 +124,11 @@ function TopBar({
         <Icon.settings className="h-4 w-4" />
         <span className="hidden xl:inline text-[12.5px]">{t('settings.open')}</span>
       </button>
+      {/* Giving up mid-game is a bankruptcy, which is final: the dialog
+          says so before anything happens. */}
+      {!spectating && me && !me.bankrupt && gameState.phase !== 'GAME_OVER' && gameState.phase !== 'LOBBY' && (
+        <SurrenderButton onSurrender={onSurrender} className="btn-danger shrink-0 px-2 py-1.5 text-[12.5px]" />
+      )}
       <button
         type="button"
         onClick={onLeave}
@@ -387,7 +393,9 @@ const TOAST_TONES = {
   muted: 'border-white/15 bg-felt-700/95 text-parch/75',
 };
 
-export default function GameUI({ gameState, playerId, actions, onLeave, chatMessages, sendChat }) {
+export default function GameUI({
+  gameState, playerId, actions, onLeave, chatMessages, sendChat, spectating,
+}) {
   const { t } = useTranslation();
   const { settings } = useSettings();
   const [selectedTileId, setSelectedTileId] = useState(null);
@@ -517,7 +525,12 @@ export default function GameUI({ gameState, playerId, actions, onLeave, chatMess
         onOpenSettings={() => setSettingsOpen(true)}
         incomingTrades={incomingTrades}
         onOpenTrades={openTrades}
+        onSurrender={actions.surrender}
+        spectating={spectating}
       />
+
+      {spectating && <SpectatorBanner onLeave={onLeave} className="mx-2.5 mt-2.5" />}
+      {gameState.spectators?.length > 0 && <SpectatorStrip spectators={gameState.spectators} className="mx-2.5 mt-2.5" />}
 
       <main className="flex min-h-0 flex-1 flex-col gap-2.5 p-2.5 lg:flex-row">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-2.5">

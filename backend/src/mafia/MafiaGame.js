@@ -148,10 +148,16 @@ class MafiaGame {
     // leave with them or the room can never be moved on again.
     if (player.isHost) {
       player.isHost = false;
-      const heir = this.players.find((p) => !p.left && p.accountId && p.connected)
-        || this.players.find((p) => !p.left && p.accountId)
-        || this.players.find((p) => !p.left && p.connected)
-        || this.players.find((p) => !p.left);
+      // A room with no host at all can never be restarted or moved on by
+      // anyone in it, so the last fallback is a seat that has also been
+      // left: if its owner ever comes back, the room answers to them again.
+      const others = this.players.filter((p) => p.id !== player.id);
+      const heir = others.find((p) => !p.left && p.accountId && p.connected)
+        || others.find((p) => !p.left && p.accountId)
+        || others.find((p) => !p.left && p.connected)
+        || others.find((p) => !p.left)
+        || others.find((p) => p.accountId)
+        || others[0];
       if (heir) {
         heir.isHost = true;
         this.hostId = heir.id;
@@ -803,6 +809,11 @@ class MafiaGame {
       isHost: p.isHost,
       ready: p.ready,
       alive: p.alive,
+      // Why a seat is empty is never a secret: the table has to be able to
+      // tell "dropped out" from "still thinking".
+      left: !!p.left,
+      exitReason: p.exitReason || null,
+      surrendered: !!p.surrendered,
       deathDay: p.deathDay,
       deathCause: this.settings.info.showDeathCause ? p.deathCause : null,
       role: this.canSeeRole(viewer, p) ? p.role : null,

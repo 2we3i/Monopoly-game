@@ -14,6 +14,8 @@ const bunker = require('../bunker/BunkerGame');
 const bunkerCards = require('../bunker/cards');
 const catan = require('../catan/CatanGame');
 const cosmic = require('../cosmic/CosmicGame');
+const throne = require('../throne/ThroneGame');
+const chpok = require('../chpok/ChpokGame');
 const modes = require('../platform/modes');
 const registry = require('../platform/registry');
 
@@ -75,6 +77,21 @@ router.get('/games', (req, res) => {
         maxPlayers: cosmic.MAX_PLAYERS,
         available: modes.gameAvailable('cosmic'),
       },
+      {
+        id: 'throne',
+        minPlayers: throne.MIN_PLAYERS,
+        maxPlayers: throne.MAX_PLAYERS,
+        available: throne.isAvailable() && modes.gameAvailable('throne'),
+      },
+      {
+        id: 'chpok',
+        minPlayers: chpok.MIN_PLAYERS,
+        maxPlayers: chpok.MAX_PLAYERS,
+        // 18+: the front door never lists it. It is offered on the board
+        // games page, behind the age gate that section already has.
+        adult: true,
+        available: modes.gameAvailable('chpok'),
+      },
     ],
   });
 });
@@ -128,6 +145,23 @@ router.get('/citadels/config', (req, res) => {
     districts: DISTRICTS.map((d) => ({
       id: d.id, type: d.type, cost: d.cost, count: d.count, name: d.name, text: d.text || null, special: d.special || null,
     })),
+  });
+});
+
+// What an online ЧПОК lobby needs before a room exists: the limits, the
+// shape of a settings object and the options the host may pick from.
+router.get('/chpok/config', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  res.json({
+    minPlayers: chpok.MIN_PLAYERS,
+    maxPlayers: chpok.MAX_PLAYERS,
+    maxAnswerLength: chpok.MAX_ANSWER_LEN,
+    defaults: chpok.DEFAULT_SETTINGS,
+    options: {
+      rounds: chpok.ROUND_OPTIONS,
+      answerSec: chpok.ANSWER_SEC_OPTIONS,
+      voteSec: chpok.VOTE_SEC_OPTIONS,
+    },
   });
 });
 

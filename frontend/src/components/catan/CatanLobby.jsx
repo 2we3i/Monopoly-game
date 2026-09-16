@@ -7,6 +7,7 @@ import { useTranslation } from '../../i18n/LanguageContext';
 import PlayerAvatar from '../PlayerAvatar';
 import Icon from '../icons';
 import SocialBar from '../social/SocialBar';
+import { PlayerStatus, SpectatorStrip } from '../room/RoomStatus';
 import FramedAvatar from '../../cosmetics/FramedAvatar';
 import { StyledName } from '../../cosmetics/Cosmetics';
 import { Segmented } from '../mafia/MafiaSettings';
@@ -110,7 +111,7 @@ export default function CatanLobby({
                       <span className="hidden sm:inline">{t(`catan.color.${color}`)}</span>
                     </span>
                     {p.isHost && <Icon.crown className="h-4 w-4 shrink-0 text-brass" title={t('waiting.host')} />}
-                    {!p.connected && <span className="pill bg-white/10 text-parch/40">{t('waiting.offline')}</span>}
+                    <PlayerStatus player={p} compact />
                     {p.isHost ? null : p.ready
                       ? <span className="pill bg-go/25 text-go-light"><Icon.check className="h-3 w-3" />{t('waiting.ready')}</span>
                       : <span className="pill bg-white/[0.07] text-parch/35">{t('mafia.notReady')}</span>}
@@ -118,6 +119,7 @@ export default function CatanLobby({
                 );
               })}
             </ul>
+            <SpectatorStrip spectators={state.spectators} className="mt-2" />
             {Array.from({ length: Math.max(0, state.maxPlayers - state.players.length) }).map((_, i) => (
               <div key={`empty-${i}`} className="mt-1.5 rounded-xl border border-dashed border-white/10 px-3 py-2 text-center text-[12px] text-parch/25">
                 {t('mafia.emptySeat')}

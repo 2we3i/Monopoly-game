@@ -29,7 +29,7 @@ function gameFromPath(pathname) {
   return Object.values(GAMES).find((game) => game.slug === slug)?.id || null;
 }
 
-export default function TabletopPage({ auth, pathname }) {
+export default function TabletopPage({ auth, pathname, onPlayOnline, creating = false }) {
   const { t } = useTranslation();
   const [confirmed, setConfirmed] = useState(isAgeConfirmed);
   const [asking, setAsking] = useState(false);
@@ -75,11 +75,28 @@ export default function TabletopPage({ auth, pathname }) {
       </section>
 
       {confirmed ? (
-        <section className="grid gap-4 md:grid-cols-2 4xl:gap-8">
-          {SERIES.map((game) => (
-            <GameCard key={game.id} game={game} onPlay={() => navigate(`/tabletop/${GAMES[game.id].slug}`)} />
-          ))}
-        </section>
+        <>
+          {/* One box, two ways to play it: around a single screen, or with
+              a phone each. The online room is the same decks, dealt by the
+              server, with the answers written and voted on from phones. */}
+          {onPlayOnline && (
+            <section className="mb-4 flex flex-col items-start gap-3 rounded-2xl border border-rose-400/25 bg-rose-500/[0.06] px-5 py-5 sm:flex-row sm:items-center 4xl:mb-8">
+              <DashIcon name="gamepad" className="h-8 w-8 shrink-0 text-rose-300" />
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[15px] font-bold text-parch 4xl:text-[18px]">{t('chpok.onlineTitle')}</h3>
+                <p className="mt-0.5 text-[13px] leading-snug text-parch/55 4xl:text-[15px]">{t('chpok.onlineText')}</p>
+              </div>
+              <button type="button" onClick={onPlayOnline} disabled={creating} className="btn-primary shrink-0 px-5 py-3 text-[14px]">
+                {creating ? t('landing.creatingRoom') : t('chpok.onlineStart')}
+              </button>
+            </section>
+          )}
+          <section className="grid gap-4 md:grid-cols-2 4xl:gap-8">
+            {SERIES.map((game) => (
+              <GameCard key={game.id} game={game} onPlay={() => navigate(`/tabletop/${GAMES[game.id].slug}`)} />
+            ))}
+          </section>
+        </>
       ) : (
         <div className="flex max-w-2xl flex-col items-start gap-3 rounded-2xl border border-white/[0.07] bg-[#121418] px-5 py-5 sm:flex-row sm:items-center">
           <DashIcon name="lock" className="h-7 w-7 shrink-0 text-zinc-500" />

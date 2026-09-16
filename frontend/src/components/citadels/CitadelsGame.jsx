@@ -18,6 +18,7 @@ import { SEAT_COLORS } from './CitadelsLobby';
 import { formatCitadelsLog } from './logFormat';
 import RoomChat from '../chat/RoomChat';
 import SocialBar from '../social/SocialBar';
+import { SpectatorBanner, SpectatorStrip, SurrenderButton } from '../room/RoomStatus';
 import { StyledName, VictoryMark, useLook } from '../../cosmetics/Cosmetics';
 import { useOutcomeEffects, useTurnSound } from '../../cosmetics/useGameCosmetics';
 
@@ -52,7 +53,9 @@ function useLookup(config, language) {
   }, [config, language]);
 }
 
-function TopBar({ state, onLeave, t }) {
+function TopBar({
+  state, onLeave, t, actions, spectating,
+}) {
   const seconds = useCountdown(state.phaseEndsAt);
   const lastRound = state.players.some((p) => p.completed) && state.phase !== 'GAME_OVER';
   return (
@@ -72,6 +75,12 @@ function TopBar({ state, onLeave, t }) {
         </div>
       )}
       <SocialBar compact />
+      {/* Giving up is in every mode where a player can be knocked out.
+          It asks for a confirmation and then ends this player's game. */}
+      {!spectating && actions?.surrender && state.phase !== 'GAME_OVER'
+        && state.players.some((p) => p.isYou && !p.left) && (
+        <SurrenderButton onSurrender={actions.surrender} />
+      )}
       <button type="button" onClick={onLeave} className="btn-quiet px-3 py-2 text-[12.5px]">{t('waiting.leave')}</button>
     </header>
   );
@@ -702,7 +711,7 @@ function GameOver({
 }
 
 export default function CitadelsGame({
-  state, chat, actions, onLeave,
+  state, chat, actions, onLeave, spectating,
 }) {
   const { t, language } = useTranslation();
   const config = useCitadelsConfig();
@@ -726,7 +735,9 @@ export default function CitadelsGame({
   return (
     <div className="table-citadel min-h-screen">
       <div className="mx-auto flex max-w-7xl flex-col gap-3 px-3 py-4 3xl:max-w-[1760px] 4xl:max-w-[2360px] 4xl:gap-5 4xl:px-8 4xl:py-8 5xl:max-w-[3100px]">
-        <TopBar state={state} onLeave={onLeave} t={t} />
+        <TopBar state={state} onLeave={onLeave} t={t} actions={actions} spectating={spectating} />
+        {spectating && <SpectatorBanner onLeave={onLeave} />}
+        <SpectatorStrip spectators={state.spectators} />
         <RoleTrack state={state} lookup={lookup} t={t} />
         <div className="scrollbar-thin flex gap-2 overflow-x-auto pb-1">
           {state.players.map((p, i) => (

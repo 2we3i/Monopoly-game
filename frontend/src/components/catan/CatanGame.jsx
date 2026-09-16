@@ -14,6 +14,7 @@ import Modal from '../Modal';
 import Icon from '../icons';
 import RoomChat from '../chat/RoomChat';
 import SocialBar from '../social/SocialBar';
+import { SpectatorBanner, SpectatorStrip, SurrenderButton } from '../room/RoomStatus';
 import { StyledName } from '../../cosmetics/Cosmetics';
 import { useOutcomeEffects, useTurnSound } from '../../cosmetics/useGameCosmetics';
 import CatanBoard from './CatanBoard';
@@ -48,7 +49,9 @@ function useCountdown(endsAt) {
 
 // --- header ------------------------------------------------------------------
 
-function TopBar({ state, onLeave, t }) {
+function TopBar({
+  state, onLeave, t, actions, spectating,
+}) {
   const seconds = useCountdown(state.phaseEndsAt);
   const actorId = state.setup?.playerId || state.turn?.playerId;
   const actor = state.players.find((p) => p.id === actorId);
@@ -85,6 +88,12 @@ function TopBar({ state, onLeave, t }) {
         </div>
       )}
       <SocialBar compact />
+      {/* Giving up is in every mode where a player can be knocked out.
+          It asks for a confirmation and then ends this player's game. */}
+      {!spectating && actions?.surrender && state.phase !== 'GAME_OVER'
+        && state.players.some((p) => p.isYou && !p.left) && (
+        <SurrenderButton onSurrender={actions.surrender} />
+      )}
       <button type="button" onClick={onLeave} className="btn-quiet px-3 py-2 text-[12.5px]">{t('waiting.leave')}</button>
     </header>
   );
@@ -940,7 +949,7 @@ function ModeHint({
 // --- the table -------------------------------------------------------------------
 
 export default function CatanGame({
-  state, chat, actions, onLeave,
+  state, chat, actions, onLeave, spectating,
 }) {
   const { t } = useTranslation();
   const [picked, setPicked] = useState(null);
@@ -989,7 +998,9 @@ export default function CatanGame({
   return (
     <div className="table-catan flex min-h-screen flex-col lg:h-[100dvh] lg:min-h-0">
       <div className="mx-auto flex w-full max-w-[1760px] flex-1 flex-col gap-3 px-3 py-3 lg:min-h-0 4xl:max-w-[2500px] 4xl:gap-4 4xl:px-6">
-        <TopBar state={state} onLeave={onLeave} t={t} />
+        <TopBar state={state} onLeave={onLeave} t={t} actions={actions} spectating={spectating} />
+        {spectating && <SpectatorBanner onLeave={onLeave} />}
+        <SpectatorStrip spectators={state.spectators} />
         <div className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-[minmax(0,1fr),22rem] 3xl:grid-cols-[minmax(0,1fr),26rem] 4xl:grid-cols-[minmax(0,1fr),32rem]">
           <div className="flex min-w-0 flex-col gap-3 lg:min-h-0">
             <div className="relative h-[60vh] min-h-[320px] lg:h-auto lg:min-h-[280px] lg:flex-1">

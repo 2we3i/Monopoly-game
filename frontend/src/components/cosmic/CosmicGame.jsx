@@ -13,6 +13,7 @@ import Modal from '../Modal';
 import Icon from '../icons';
 import RoomChat from '../chat/RoomChat';
 import SocialBar from '../social/SocialBar';
+import { SpectatorBanner, SpectatorStrip, SurrenderButton } from '../room/RoomStatus';
 import { StyledName } from '../../cosmetics/Cosmetics';
 import { useOutcomeEffects, useTurnSound } from '../../cosmetics/useGameCosmetics';
 import CosmicBoard from './CosmicBoard';
@@ -68,7 +69,9 @@ function PlayerChip({ player, t, suffix }) {
 
 // --- header and phase track ----------------------------------------------------
 
-function TopBar({ state, onLeave, t }) {
+function TopBar({
+  state, onLeave, t, actions, spectating,
+}) {
   const enc = state.encounter;
   const current = state.players.find((p) => p.id === state.turnPlayerId);
   const c = cosmicColor(current?.color);
@@ -96,7 +99,13 @@ function TopBar({ state, onLeave, t }) {
         <span className="pill hidden bg-white/[0.06] normal-case tracking-normal text-parch/70 sm:inline-flex">🏆 {t('cosmic.goal', { n: state.winColonies })}</span>
         <Timer endsAt={state.phaseEndsAt} t={t} />
         <SocialBar compact />
-        <button type="button" onClick={onLeave} className="btn-quiet px-3 py-2 text-[12.5px]">{t('waiting.leave')}</button>
+        {/* Giving up is in every mode where a player can be knocked out.
+          It asks for a confirmation and then ends this player's game. */}
+      {!spectating && actions?.surrender && state.phase !== 'GAME_OVER'
+        && state.players.some((p) => p.isYou && !p.left) && (
+        <SurrenderButton onSurrender={actions.surrender} />
+      )}
+      <button type="button" onClick={onLeave} className="btn-quiet px-3 py-2 text-[12.5px]">{t('waiting.leave')}</button>
       </div>
       {state.phase === 'PLAY' && enc && (
         <ol className="scrollbar-thin flex gap-1 overflow-x-auto pb-0.5" aria-label={t('cosmic.phaseTrack')}>
@@ -1077,7 +1086,7 @@ const EMPTY_UI = {
 };
 
 export default function CosmicGame({
-  state, chat, actions, onLeave,
+  state, chat, actions, onLeave, spectating,
 }) {
   const { t } = useTranslation();
   const [ui, setUi] = useState(EMPTY_UI);
@@ -1120,7 +1129,9 @@ export default function CosmicGame({
   return (
     <div className="table-cosmic flex min-h-screen flex-col lg:h-[100dvh] lg:min-h-0">
       <div className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col gap-3 px-3 py-3 lg:min-h-0 4xl:max-w-[2500px]">
-        <TopBar state={state} onLeave={onLeave} t={t} />
+        <TopBar state={state} onLeave={onLeave} t={t} actions={actions} spectating={spectating} />
+        {spectating && <SpectatorBanner onLeave={onLeave} />}
+        <SpectatorStrip spectators={state.spectators} />
         <div className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-[minmax(0,1fr),23rem] 3xl:grid-cols-[minmax(0,1fr),27rem]">
           <div className="flex min-w-0 flex-col gap-3 lg:min-h-0">
             <div className="relative h-[58vh] min-h-[320px] lg:h-auto lg:min-h-[260px] lg:flex-1">

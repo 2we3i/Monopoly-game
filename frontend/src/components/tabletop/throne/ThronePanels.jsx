@@ -69,7 +69,7 @@ function Stat({
 // --- Turn and resources ---------------------------------------------------------
 
 export function TurnBanner({
-  s, humanTurn, onEndTurn, aiBusy,
+  s, humanTurn, onEndTurn, aiBusy, lordName, waitingText, aside,
 }) {
   const { t, house } = useThroneText();
   const h = currentHouse(s);
@@ -82,10 +82,13 @@ export function TurnBanner({
           <span className="throne-turn-ring pointer-events-none absolute -inset-1 rounded-full" style={{ '--ring': HOUSES[h].color }} />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="throne-label truncate">{t('throne.ui.turnOf', { round: s.round, limit: s.roundLimit })}</p>
+          <p className="throne-label flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate">{t('throne.ui.turnOf', { round: s.round, limit: s.roundLimit })}</span>
+            {aside}
+          </p>
           <p className="throne-heading truncate text-[19px] leading-tight 4xl:text-[24px]" style={{ color: HOUSES[h].color }} title={house(h)}>{house(h)}</p>
           <p className="truncate text-[12px] text-[#e9dfc8]/60">
-            {me.name || (me.control === 'ai' ? t('throne.ui.ai') : t('throne.ui.human'))}
+            {lordName ?? (me.name || (me.control === 'ai' ? t('throne.ui.ai') : t('throne.ui.human')))}
             {' · '}
             <span className="italic">{t(`throne.words.${h}`)}</span>
           </p>
@@ -98,16 +101,16 @@ export function TurnBanner({
       ) : (
         <span className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-2 text-[12.5px] text-[#e9dfc8]/70">
           <span className={`h-2 w-2 rounded-full bg-[#d9b765] ${aiBusy ? 'animate-pulse' : ''}`} />
-          {t('throne.ui.aiThinking')}
+          {waitingText || t('throne.ui.aiThinking')}
         </span>
       )}
     </section>
   );
 }
 
-export function ResourcesPanel({ s }) {
+export function ResourcesPanel({ s, house: viewerHouse }) {
   const { t } = useThroneText();
-  const h = currentHouse(s);
+  const h = viewerHouse || currentHouse(s);
   const me = s.houses[h];
   const army = armyOf(s, h);
   const cap = armyCap(s, h);
@@ -130,7 +133,7 @@ export function ResourcesPanel({ s }) {
   );
 }
 
-export function HouseRoster({ s, onSelectHouse }) {
+export function HouseRoster({ s, onSelectHouse, names }) {
   const { t, house } = useThroneText();
   const cur = currentHouse(s);
   const king = throneHolder(s);
@@ -159,6 +162,7 @@ export function HouseRoster({ s, onSelectHouse }) {
                     {king === h && <span className="ml-1 text-[#e8c262]" title={t('throne.ui.ironThrone')}>♛</span>}
                     {ally && <span className="ml-1 text-[11px] text-[#8fc1dd]">· {t('throne.ui.ally')}</span>}
                   </p>
+                  {names?.[h] && <p className="truncate text-[11px] leading-tight text-[#e9dfc8]/50">{names[h]}</p>}
                   <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-black/50">
                     <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, (vp / s.target) * 100)}%`, background: HOUSES[h].color }} />
                   </div>
@@ -437,10 +441,10 @@ export function ThronePanel({ s }) {
 // --- Cards and diplomacy ---------------------------------------------------------------
 
 export function HandPanel({
-  s, humanTurn, targeting, onPlay, onBuy, onCancelTarget,
+  s, humanTurn, targeting, onPlay, onBuy, onCancelTarget, me: viewerHouse,
 }) {
   const { t } = useThroneText();
-  const h = currentHouse(s);
+  const h = viewerHouse || currentHouse(s);
   const me = s.houses[h];
   const canBuy = humanTurn && me.gold >= COST.card && me.hand.length < HAND_LIMIT;
   return (
@@ -484,10 +488,10 @@ export function HandPanel({
 }
 
 export function DiplomacyPanel({
-  s, humanTurn, onPropose, onBetray,
+  s, humanTurn, onPropose, onBetray, me: viewerHouse,
 }) {
   const { t, house } = useThroneText();
-  const h = currentHouse(s);
+  const h = viewerHouse || currentHouse(s);
   const me = s.houses[h];
   const cost = allianceCost(s);
   const others = s.order.filter((o) => o !== h && !s.houses[o].out);
@@ -612,7 +616,7 @@ export function BattleReport({ report, onClose }) {
   );
 }
 
-export function ProposalDialog({ s, onRespond }) {
+export function ProposalDialog({ s, onRespond, online = false }) {
   const { t, house } = useThroneText();
   const { from, to } = s.proposal;
   return (
@@ -634,7 +638,7 @@ export function ProposalDialog({ s, onRespond }) {
         <SigilBadge house={to} className="h-16 w-16" />
       </div>
       <p className="mt-3 text-center text-[14px] text-[#e9dfc8]/85">{t('throne.ui.proposalText', { from: house(from), to: house(to), n: s.round + ALLIANCE_ROUNDS })}</p>
-      <p className="mt-2 text-center text-[12px] text-[#e9dfc8]/50">{t('throne.ui.passDevice', { house: house(to) })}</p>
+      {!online && <p className="mt-2 text-center text-[12px] text-[#e9dfc8]/50">{t('throne.ui.passDevice', { house: house(to) })}</p>}
     </Modal>
   );
 }

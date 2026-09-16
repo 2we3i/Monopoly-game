@@ -6,10 +6,15 @@
 // and keeping the connections apart means neither hook can break the
 // other. The state this hook holds is whatever the SERVER decided this
 // player may see - there is no client-side copy of anyone's role.
+//
+// Reconnecting is handled by lib/roomSession: the seat is re-announced on
+// every connect, not just the first, and a seat that is gone for good
+// turns into a place in the gallery instead of throwing the player out.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { announce, getGuestKey, getPlayerId } from '../lib/identity';
+import { bindRejoin, forgetRoom, rememberRoom } from '../lib/roomSession';
 
 const ROOM_KEY = 'landmark_mafia_room';
 const NICKNAME_KEY = 'landmark_nickname';
@@ -26,6 +31,7 @@ export function useMafia(authToken, { enabled }) {
   const [error, setError] = useState(null);
   const [chat, setChat] = useState([]);
   const [roomCode, setRoomCode] = useState(() => localStorage.getItem(ROOM_KEY) || null);
+  const [spectating, setSpectating] = useState(false);
   const [busy, setBusy] = useState(false);
   // Set by "Change settings" on the game-over screen, so the lobby the
   // room returns to opens with the rules already on screen.
@@ -33,10 +39,11 @@ export function useMafia(authToken, { enabled }) {
   const playerId = getPlayerId();
 
   const clearRoom = useCallback(() => {
-    localStorage.removeItem(ROOM_KEY);
+    forgetRoom(ROOM_KEY);
     setRoomCode(null);
     setState(null);
     setChat([]);
+    setSpectating(false);
   }, []);
 
   useEffect(() => {
@@ -50,7 +57,10 @@ export function useMafia(authToken, { enabled }) {
 
     socket.on('connect', () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
-    socket.on('mafia:state', (next) => setState(next));
+    socket.on('mafia:state', (next) => {
+      setState(next);
+      setSpectating(!!next.spectating);
+    });
     socket.on('mafia:chat', (msg) => setChat((prev) => [...prev.slice(-199), msg]));
     socket.on('mafia:system', (msg) => setChat((prev) => [...prev.slice(-199), { ...msg, system: true, ts: Date.now() }]));
     socket.on('mafia:error', (err) => {
@@ -64,27 +74,30 @@ export function useMafia(authToken, { enabled }) {
     });
     socket.on('account:blocked', (payload) => announce('blocked', payload));
 
-    // A saved room code means "I was in a game" - rejoin it as soon as
-    // the socket is up, exactly as the Monopoly side does.
-    const saved = localStorage.getItem(ROOM_KEY);
-    if (saved) {
-      const rejoin = () => socket.emit('mafia:join', {
-        roomCode: saved,
-        playerId,
-        nickname: localStorage.getItem(NICKNAME_KEY),
-        token: authTokenRef.current,
-        guestKey: getGuestKey(),
-      }, (res) => {
-        if (res?.ok) {
-          setRoomCode(res.roomCode);
-          setState(res.state);
-        } else {
-          localStorage.removeItem(ROOM_KEY);
-          setRoomCode(null);
-        }
-      });
-      if (socket.connected) rejoin(); else socket.once('connect', rejoin);
-    }
+    bindRejoin(socket, {
+      joinEvent: 'mafia:join',
+      spectateEvent: 'mafia:spectate',
+      roomKey: ROOM_KEY,
+      nicknameKey: NICKNAME_KEY,
+      playerId,
+      getToken: () => authTokenRef.current,
+      getGuestKey,
+      onJoined: (res) => {
+        setRoomCode(res.roomCode);
+        setState(res.state);
+        setSpectating(false);
+      },
+      onWatching: (res) => {
+        setRoomCode(res.roomCode);
+        setState(res.state);
+        setSpectating(true);
+      },
+      onLost: () => {
+        setRoomCode(null);
+        setState(null);
+        setSpectating(false);
+      },
+    });
 
     return () => socket.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -98,14 +111,15 @@ export function useMafia(authToken, { enabled }) {
     socketRef.current?.emit(event, payload);
   }, []);
 
-  const request = useCallback((event, payload, fallback) => new Promise((resolve, reject) => {
+  const request = useCallback((event, payload, fallback, watching = false) => new Promise((resolve, reject) => {
     setBusy(true);
     socketRef.current.emit(event, payload, (res) => {
       setBusy(false);
       if (res?.ok) {
-        localStorage.setItem(ROOM_KEY, res.roomCode);
+        rememberRoom(ROOM_KEY, res.roomCode, watching);
         setRoomCode(res.roomCode);
         setState(res.state);
+        setSpectating(watching || !!res.spectator);
         resolve(res);
       } else {
         const err = new Error(res?.error || fallback);
@@ -126,13 +140,26 @@ export function useMafia(authToken, { enabled }) {
     if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
     return request('mafia:join', {
       roomCode: code, nickname, playerId, token: authTokenRef.current, guestKey: getGuestKey(),
-    }, 'Could not join the room.');
+    }, 'Could not join the room.').catch((err) => {
+      // A room that will not seat us is still a room we may watch.
+      if (err.code !== 'SEAT_GONE') throw err;
+      return request('mafia:spectate', {
+        roomCode: code, nickname, playerId, token: authTokenRef.current, guestKey: getGuestKey(),
+      }, 'Could not watch the room.', true);
+    });
+  }, [playerId, request]);
+
+  const spectateRoom = useCallback((code, nickname) => {
+    if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
+    return request('mafia:spectate', {
+      roomCode: code, nickname, playerId, token: authTokenRef.current, guestKey: getGuestKey(),
+    }, 'Could not watch the room.', true);
   }, [playerId, request]);
 
   const leaveRoom = useCallback(() => {
-    socketRef.current?.emit('mafia:leave');
+    socketRef.current?.emit(spectating ? 'mafia:unspectate' : 'mafia:leave');
     clearRoom();
-  }, [clearRoom]);
+  }, [clearRoom, spectating]);
 
   return {
     connected,
@@ -140,10 +167,12 @@ export function useMafia(authToken, { enabled }) {
     error,
     chat,
     roomCode,
+    spectating,
     busy,
     playerId,
     createRoom,
     joinRoom,
+    spectateRoom,
     leaveRoom,
     settingsRequested,
     clearSettingsRequest: () => setSettingsRequested(false),
@@ -155,6 +184,17 @@ export function useMafia(authToken, { enabled }) {
       start: () => emit('mafia:start', {}),
       nightAction: (targetId) => emit('mafia:night', { targetId }),
       donCheck: (targetId) => emit('mafia:night', { secondaryTargetId: targetId }),
+      // Giving up is final: the seat goes, and the player stays on as a
+      // watcher. The confirmation happens before this is ever called.
+      surrender: () => new Promise((resolve) => {
+        socketRef.current?.emit('mafia:surrender', {}, (res) => {
+          if (res?.ok) {
+            rememberRoom(ROOM_KEY, localStorage.getItem(ROOM_KEY), true);
+            setSpectating(true);
+          }
+          resolve(res);
+        });
+      }),
       restart: (startNow) => {
         setSettingsRequested(!startNow);
         emit('mafia:restart', { startNow });

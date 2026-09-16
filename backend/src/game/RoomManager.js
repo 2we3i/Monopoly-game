@@ -9,6 +9,8 @@ const { CitadelsGame } = require('../citadels/CitadelsGame');
 const { BunkerGame } = require('../bunker/BunkerGame');
 const { CatanGame } = require('../catan/CatanGame');
 const { CosmicGame } = require('../cosmic/CosmicGame');
+const { ThroneGame } = require('../throne/ThroneGame');
+const { ChpokGame } = require('../chpok/ChpokGame');
 const db = require('../db/database');
 const platformDb = require('../db/platform');
 const recorder = require('../platform/recorder');
@@ -29,6 +31,8 @@ class RoomManager {
     this.bunkerRooms = new Map();
     this.catanRooms = new Map();
     this.cosmicRooms = new Map();
+    this.throneRooms = new Map();
+    this.chpokRooms = new Map();
     this._loadFromDisk();
     setInterval(() => db.pruneStaleRooms(ROOM_MAX_AGE_MS), 1000 * 60 * 60).unref();
   }
@@ -47,6 +51,10 @@ class RoomManager {
           this.catanRooms.set(roomCode, CatanGame.fromJSON(state));
         } else if (state && state.gameType === 'cosmic') {
           this.cosmicRooms.set(roomCode, CosmicGame.fromJSON(state));
+        } else if (state && state.gameType === 'throne') {
+          this.throneRooms.set(roomCode, ThroneGame.fromJSON(state));
+        } else if (state && state.gameType === 'chpok') {
+          this.chpokRooms.set(roomCode, ChpokGame.fromJSON(state));
         } else {
           this.rooms.set(roomCode, GameManager.fromPersisted(state, hostId));
         }
@@ -60,14 +68,17 @@ class RoomManager {
   }
 
   roomCount() {
-    return this.rooms.size + this.mafiaRooms.size + this.citadelsRooms.size + this.bunkerRooms.size + this.catanRooms.size + this.cosmicRooms.size;
+    return this.rooms.size + this.mafiaRooms.size + this.citadelsRooms.size + this.bunkerRooms.size
+      + this.catanRooms.size + this.cosmicRooms.size + this.throneRooms.size + this.chpokRooms.size;
   }
 
   generateRoomCode() {
     let code;
     do {
       code = Array.from({ length: 5 }, () => ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)]).join('');
-    } while (this.rooms.has(code) || this.mafiaRooms.has(code) || this.citadelsRooms.has(code) || this.bunkerRooms.has(code) || this.catanRooms.has(code) || this.cosmicRooms.has(code));
+    } while (this.rooms.has(code) || this.mafiaRooms.has(code) || this.citadelsRooms.has(code)
+      || this.bunkerRooms.has(code) || this.catanRooms.has(code) || this.cosmicRooms.has(code)
+      || this.throneRooms.has(code) || this.chpokRooms.has(code));
     return code;
   }
 
@@ -231,6 +242,64 @@ class RoomManager {
     this._gone(roomCode, reason);
   }
 
+  // --- Iron Throne rooms ---------------------------------------------
+
+  createThroneRoom(hostId, settings, meta = null) {
+    const code = this.generateRoomCode();
+    const game = new ThroneGame(code, hostId, settings);
+    this.throneRooms.set(code, game);
+    this.persistThrone(code);
+    this._logCreated(code, 'throne', 'throne.classic', meta);
+    return game;
+  }
+
+  getThroneRoom(roomCode) {
+    if (!roomCode) return null;
+    return this.throneRooms.get(String(roomCode).toUpperCase()) || null;
+  }
+
+  persistThrone(roomCode) {
+    const game = this.throneRooms.get(roomCode);
+    if (!game) return;
+    db.saveRoom(roomCode, game.hostId, game.toJSON());
+  }
+
+  deleteThroneRoom(roomCode, reason = 'empty') {
+    if (!this.throneRooms.has(roomCode)) return;
+    this.throneRooms.delete(roomCode);
+    db.deleteRoom(roomCode);
+    this._gone(roomCode, reason);
+  }
+
+  // --- ЧПОК rooms ----------------------------------------------------
+
+  createChpokRoom(hostId, settings, meta = null) {
+    const code = this.generateRoomCode();
+    const game = new ChpokGame(code, hostId, settings);
+    this.chpokRooms.set(code, game);
+    this.persistChpok(code);
+    this._logCreated(code, 'chpok', 'chpok.party', meta);
+    return game;
+  }
+
+  getChpokRoom(roomCode) {
+    if (!roomCode) return null;
+    return this.chpokRooms.get(String(roomCode).toUpperCase()) || null;
+  }
+
+  persistChpok(roomCode) {
+    const game = this.chpokRooms.get(roomCode);
+    if (!game) return;
+    db.saveRoom(roomCode, game.hostId, game.toJSON());
+  }
+
+  deleteChpokRoom(roomCode, reason = 'empty') {
+    if (!this.chpokRooms.has(roomCode)) return;
+    this.chpokRooms.delete(roomCode);
+    db.deleteRoom(roomCode);
+    this._gone(roomCode, reason);
+  }
+
   // What kind of game a code refers to, for callers that only have the
   // code (a player rejoining from a saved link, for instance).
   roomKind(roomCode) {
@@ -242,6 +311,8 @@ class RoomManager {
     if (this.bunkerRooms.has(code)) return 'bunker';
     if (this.catanRooms.has(code)) return 'catan';
     if (this.cosmicRooms.has(code)) return 'cosmic';
+    if (this.throneRooms.has(code)) return 'throne';
+    if (this.chpokRooms.has(code)) return 'chpok';
     return null;
   }
 

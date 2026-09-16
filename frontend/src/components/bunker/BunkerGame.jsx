@@ -13,6 +13,7 @@ import PlayerAvatar from '../PlayerAvatar';
 import Icon from '../icons';
 import RoomChat from '../chat/RoomChat';
 import SocialBar from '../social/SocialBar';
+import { SpectatorBanner, SpectatorStrip, SurrenderButton } from '../room/RoomStatus';
 import FramedAvatar from '../../cosmetics/FramedAvatar';
 import { StyledName } from '../../cosmetics/Cosmetics';
 import { useOutcomeEffects, useTurnSound } from '../../cosmetics/useGameCosmetics';
@@ -46,7 +47,9 @@ function Timer({ endsAt, t }) {
   );
 }
 
-function TopBar({ state, onLeave, t }) {
+function TopBar({
+  state, onLeave, t, actions, spectating,
+}) {
   return (
     <header className="bunker-plate flex flex-wrap items-center gap-3 px-4 py-3 4xl:px-6 4xl:py-4">
       <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-black/40 text-[22px] 4xl:h-14 4xl:w-14 4xl:text-[28px]" aria-hidden="true">☢️</span>
@@ -56,6 +59,12 @@ function TopBar({ state, onLeave, t }) {
       </div>
       <Timer endsAt={state.phaseEndsAt} t={t} />
       <SocialBar compact />
+      {/* Giving up is in every mode where a player can be knocked out.
+          It asks for a confirmation and then ends this player's game. */}
+      {!spectating && actions?.surrender && state.phase !== 'GAME_OVER'
+        && state.players.some((p) => p.isYou && !p.left) && (
+        <SurrenderButton onSurrender={actions.surrender} />
+      )}
       <button type="button" onClick={onLeave} className="btn-quiet px-3 py-2 text-[12.5px]">{t('waiting.leave')}</button>
     </header>
   );
@@ -502,7 +511,7 @@ function GameOver({
 }
 
 export default function BunkerGame({
-  state, chat, actions, onLeave,
+  state, chat, actions, onLeave, spectating,
 }) {
   const { t, language } = useTranslation();
   const config = useBunkerConfig();
@@ -533,7 +542,9 @@ export default function BunkerGame({
   return (
     <div className="table-bunker min-h-screen">
       <div className="mx-auto flex max-w-7xl flex-col gap-3 px-3 py-4 3xl:max-w-[1760px] 4xl:max-w-[2360px] 4xl:gap-5 4xl:px-8 4xl:py-8 5xl:max-w-[3100px]">
-        <TopBar state={state} onLeave={onLeave} t={t} />
+        <TopBar state={state} onLeave={onLeave} t={t} actions={actions} spectating={spectating} />
+        {spectating && <SpectatorBanner onLeave={onLeave} />}
+        <SpectatorStrip spectators={state.spectators} />
 
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4 4xl:gap-3">
           <Stat label={t('bunker.seatsLabel')} value={state.seats} hint={t('bunker.seatsHint')} />

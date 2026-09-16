@@ -23,6 +23,8 @@ function catalog() {
     { id: 'bunker.classic', gameId: 'bunker', variant: 'classic', label: { en: 'Bunker', ru: 'Бункер' } },
     { id: 'catan.classic', gameId: 'catan', variant: 'classic', label: { en: 'Catan', ru: 'Колонизаторы' } },
     { id: 'cosmic.classic', gameId: 'cosmic', variant: 'classic', label: { en: 'Cosmic Encounter', ru: 'Космический контакт' } },
+    { id: 'throne.classic', gameId: 'throne', variant: 'classic', label: { en: 'The Iron Throne', ru: 'Железный трон' } },
+    { id: 'chpok.party', gameId: 'chpok', variant: 'party', label: { en: 'ЧПОК Party', ru: 'ЧПОК: вечеринка' } },
   ];
 }
 

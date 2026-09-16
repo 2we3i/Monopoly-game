@@ -12,6 +12,10 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
+# The Iron Throne rules and the ЧПОК decks are shared with the server; the
+# client build imports both from here (see frontend/vite.config.js).
+COPY backend/src/throne/ /app/backend/src/throne/
+COPY backend/src/chpok/ /app/backend/src/chpok/
 RUN npm run build
 
 # ---- Stage 2: install backend production dependencies ----

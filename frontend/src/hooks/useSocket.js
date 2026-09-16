@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { announce, getGuestKey, getPlayerId } from '../lib/identity';
+import { bindRejoin, forgetRoom, rememberRoom } from '../lib/roomSession';
 
 const ROOM_CODE_KEY = 'landmark_room_code';
 const NICKNAME_KEY = 'landmark_nickname';
@@ -19,6 +20,8 @@ function stamp(state) {
 
 export function useSocket(authToken) {
   const socketRef = useRef(null);
+  // joinRoom may need to fall back to watching, which is defined after it.
+  const spectateRoomRef = useRef(() => Promise.reject(new Error('not ready')));
   const [connected, setConnected] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
   const [gameState, setGameState] = useState(null);
@@ -28,14 +31,17 @@ export function useSocket(authToken) {
   const [roomCode, setRoomCode] = useState(() => localStorage.getItem(ROOM_CODE_KEY) || null);
   const [joining, setJoining] = useState(false);
   const [rehydrating, setRehydrating] = useState(() => !!localStorage.getItem(ROOM_CODE_KEY));
+  // A watcher is in the room but has no seat in it.
+  const [spectating, setSpectating] = useState(false);
   const authTokenRef = useRef(authToken);
   authTokenRef.current = authToken;
 
   const clearRoom = useCallback(() => {
-    localStorage.removeItem(ROOM_CODE_KEY);
+    forgetRoom(ROOM_CODE_KEY);
     setRoomCode(null);
     setGameState(null);
     setChatMessages([]);
+    setSpectating(false);
   }, []);
 
   useEffect(() => {
@@ -72,32 +78,37 @@ export function useSocket(authToken) {
     });
     socket.on('account:blocked', (payload) => announce('blocked', payload));
 
-    const savedRoom = localStorage.getItem(ROOM_CODE_KEY);
-    if (savedRoom) {
-      const attemptRejoin = () => {
-        socket.emit('room:join', {
-          roomCode: savedRoom,
-          playerId,
-          nickname: localStorage.getItem(NICKNAME_KEY),
-          token: authTokenRef.current,
-          guestKey: getGuestKey(),
-        }, (res) => {
-          if (res?.ok) {
-            setRoomCode(res.roomCode);
-            setGameState(stamp(res.state));
-            setPlayerId(res.playerId);
-          } else {
-            localStorage.removeItem(ROOM_CODE_KEY);
-            setRoomCode(null);
-          }
-          setRehydrating(false);
-        });
-      };
-      if (socket.connected) attemptRejoin();
-      else socket.once('connect', attemptRejoin);
-    } else {
-      setRehydrating(false);
-    }
+    // Re-announced on EVERY connect, not just the first: a reconnect is a
+    // new socket on the server, with none of this one's room bindings.
+    bindRejoin(socket, {
+      joinEvent: 'room:join',
+      spectateEvent: 'room:spectate',
+      roomKey: ROOM_CODE_KEY,
+      nicknameKey: NICKNAME_KEY,
+      playerId,
+      getToken: () => authTokenRef.current,
+      getGuestKey,
+      onJoined: (res) => {
+        setRoomCode(res.roomCode);
+        setGameState(stamp(res.state));
+        setPlayerId(res.playerId);
+        setSpectating(false);
+        setRehydrating(false);
+      },
+      onWatching: (res) => {
+        setRoomCode(res.roomCode);
+        setGameState(stamp(res.state));
+        setSpectating(true);
+        setRehydrating(false);
+      },
+      onLost: () => {
+        setRoomCode(null);
+        setGameState(null);
+        setSpectating(false);
+        setRehydrating(false);
+      },
+      onIdle: () => setRehydrating(false),
+    });
 
     return () => {
       socket.disconnect();
@@ -118,10 +129,11 @@ export function useSocket(authToken) {
     }, (res) => {
       setJoining(false);
       if (res?.ok) {
-        localStorage.setItem(ROOM_CODE_KEY, res.roomCode);
+        rememberRoom(ROOM_CODE_KEY, res.roomCode, false);
         setRoomCode(res.roomCode);
         setGameState(stamp(res.state));
         setPlayerId(res.playerId);
+        setSpectating(false);
         resolve(res);
       } else {
         const err = new Error(res?.error || 'Failed to create room.');
@@ -139,25 +151,56 @@ export function useSocket(authToken) {
     }, (res) => {
       setJoining(false);
       if (res?.ok) {
-        localStorage.setItem(ROOM_CODE_KEY, res.roomCode);
+        rememberRoom(ROOM_CODE_KEY, res.roomCode, false);
         setRoomCode(res.roomCode);
         setGameState(stamp(res.state));
         setPlayerId(res.playerId);
+        setSpectating(false);
         resolve(res);
       } else {
         const err = new Error(res?.error || 'Failed to join room.');
         err.code = res?.code || null;
+        // A room that will not seat us is still a room we may watch.
+        if (err.code === 'SEAT_GONE') {
+          // eslint-disable-next-line no-use-before-define
+          spectateRoomRef.current(code, nickname).then(resolve, reject);
+          return;
+        }
         reject(err);
       }
     });
   }), [playerId]);
 
+  // Watching takes no seat: the server sends the same public board, and
+  // this client simply has no events with which to act on it.
+  const spectateRoom = useCallback((code, nickname) => new Promise((resolve, reject) => {
+    setJoining(true);
+    if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
+    socketRef.current.emit('room:spectate', {
+      roomCode: code, nickname, playerId, token: authTokenRef.current, guestKey: getGuestKey(),
+    }, (res) => {
+      setJoining(false);
+      if (res?.ok) {
+        rememberRoom(ROOM_CODE_KEY, res.roomCode, true);
+        setRoomCode(res.roomCode);
+        setGameState(stamp(res.state));
+        setSpectating(true);
+        resolve(res);
+      } else {
+        const err = new Error(res?.error || 'Failed to watch this room.');
+        err.code = res?.code || null;
+        reject(err);
+      }
+    });
+  }), [playerId]);
+  spectateRoomRef.current = spectateRoom;
+
   const leaveRoom = useCallback(() => {
-    socketRef.current?.emit('room:leave');
+    socketRef.current?.emit(spectating ? 'room:unspectate' : 'room:leave');
     clearRoom();
     socketRef.current.disconnect();
     socketRef.current.connect();
-  }, [clearRoom]);
+  }, [clearRoom, spectating]);
 
   const send = useCallback((event, payload) => {
     socketRef.current?.emit(event, payload);
@@ -186,6 +229,17 @@ export function useSocket(authToken) {
     placeBid: (auctionId, amount) => send('game:placeBid', { auctionId, amount }),
     withdrawAuction: (auctionId) => send('game:withdrawAuction', { auctionId }),
     sendChat: (text, extra = {}) => send('chat:message', { ...extra, text }),
+    // Giving up is final: mid-game it is a bankruptcy, and the player
+    // stays on as a watcher. The confirmation happens before this call.
+    surrender: () => new Promise((resolve) => {
+      socketRef.current?.emit('room:surrender', {}, (res) => {
+        if (res?.ok) {
+          rememberRoom(ROOM_CODE_KEY, localStorage.getItem(ROOM_CODE_KEY), true);
+          setSpectating(true);
+        }
+        resolve(res);
+      });
+    }),
   };
 
   return {
@@ -196,10 +250,12 @@ export function useSocket(authToken) {
     chatMessages,
     playerId,
     roomCode,
+    spectating,
     joining,
     rehydrating,
     createRoom,
     joinRoom,
+    spectateRoom,
     leaveRoom,
     savedNickname: localStorage.getItem(NICKNAME_KEY) || '',
     ...actions,

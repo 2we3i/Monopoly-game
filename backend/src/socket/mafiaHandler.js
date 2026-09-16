@@ -21,6 +21,7 @@ const bans = require('../platform/bans');
 const {
   notifyRemoved, clientMessage, errorPayload, idString,
 } = require('./roomSockets');
+const liveRoom = require('./liveRoom');
 
 const { AccessError } = access;
 const MODE_ID = 'mafia.classic';
@@ -41,6 +42,15 @@ const roomChat = require('../social/roomChat');
 function clientState(game, viewerId) {
   const state = game.toClientJSON(viewerId);
   state.players = roomChat.decoratePlayers(state.players, (p) => game.getPlayer(p.id)?.accountId);
+  return liveRoom.decorate(state, game.roomCode);
+}
+
+// A watcher has no seat, so they get the payload built for nobody: the
+// engine hides every role from a viewer it does not recognise, which is
+// exactly what a spectator may see.
+function spectatorState(game) {
+  const state = clientState(game, null);
+  state.spectating = true;
   return state;
 }
 
@@ -52,6 +62,7 @@ function broadcast(io, roomCode) {
     if (!player.socketId) return;
     io.to(player.socketId).emit('mafia:state', clientState(game, player.id));
   });
+  liveRoom.sendToSpectators(io, roomCode, 'mafia:state', () => spectatorState(game));
   registry.observe('mafia', game);
 }
 
@@ -109,6 +120,45 @@ function stageOf(phase) {
   if (phase === PHASES.LOBBY) return 'lobby';
   if (phase === PHASES.GAME_OVER) return 'finished';
   return 'active';
+}
+
+// A phase that nobody is still expected to act in must not sit out its
+// clock: after a seat empties, the remaining table may already be done.
+function advanceIfSettled(io, roomCode) {
+  const game = roomManager.getMafiaRoom(roomCode);
+  if (!game) return;
+  if (game.phase === PHASES.NIGHT && game.everyoneActed()) advanceEarly(io, roomCode);
+  else if (game.phase === PHASES.VOTE && game.everyoneVoted()) advanceEarly(io, roomCode);
+}
+
+// One player stops being a player: they gave up, their twenty seconds ran
+// out, or they walked out. All three end the same way in the engine - a
+// mid-game departure is a death - and the room is told which it was.
+function dropPlayer(io, roomCode, playerId, reason) {
+  const game = roomManager.getMafiaRoom(roomCode);
+  if (!game) return;
+  const player = game.getPlayer(playerId);
+  if (!player || player.exitReason) return;
+  const { nickname } = player;
+  liveRoom.disarmDrop(roomCode, playerId);
+  liveRoom.markExit(game, playerId, reason);
+  game.removePlayer(playerId);
+
+  if (game.players.length === 0) {
+    clearPhaseTimer(roomCode);
+    liveRoom.disarmRoom(roomCode);
+    roomManager.deleteMafiaRoom(roomCode, 'empty');
+    liveRoom.closeSpectators(io, roomCode, 'mafia', 'empty');
+    return;
+  }
+  if (game.phase !== PHASES.LOBBY && game.phase !== PHASES.GAME_OVER) game.checkWin();
+  io.to(roomCode).emit('mafia:system', {
+    type: reason === 'surrender' ? 'PLAYER_SURRENDERED' : 'PLAYER_DROPPED',
+    params: { name: nickname },
+  });
+  broadcast(io, roomCode);
+  schedulePhase(io, roomCode);
+  advanceIfSettled(io, roomCode);
 }
 
 function resultFor(game, player) {
@@ -174,6 +224,8 @@ registry.register({
     game.players.forEach((p) => notifyRemoved(ioRef, p.socketId, {
       gameType: 'mafia', roomCode: code, reason, dataKeys: DATA_KEYS,
     }));
+    liveRoom.disarmRoom(code);
+    liveRoom.closeSpectators(ioRef, code, 'mafia', reason);
     roomManager.deleteMafiaRoom(code, reason);
     return true;
   },
@@ -182,13 +234,9 @@ registry.register({
     const player = game?.getPlayer(playerId);
     if (!player) return false;
     notifyRemoved(ioRef, player.socketId, { gameType: 'mafia', roomCode: code, reason, dataKeys: DATA_KEYS });
-    game.removePlayer(playerId);
     game.setConnected(playerId, false);
-    if (game.players.length === 0) {
-      this.close(code, reason);
-      return true;
-    }
-    if (game.phase !== PHASES.LOBBY && game.phase !== PHASES.GAME_OVER) game.checkWin();
+    dropPlayer(ioRef, code, playerId, 'kicked');
+    if (!roomManager.getMafiaRoom(code)) return true;
     broadcast(ioRef, code);
     schedulePhase(ioRef, code);
     return true;
@@ -259,7 +307,12 @@ function registerMafiaHandlers(io) {
           throw new AccessError('You were removed from this room.', 'BANNED');
         }
         const existing = game.getPlayer(identity.playerId);
-        if (existing) access.assertCanClaimSeat(existing, identity);
+        if (existing) {
+          access.assertCanClaimSeat(existing, identity);
+          // Out is out: a player who surrendered, walked out or ran out of
+          // grace cannot take their seat back - only watch.
+          liveRoom.assertSeatReclaimable(existing);
+        }
         if (!existing && !identity.nickname) throw new MafiaError('Nickname is required.');
         if (!existing && game.players.length >= MAX_PLAYERS) {
           throw new MafiaError(`This room is full (${MAX_PLAYERS} players).`);
@@ -268,6 +321,9 @@ function registerMafiaHandlers(io) {
           ? game.setConnected(identity.playerId, true, socket.id)
           : game.addPlayer({ ...identity, socketId: socket.id });
         if (existing) existing.left = false;
+        // Back inside the grace period: nothing happened at all.
+        liveRoom.disarmDrop(game.roomCode, player.id);
+        liveRoom.unwatch(socket);
 
         socket.join(game.roomCode);
         socket.data.mafiaRoom = game.roomCode;
@@ -450,6 +506,70 @@ function registerMafiaHandlers(io) {
       });
     });
 
+    // --- watching -----------------------------------------------------
+
+    // Anyone may watch a Mafia room, at any point in the game, without
+    // taking a seat. The payload a watcher gets is built for no viewer at
+    // all, so no living player's role is in it.
+    socket.on('mafia:spectate', (payload, cb) => {
+      try {
+        const {
+          roomCode, nickname, playerId, token, guestKey,
+        } = payload || {};
+        const game = roomManager.getMafiaRoom(roomCode);
+        if (!game) throw new MafiaError('Room not found. Check the code and try again.');
+        const identity = access.resolveIdentity({
+          token, playerId, nickname, guestKey,
+        });
+        if (bans.isBanned(game.roomCode, identity.playerId)) {
+          throw new AccessError('You were removed from this room.', 'BANNED');
+        }
+        // Someone with a live seat here is a player, not a watcher.
+        const seat = game.getPlayer(identity.playerId);
+        if (seat && !seat.left) throw new MafiaError('You are playing in this room.');
+        const viewer = liveRoom.watch(socket, game.roomCode, 'mafia', identity);
+        if (!viewer) throw new MafiaError('This room has too many spectators already.');
+        cb?.({ ok: true, roomCode: game.roomCode, spectator: true, state: spectatorState(game) });
+        broadcast(io, game.roomCode);
+      } catch (err) {
+        cb?.(errorPayload(err, [MafiaError]));
+      }
+    });
+
+    socket.on('mafia:unspectate', () => {
+      const roomCode = liveRoom.unwatch(socket);
+      if (roomCode) broadcast(io, roomCode);
+    });
+
+    // --- giving up ----------------------------------------------------
+
+    // Surrender is a real exit, not a disconnect: the seat is gone at once
+    // and cannot be reclaimed. The confirmation happens in the client; by
+    // the time this arrives the player has already said yes.
+    socket.on('mafia:surrender', (payload, cb) => {
+      const roomCode = socket.data.mafiaRoom;
+      const playerId = socket.data.mafiaPlayerId;
+      try {
+        const game = roomManager.getMafiaRoom(roomCode);
+        const player = game?.getPlayer(playerId);
+        if (!game || !player) throw new MafiaError('You are not in a Mafia room.');
+        if (player.exitReason) throw new MafiaError('You have already left this game.');
+        dropPlayer(io, roomCode, playerId, 'surrender');
+        // A player who gave up mid-game keeps watching from the gallery.
+        if (roomManager.getMafiaRoom(roomCode)) {
+          liveRoom.watch(socket, roomCode, 'mafia', {
+            playerId, nickname: player.nickname, accountId: player.accountId, avatarUrl: player.avatarUrl,
+          });
+          broadcast(io, roomCode);
+        }
+        cb?.({ ok: true });
+      } catch (err) {
+        const message = clientMessage(err, [MafiaError]);
+        sendError(socket, message);
+        cb?.({ ok: false, error: message });
+      }
+    });
+
     socket.on('mafia:leave', () => {
       const roomCode = socket.data.mafiaRoom;
       const playerId = socket.data.mafiaPlayerId;
@@ -457,27 +577,32 @@ function registerMafiaHandlers(io) {
       socket.data.mafiaRoom = null;
       socket.data.mafiaPlayerId = null;
       socket.data.mafiaAccountId = null;
+      liveRoom.unwatch(socket);
       if (!game) return;
-      game.removePlayer(playerId);
       socket.leave(roomCode);
-      if (game.players.length === 0) {
-        clearPhaseTimer(roomCode);
-        roomManager.deleteMafiaRoom(roomCode, 'empty');
-        return;
-      }
-      broadcast(io, roomCode);
+      dropPlayer(io, roomCode, playerId, 'left');
     });
 
     socket.on('disconnect', () => {
       const roomCode = socket.data.mafiaRoom;
       const playerId = socket.data.mafiaPlayerId;
+      const watched = liveRoom.unwatch(socket);
+      if (watched) broadcast(io, watched);
       if (!roomCode || !playerId) return;
       const game = roomManager.getMafiaRoom(roomCode);
       if (!game) return;
+      const player = game.getPlayer(playerId);
+      if (!player || player.exitReason) return;
+      // A socket that closed AFTER its owner had already reconnected is
+      // stale: the seat now answers to a different socket, and treating
+      // this close as a disconnect would knock a player who is sitting
+      // right there offline - and start a countdown on them.
+      if (player.socketId !== socket.id) return;
       game.setConnected(playerId, false);
-      // A disconnect is never a death here: a reload mid-night should
-      // not cost a player their game, and the phase clock keeps running
-      // regardless of who is currently looking at it.
+      // A dropped connection is not a death - yet. The player has twenty
+      // seconds to come back; the room sees the countdown, and only when
+      // it runs out does the seat actually empty.
+      liveRoom.armDrop(roomCode, playerId, () => dropPlayer(io, roomCode, playerId, 'timeout'));
       broadcast(io, roomCode);
     });
   });

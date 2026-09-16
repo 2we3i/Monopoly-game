@@ -59,7 +59,10 @@ class Client {
   close() { this.socket.close(); }
 }
 
-const snapshot = (s) => `${s.turnCount}|${s.encounter?.number}|${s.encounter?.phase}|${s.encounter?.step}|${s.encounter?.responderId}|${JSON.stringify(s.encounter?.passes)}|${s.encounter?.chosen?.offense}${s.encounter?.chosen?.defense}|${s.phase}`;
+// The destiny deck is part of the snapshot on purpose: drawing the
+// offense own colour twice in a row leaves every other field identical,
+// and the room HAS moved on - it dealt another card.
+const snapshot = (s) => `${s.turnCount}|${s.encounter?.number}|${s.encounter?.phase}|${s.encounter?.step}|${s.encounter?.responderId}|${JSON.stringify(s.encounter?.passes)}|${s.encounter?.chosen?.offense}${s.encounter?.chosen?.defense}|${s.phase}|${s.decks?.destiny}|${JSON.stringify(s.encounter?.destiny)}`;
 
 // One legal, simple decision for whoever the game waits on.
 async function decide(clients, host) {

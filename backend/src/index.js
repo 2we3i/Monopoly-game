@@ -19,6 +19,8 @@ const { registerCitadelsHandlers } = require('./socket/citadelsHandler');
 const { registerBunkerHandlers } = require('./socket/bunkerHandler');
 const { registerCatanHandlers } = require('./socket/catanHandler');
 const { registerCosmicHandlers } = require('./socket/cosmicHandler');
+const { registerThroneHandlers } = require('./socket/throneHandler');
+const { registerChpokHandlers } = require('./socket/chpokHandler');
 const db = require('./db/database');
 const accountsDb = require('./db/accounts');
 const platformDb = require('./db/platform');
@@ -81,6 +83,8 @@ registerCitadelsHandlers(io);
 registerBunkerHandlers(io);
 registerCatanHandlers(io);
 registerCosmicHandlers(io);
+registerThroneHandlers(io);
+registerChpokHandlers(io);
 
 server.listen(PORT, '0.0.0.0', () => {
   // eslint-disable-next-line no-console

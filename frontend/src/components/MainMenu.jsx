@@ -204,6 +204,7 @@ export default function MainMenu({
     { id: 'bunker', minPlayers: 4, maxPlayers: 16 },
     { id: 'catan', minPlayers: 2, maxPlayers: 4 },
     { id: 'cosmic', minPlayers: 3, maxPlayers: 5 },
+    { id: 'throne', minPlayers: 2, maxPlayers: 6 },
   ]);
   const [code, setCode] = useState('');
   const isGuest = !auth?.isLoggedIn;
@@ -215,7 +216,9 @@ export default function MainMenu({
     fetch('/api/games')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (!cancelled && data?.games) setGames(data.games);
+        // Adult games are never listed on the front door: they live on
+        // the board games page, behind the age gate.
+        if (!cancelled && data?.games) setGames(data.games.filter((g) => !g.adult));
       })
       .catch(() => { /* the built-in list is a fine fallback */ });
     return () => { cancelled = true; };

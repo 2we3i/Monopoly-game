@@ -16,6 +16,7 @@ const {
   notifyRemoved, clientMessage, errorPayload, idString,
 } = require('./roomSockets');
 const roomChat = require('../social/roomChat');
+const liveRoom = require('./liveRoom');
 
 const { AccessError } = access;
 const MODE_ID = 'citadels.classic';
@@ -31,6 +32,14 @@ function sendError(socket, message) {
 function clientState(game, viewerId) {
   const state = game.toClientJSON(viewerId);
   state.players = roomChat.decoratePlayers(state.players, (p) => game.getPlayer(p.id)?.accountId);
+  return liveRoom.decorate(state, game.roomCode);
+}
+
+// Watchers see the table as a player with no hand does: every city, the
+// crown and the log, but nobody's cards and nobody's chosen role.
+function spectatorState(game) {
+  const state = clientState(game, null);
+  state.spectating = true;
   return state;
 }
 
@@ -41,6 +50,7 @@ function broadcast(io, roomCode) {
   game.players.forEach((p) => {
     if (p.socketId) io.to(p.socketId).emit('citadels:state', clientState(game, p.id));
   });
+  liveRoom.sendToSpectators(io, roomCode, 'citadels:state', () => spectatorState(game));
   registry.observe('citadels', game);
 }
 
@@ -81,6 +91,35 @@ function stageOf(phase) {
 }
 
 const DATA_KEYS = ['citadelsRoom', 'citadelsPlayerId', 'citadelsAccountId'];
+
+// One seat stops being a seat: the player gave up, walked out, or their
+// twenty seconds of grace ran out. The engine turns that into whatever it
+// means at this table; the reason is kept, so everyone can be told which
+// of the three it was.
+function dropPlayer(io, roomCode, playerId, reason) {
+  const game = roomManager.getCitadelsRoom(roomCode);
+  if (!game) return;
+  const player = game.getPlayer(playerId);
+  if (!player || player.exitReason) return;
+  const { nickname } = player;
+  liveRoom.disarmDrop(roomCode, playerId);
+  liveRoom.markExit(game, playerId, reason);
+  game.removePlayer(playerId);
+
+  if (game.players.length === 0 || game.players.every((p) => p.left)) {
+    clearTimer(roomCode);
+    liveRoom.disarmRoom(roomCode);
+    roomManager.deleteCitadelsRoom(roomCode, 'empty');
+    liveRoom.closeSpectators(io, roomCode, 'citadels', 'empty');
+    return;
+  }
+  io.to(roomCode).emit('citadels:system', {
+    type: reason === 'surrender' ? 'PLAYER_SURRENDERED' : 'PLAYER_DROPPED',
+    params: { name: nickname },
+  });
+  broadcast(io, roomCode);
+  schedule(io, roomCode);
+}
 
 registry.register({
   type: 'citadels',
@@ -151,6 +190,8 @@ registry.register({
     game.players.forEach((p) => notifyRemoved(ioRef, p.socketId, {
       gameType: 'citadels', roomCode: code, reason, dataKeys: DATA_KEYS,
     }));
+    liveRoom.disarmRoom(code);
+    liveRoom.closeSpectators(ioRef, code, 'citadels', reason);
     roomManager.deleteCitadelsRoom(code, reason);
     return true;
   },
@@ -159,11 +200,8 @@ registry.register({
     const player = game?.getPlayer(playerId);
     if (!player) return false;
     notifyRemoved(ioRef, player.socketId, { gameType: 'citadels', roomCode: code, reason, dataKeys: DATA_KEYS });
-    game.removePlayer(playerId);
-    if (game.players.length === 0 || game.players.every((p) => p.left)) {
-      this.close(code, reason);
-      return true;
-    }
+    dropPlayer(ioRef, code, playerId, 'kicked');
+    if (!roomManager.getCitadelsRoom(code)) return true;
     broadcast(ioRef, code);
     schedule(ioRef, code);
     return true;
@@ -205,6 +243,9 @@ function registerCitadelsHandlers(io) {
           accountId: identity.accountId, nickname: identity.nickname,
         });
         const player = game.addPlayer({ ...identity, socketId: socket.id });
+        // Back inside the twenty seconds: nothing happened at all.
+        liveRoom.disarmDrop(game.roomCode, player.id);
+        liveRoom.unwatch(socket);
         socket.join(game.roomCode);
         socket.data.citadelsRoom = game.roomCode;
         socket.data.citadelsPlayerId = player.id;
@@ -234,6 +275,9 @@ function registerCitadelsHandlers(io) {
         const existing = game.getPlayer(identity.playerId);
         if (existing) {
           access.assertCanClaimSeat(existing, identity);
+          // Out is out: a seat somebody gave up cannot be taken back, and
+          // the client turns this refusal into a place in the gallery.
+          liveRoom.assertSeatReclaimable(existing);
         } else if (!identity.nickname) {
           throw new CitadelsError('Nickname is required.');
         }
@@ -308,29 +352,98 @@ function registerCitadelsHandlers(io) {
       roomChat.notifyMentions(message, { players: game.players, context: { kind: 'room', gameType: 'citadels', roomCode: game.roomCode } });
     });
 
+    // --- watching -----------------------------------------------------
+
+    // Anyone may watch a room without taking a seat, before or after the
+    // game started. A watcher is sent the payload built for no viewer at
+    // all, so nothing private is in it, and has no events with which to
+    // act on the game.
+    socket.on('citadels:spectate', (payload, cb) => {
+      try {
+        const {
+          roomCode, nickname, playerId, token, guestKey,
+        } = payload || {};
+        const game = roomManager.getCitadelsRoom(roomCode);
+        if (!game) throw new CitadelsError('Room not found. Check the code and try again.');
+        const identity = access.resolveIdentity({
+          token, playerId, nickname, guestKey,
+        });
+        if (bans.isBanned(game.roomCode, identity.playerId)) {
+          throw new AccessError('You were removed from this room.', 'BANNED');
+        }
+        const own = game.getPlayer(identity.playerId);
+        if (own && !own.left) throw new CitadelsError('You are playing in this room.');
+        const viewer = liveRoom.watch(socket, game.roomCode, 'citadels', identity);
+        if (!viewer) throw new CitadelsError('This room has too many spectators already.');
+        cb?.({ ok: true, roomCode: game.roomCode, spectator: true, state: spectatorState(game) });
+        broadcast(io, game.roomCode);
+      } catch (err) {
+        cb?.(errorPayload(err, [CitadelsError]));
+      }
+    });
+
+    socket.on('citadels:unspectate', () => {
+      const watched = liveRoom.unwatch(socket);
+      if (watched) broadcast(io, watched);
+    });
+
+    // --- giving up ----------------------------------------------------
+
+    // The client has already asked for a confirmation by the time this
+    // arrives. Surrendering is final; the player stays on as a watcher.
+    socket.on('citadels:surrender', (payload, cb) => {
+      const roomCode = socket.data.citadelsRoom;
+      const playerId = socket.data.citadelsPlayerId;
+      try {
+        const game = roomManager.getCitadelsRoom(roomCode);
+        const player = game?.getPlayer(playerId);
+        if (!game || !player) throw new CitadelsError('You are not in a Citadels room.');
+        if (player.exitReason) throw new CitadelsError('You have already left this game.');
+        const seat = {
+          playerId, nickname: player.nickname, accountId: player.accountId, avatarUrl: player.avatarUrl,
+        };
+        dropPlayer(io, roomCode, playerId, 'surrender');
+        if (roomManager.getCitadelsRoom(roomCode)) {
+          liveRoom.watch(socket, roomCode, 'citadels', seat);
+          broadcast(io, roomCode);
+        }
+        cb?.({ ok: true });
+      } catch (err) {
+        const message = clientMessage(err, [CitadelsError]);
+        sendError(socket, message);
+        cb?.({ ok: false, error: message });
+      }
+    });
+
     socket.on('citadels:leave', () => {
       const roomCode = socket.data.citadelsRoom;
       const playerId = socket.data.citadelsPlayerId;
       DATA_KEYS.forEach((k) => { socket.data[k] = null; });
+      liveRoom.unwatch(socket);
       const game = roomManager.getCitadelsRoom(roomCode);
       if (!game) return;
       socket.leave(roomCode);
-      game.removePlayer(playerId);
-      if (game.players.length === 0 || game.players.every((p) => p.left)) {
-        clearTimer(roomCode);
-        roomManager.deleteCitadelsRoom(roomCode, 'empty');
-        return;
-      }
-      broadcast(io, roomCode);
-      schedule(io, roomCode);
+      dropPlayer(io, roomCode, playerId, 'left');
     });
 
     socket.on('disconnect', () => {
       const roomCode = socket.data.citadelsRoom;
       const playerId = socket.data.citadelsPlayerId;
+      const watched = liveRoom.unwatch(socket);
+      if (watched) broadcast(io, watched);
       const game = roomManager.getCitadelsRoom(roomCode);
       if (!game || !playerId) return;
+      const player = game.getPlayer(playerId);
+      if (!player || player.exitReason) return;
+      // A socket that closed AFTER its owner had already reconnected is
+      // stale: the seat now answers to a different socket, and treating
+      // this close as a disconnect would knock a player who is sitting
+      // right there offline - and start a countdown on them.
+      if (player.socketId !== socket.id) return;
       game.setConnected(playerId, false);
+      // Not a departure yet: twenty seconds to come back, counted down on
+      // every screen in the room.
+      liveRoom.armDrop(roomCode, playerId, () => dropPlayer(io, roomCode, playerId, 'timeout'));
       broadcast(io, roomCode);
       schedule(io, roomCode);
     });

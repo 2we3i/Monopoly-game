@@ -6,6 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { announce, getGuestKey, getPlayerId } from '../lib/identity';
+import { bindRejoin, forgetRoom, rememberRoom } from '../lib/roomSession';
 
 const ROOM_KEY = 'landmark_cosmic_room';
 const NICKNAME_KEY = 'landmark_nickname';
@@ -21,14 +22,17 @@ export function useCosmic(authToken) {
   const [error, setError] = useState(null);
   const [chat, setChat] = useState([]);
   const [roomCode, setRoomCode] = useState(() => localStorage.getItem(ROOM_KEY) || null);
+  // A watcher is in the room but has no seat in it.
+  const [spectating, setSpectating] = useState(false);
   const [settingsRequested, setSettingsRequested] = useState(false);
   const playerId = getPlayerId();
 
   const clearRoom = useCallback(() => {
-    localStorage.removeItem(ROOM_KEY);
+    forgetRoom(ROOM_KEY);
     setRoomCode(null);
     setState(null);
     setChat([]);
+    setSpectating(false);
   }, []);
 
   useEffect(() => {
@@ -40,7 +44,10 @@ export function useCosmic(authToken) {
     socketRef.current = socket;
     socket.on('connect', () => setConnected(true));
     socket.on('disconnect', () => setConnected(false));
-    socket.on('cosmic:state', (next) => setState(next));
+    socket.on('cosmic:state', (next) => {
+      setState(next);
+      setSpectating(!!next.spectating);
+    });
     socket.on('cosmic:chat', (msg) => setChat((prev) => [...prev.slice(-149), msg]));
     socket.on('cosmic:system', (msg) => setChat((prev) => [...prev.slice(-149), { ...msg, system: true, ts: Date.now() }]));
     socket.on('cosmic:error', (err) => {
@@ -54,26 +61,30 @@ export function useCosmic(authToken) {
     });
     socket.on('account:blocked', (payload) => announce('blocked', payload));
 
-    // Rejoin the saved room on every (re)connect.
-    const rejoin = () => {
-      const saved = localStorage.getItem(ROOM_KEY);
-      if (!saved) return;
-      socket.emit('cosmic:join', {
-        roomCode: saved,
-        playerId,
-        nickname: localStorage.getItem(NICKNAME_KEY),
-        token: authTokenRef.current,
-        guestKey: getGuestKey(),
-      }, (res) => {
-        if (res?.ok) {
-          setRoomCode(res.roomCode);
-          setState(res.state);
-        } else {
-          clearRoom();
-        }
-      });
-    };
-    socket.on('connect', rejoin);
+    bindRejoin(socket, {
+      joinEvent: 'cosmic:join',
+      spectateEvent: 'cosmic:spectate',
+      roomKey: ROOM_KEY,
+      nicknameKey: NICKNAME_KEY,
+      playerId,
+      getToken: () => authTokenRef.current,
+      getGuestKey,
+      onJoined: (res) => {
+        setRoomCode(res.roomCode);
+        setState(res.state);
+        setSpectating(false);
+      },
+      onWatching: (res) => {
+        setRoomCode(res.roomCode);
+        setState(res.state);
+        setSpectating(true);
+      },
+      onLost: () => {
+        setRoomCode(null);
+        setState(null);
+        setSpectating(false);
+      },
+    });
     return () => socket.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -82,12 +93,13 @@ export function useCosmic(authToken) {
     socketRef.current?.emit('presence:identify', { token: authToken });
   }, [authToken]);
 
-  const request = useCallback((event, payload, fallback) => new Promise((resolve, reject) => {
+  const request = useCallback((event, payload, fallback, watching = false) => new Promise((resolve, reject) => {
     socketRef.current.emit(event, payload, (res) => {
       if (res?.ok) {
-        localStorage.setItem(ROOM_KEY, res.roomCode);
+        rememberRoom(ROOM_KEY, res.roomCode, watching);
         setRoomCode(res.roomCode);
         setState(res.state);
+        setSpectating(watching || !!res.spectator);
         resolve(res);
       } else {
         const err = new Error(res?.error || fallback);
@@ -108,13 +120,26 @@ export function useCosmic(authToken) {
     if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
     return request('cosmic:join', {
       roomCode: code, nickname, playerId, token: authTokenRef.current, guestKey: getGuestKey(),
-    }, 'Could not join the room.');
+    }, 'Could not join the room.').catch((err) => {
+      // A room that will not seat us is still a room we may watch.
+      if (err.code !== 'SEAT_GONE') throw err;
+      return request('cosmic:spectate', {
+        roomCode: code, nickname, playerId, token: authTokenRef.current, guestKey: getGuestKey(),
+      }, 'Could not watch the room.', true);
+    });
+  }, [playerId, request]);
+
+  const spectateRoom = useCallback((code, nickname) => {
+    if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
+    return request('cosmic:spectate', {
+      roomCode: code, nickname, playerId, token: authTokenRef.current, guestKey: getGuestKey(),
+    }, 'Could not watch the room.', true);
   }, [playerId, request]);
 
   const leaveRoom = useCallback(() => {
-    socketRef.current?.emit('cosmic:leave');
+    socketRef.current?.emit(spectating ? 'cosmic:unspectate' : 'cosmic:leave');
     clearRoom();
-  }, [clearRoom]);
+  }, [clearRoom, spectating]);
 
   const emit = useCallback((event, payload = {}) => {
     socketRef.current?.emit(event, payload);
@@ -126,13 +151,26 @@ export function useCosmic(authToken) {
     error,
     chat,
     roomCode,
+    spectating,
     playerId,
     createRoom,
     joinRoom,
+    spectateRoom,
     leaveRoom,
     settingsRequested,
     clearSettingsRequest: () => setSettingsRequested(false),
     actions: {
+      // Giving up is final: the seat goes, and the player stays on as a
+      // watcher. The confirmation happens before this is ever called.
+      surrender: () => new Promise((resolve) => {
+        socketRef.current?.emit('cosmic:surrender', {}, (res) => {
+          if (res?.ok) {
+            rememberRoom(ROOM_KEY, localStorage.getItem(ROOM_KEY), true);
+            setSpectating(true);
+          }
+          resolve(res);
+        });
+      }),
       updateSettings: (settings) => emit('cosmic:settings', { settings }),
       setReady: (ready) => emit('cosmic:ready', { ready }),
       start: () => emit('cosmic:start'),

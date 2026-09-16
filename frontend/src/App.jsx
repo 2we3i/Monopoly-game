@@ -19,6 +19,8 @@ import { useCitadels } from './hooks/useCitadels';
 import { useBunker } from './hooks/useBunker';
 import { useCatan } from './hooks/useCatan';
 import { useCosmic } from './hooks/useCosmic';
+import { useThrone } from './hooks/useThrone';
+import { useChpok } from './hooks/useChpok';
 import { useAuth } from './hooks/useAuth';
 import AuthScreen from './components/AuthScreen';
 import MainMenu from './components/MainMenu';
@@ -46,6 +48,10 @@ const CatanLobby = lazy(() => import('./components/catan/CatanLobby'));
 const CatanGame = lazy(() => import('./components/catan/CatanGame'));
 const CosmicLobby = lazy(() => import('./components/cosmic/CosmicLobby'));
 const CosmicGame = lazy(() => import('./components/cosmic/CosmicGame'));
+const ThroneLobby = lazy(() => import('./components/tabletop/throne/ThroneLobby'));
+const ThroneOnline = lazy(() => import('./components/tabletop/throne/ThroneOnline'));
+const ChpokOnline = lazy(() => import('./components/tabletop/chpok/ChpokOnline'));
+const PhoneController = lazy(() => import('./components/tabletop/chpok/PhoneController'));
 const ProfilePage = lazy(() => import('./components/profile/ProfilePage'));
 const AdminPanel = lazy(() => import('./components/admin/AdminPanel'));
 const ShopPage = lazy(() => import('./components/shop/ShopPage'));
@@ -139,7 +145,9 @@ export default function App() {
       || !!localStorage.getItem('landmark_citadels_room')
       || !!localStorage.getItem('landmark_bunker_room')
       || !!localStorage.getItem('landmark_catan_room')
-      || !!localStorage.getItem('landmark_cosmic_room'),
+      || !!localStorage.getItem('landmark_cosmic_room')
+      || !!localStorage.getItem('landmark_throne_room')
+      || !!localStorage.getItem('landmark_chpok_room'),
   );
 
   useEffect(() => {
@@ -147,6 +155,19 @@ export default function App() {
   }, [settings.animations]);
 
   if (auth.checking) return <RehydratingScreen />;
+
+  // /play/<CODE> is what a ЧПОК QR code points at. It is deliberately not
+  // part of the platform shell: a phone that scanned a code wants a seat in
+  // that room, not a games menu.
+  if (pathname.startsWith('/play/')) {
+    const code = decodeURIComponent(pathname.slice('/play/'.length)).trim().toUpperCase();
+    return (
+      <Suspense fallback={<RehydratingScreen />}>
+        <PhoneController roomCode={code} auth={auth} />
+        <NoticeToast />
+      </Suspense>
+    );
+  }
 
   // The game hooks are only ever mounted once useAuth has FINISHED
   // confirming whatever token was in localStorage - their connect-and-
@@ -177,6 +198,8 @@ function AppShell({
   const bunker = useBunker(auth.token);
   const catan = useCatan(auth.token);
   const cosmic = useCosmic(auth.token);
+  const throne = useThrone(auth.token);
+  const chpok = useChpok(auth.token, { device: 'screen' });
   const [hub, setHub] = useState(null); // null = main menu, 'monopoly' = its lobby
   const [joinError, setJoinError] = useState(null);
   const [joining, setJoining] = useState(false);
@@ -187,7 +210,8 @@ function AppShell({
 
   const identityResolved = auth.isLoggedIn || guestResolved;
   const nickname = auth.isLoggedIn ? auth.account.nickname : (localStorage.getItem(NICKNAME_KEY) || '');
-  const inAnyRoom = !!(socket.roomCode || mafia.roomCode || citadels.roomCode || bunker.roomCode || catan.roomCode || cosmic.roomCode);
+  const inAnyRoom = !!(socket.roomCode || mafia.roomCode || citadels.roomCode || bunker.roomCode
+    || catan.roomCode || cosmic.roomCode || throne.roomCode || chpok.roomCode);
   const page = platformPage(pathname);
 
   useStartSound(socket.gameState?.phase);
@@ -196,6 +220,8 @@ function AppShell({
   useStartSound(bunker.state?.phase);
   useStartSound(catan.state?.phase);
   useStartSound(cosmic.state?.phase);
+  useStartSound(throne.state?.phase);
+  useStartSound(chpok.state?.phase);
 
   useEffect(() => {
     if (auth.isLoggedIn) setAuthMode(null);
@@ -219,6 +245,9 @@ function AppShell({
 
   // A room code alone does not say which game it belongs to - the server
   // does, so the client asks before deciding where to send the player.
+  const HOOKS = {
+    mafia, citadels, bunker, catan, cosmic, throne, chpok, monopoly: socket,
+  };
   const joinByCode = async (code) => {
     setJoinError(null);
     setJoining(true);
@@ -228,12 +257,21 @@ function AppShell({
         setJoinError('room-not-found');
         return;
       }
-      if (res.gameType === 'mafia') await mafia.joinRoom(code, nickname);
-      else if (res.gameType === 'citadels') await citadels.joinRoom(code, nickname);
-      else if (res.gameType === 'bunker') await bunker.joinRoom(code, nickname);
-      else if (res.gameType === 'catan') await catan.joinRoom(code, nickname);
-      else if (res.gameType === 'cosmic') await cosmic.joinRoom(code, nickname);
-      else await socket.joinRoom(code, nickname);
+      const hook = HOOKS[res.gameType] || socket;
+      try {
+        await hook.joinRoom(code, nickname);
+      } catch (err) {
+        // A room that will not seat this player - already started, full,
+        // or a seat they have already left - is still a room they may
+        // watch. Only a refusal about WHO they are is worth reporting.
+        const identityProblem = ['BANNED', 'BLOCKED', 'SEAT_TAKEN', 'IDENTITY_TAKEN', 'BAD_IDENTITY'].includes(err.code);
+        if (identityProblem || !hook.spectateRoom) throw err;
+        try {
+          await hook.spectateRoom(code, nickname);
+        } catch {
+          throw err;
+        }
+      }
     } catch (err) {
       setJoinError(err.message);
     } finally {
@@ -261,7 +299,26 @@ function AppShell({
     else if (page === 'inventory') content = <InventoryPage auth={auth} />;
     else if (page === 'messages') content = <MessagesPage auth={auth} />;
     else if (page === 'leaderboard') content = <LeaderboardPage auth={auth} />;
-    else if (page === 'tabletop') content = <TabletopPage auth={auth} pathname={pathname} />;
+    else if (page === 'tabletop') {
+      content = (
+        <TabletopPage
+          auth={auth}
+          pathname={pathname}
+          creating={chpok.busy}
+          onPlayOnline={async () => {
+            if (!auth.isLoggedIn) { requireAccount(); return; }
+            // The room screen lives on the games side of the app, so the
+            // page moves there before the room exists.
+            navigate('/');
+            try {
+              await chpok.createRoom(nickname);
+            } catch (err) {
+              setJoinError(err.message);
+            }
+          }}
+        />
+      );
+    }
     else content = <PublicProfilePage auth={auth} userId={decodeURIComponent(pathname.slice(3))} />;
     return <PlatformNavContext.Provider value={nav}>{content}</PlatformNavContext.Provider>;
   }
@@ -290,6 +347,53 @@ function AppShell({
 
   if (socket.rehydrating) return <RehydratingScreen />;
 
+  // --- ЧПОК (the big screen) ------------------------------------------
+  if (chpok.state && chpok.roomCode) {
+    const leave = () => { chpok.leaveRoom(); setHub(null); };
+    return (
+      <>
+        <ConnectionBanner connected={chpok.connected} connectionError={null} />
+        <ErrorBanner message={chpok.error} />
+        <ChpokOnline
+          state={chpok.state}
+          actions={chpok.actions}
+          spectating={chpok.spectating}
+          onLeave={leave}
+        />
+      </>
+    );
+  }
+
+  // --- The Iron Throne -----------------------------------------------
+  if (throne.state && throne.roomCode) {
+    const leave = () => { throne.leaveRoom(); setHub(null); };
+    return (
+      <>
+        <ConnectionBanner connected={throne.connected} connectionError={null} />
+        <ErrorBanner message={throne.error} />
+        {throne.state.phase === 'LOBBY'
+          ? (
+            <ThroneLobby
+              state={throne.state}
+              actions={throne.actions}
+              openSettings={throne.settingsRequested}
+              onSettingsOpened={throne.clearSettingsRequest}
+              onLeave={leave}
+            />
+          )
+          : (
+            <ThroneOnline
+              state={throne.state}
+              chat={throne.chat}
+              actions={throne.actions}
+              spectating={throne.spectating}
+              onLeave={leave}
+            />
+          )}
+      </>
+    );
+  }
+
   // --- Cosmic Encounter ----------------------------------------------
   if (cosmic.state && cosmic.roomCode) {
     const leave = () => { cosmic.leaveRoom(); setHub(null); };
@@ -307,7 +411,15 @@ function AppShell({
               onLeave={leave}
             />
           )
-          : <CosmicGame state={cosmic.state} chat={cosmic.chat} actions={cosmic.actions} onLeave={leave} />}
+          : (
+            <CosmicGame
+              state={cosmic.state}
+              chat={cosmic.chat}
+              actions={cosmic.actions}
+              spectating={cosmic.spectating}
+              onLeave={leave}
+            />
+          )}
       </>
     );
   }
@@ -329,7 +441,15 @@ function AppShell({
               onLeave={leave}
             />
           )
-          : <CatanGame state={catan.state} chat={catan.chat} actions={catan.actions} onLeave={leave} />}
+          : (
+            <CatanGame
+              state={catan.state}
+              chat={catan.chat}
+              actions={catan.actions}
+              spectating={catan.spectating}
+              onLeave={leave}
+            />
+          )}
       </>
     );
   }
@@ -351,7 +471,15 @@ function AppShell({
               onLeave={leave}
             />
           )
-          : <BunkerGame state={bunker.state} chat={bunker.chat} actions={bunker.actions} onLeave={leave} />}
+          : (
+            <BunkerGame
+              state={bunker.state}
+              chat={bunker.chat}
+              actions={bunker.actions}
+              spectating={bunker.spectating}
+              onLeave={leave}
+            />
+          )}
       </>
     );
   }
@@ -373,7 +501,15 @@ function AppShell({
               onLeave={leave}
             />
           )
-          : <CitadelsGame state={citadels.state} chat={citadels.chat} actions={citadels.actions} onLeave={leave} />}
+          : (
+            <CitadelsGame
+              state={citadels.state}
+              chat={citadels.chat}
+              actions={citadels.actions}
+              spectating={citadels.spectating}
+              onLeave={leave}
+            />
+          )}
       </>
     );
   }
@@ -401,6 +537,7 @@ function AppShell({
               state={mafia.state}
               chat={mafia.chat}
               actions={mafia.actions}
+              spectating={mafia.spectating}
               onLeave={leave}
             />
           )}
@@ -442,7 +579,9 @@ function AppShell({
               sellToBank: socket.sellToBank,
               placeBid: socket.placeBid,
               withdrawAuction: socket.withdrawAuction,
+              surrender: socket.surrender,
             }}
+            spectating={socket.spectating}
             onLeave={() => { socket.leaveRoom(); setHub(null); }}
             chatMessages={socket.chatMessages}
             sendChat={socket.sendChat}
@@ -486,6 +625,8 @@ function AppShell({
       else if (game.id === 'bunker') await bunker.createRoom(nickname);
       else if (game.id === 'catan') await catan.createRoom(nickname);
       else if (game.id === 'cosmic') await cosmic.createRoom(nickname);
+      else if (game.id === 'throne') await throne.createRoom(nickname);
+      else if (game.id === 'chpok') await chpok.createRoom(nickname);
       else setHub('monopoly');
     } catch (err) {
       if (err.code === 'GUEST_CANNOT_CREATE') requireAccount();

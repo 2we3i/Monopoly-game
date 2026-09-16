@@ -187,10 +187,16 @@ class CatanGame {
     if (!leaving.isHost) return;
     leaving.isHost = false;
     const candidates = this.players.filter((p) => p.id !== leaving.id && !p.left);
+    // A room with no host at all can never be restarted or closed by
+    // anyone in it, so the last fallback is a seat that has also been
+    // left: if its owner ever comes back, the room answers to them again.
+    const remaining = this.players.filter((p) => p.id !== leaving.id);
     const heir = candidates.find((p) => p.accountId && p.connected)
       || candidates.find((p) => p.accountId)
       || candidates.find((p) => p.connected)
-      || candidates[0];
+      || candidates[0]
+      || remaining.find((p) => p.accountId)
+      || remaining[0];
     if (heir) {
       heir.isHost = true;
       this.hostId = heir.id;
@@ -1137,6 +1143,8 @@ class CatanGame {
         isGuest: !p.accountId,
         connected: p.connected,
         left: !!p.left,
+        exitReason: p.exitReason || null,
+        surrendered: !!p.surrendered,
         isHost: p.isHost,
         ready: p.ready,
         color: p.color,

@@ -16,6 +16,7 @@ const {
   notifyRemoved, clientMessage, errorPayload,
 } = require('./roomSockets');
 const roomChat = require('../social/roomChat');
+const liveRoom = require('./liveRoom');
 
 const { AccessError } = access;
 const DISCONNECT_GRACE_MS = 1000 * 60 * 10;
@@ -35,8 +36,7 @@ function roomStatePayload(mgr) {
     state.players.map(({ guestKeyHash, ...p }) => ({ ...p, isGuest: !p.accountId })),
     (p) => p.accountId,
   );
-  state.serverTime = Date.now();
-  return state;
+  return liveRoom.decorate(state, mgr.state.roomCode);
 }
 
 function clearAuctionTimer(roomCode) {
@@ -140,6 +140,48 @@ function stageOf(phase) {
 
 const DATA_KEYS = ['roomCode', 'playerId', 'accountId'];
 
+// A player stops being a player: they gave up, walked out, or their twenty
+// seconds of grace ran out. Before the game starts that empties the seat;
+// once it has started, the only honest way out of a Monopoly game is
+// bankruptcy, so that is what it becomes.
+function dropPlayer(io, roomCode, playerId, reason) {
+  const mgr = roomManager.getRoom(roomCode);
+  if (!mgr) return;
+  const player = mgr.state.getPlayer(playerId);
+  if (!player || player.exitReason) return;
+  clearDisconnectTimer(roomCode, playerId);
+  liveRoom.disarmDrop(roomCode, playerId);
+  liveRoom.markExit(mgr, playerId, reason);
+  const { nickname } = player;
+
+  if (mgr.state.phase === 'LOBBY') {
+    mgr.removePlayer(playerId);
+  } else {
+    if (!player.bankrupt && mgr.state.phase !== 'GAME_OVER') {
+      try {
+        mgr.declareBankruptcy(playerId);
+      } catch (err) {
+        // Already out, or the game is over - either way there is nothing
+        // left for this player to give up.
+      }
+    }
+    mgr.markDisconnected(playerId);
+  }
+  if (mgr.state.players.length === 0) {
+    liveRoom.disarmRoom(roomCode);
+    clearAuctionTimer(roomCode);
+    roomManager.deleteRoom(roomCode, 'empty');
+    liveRoom.closeSpectators(io, roomCode, 'monopoly', 'empty');
+    return;
+  }
+  io.to(roomCode).emit('chat:system', {
+    message: reason === 'surrender' ? nickname + ' surrendered.' : nickname + ' is out of the game.',
+    type: reason === 'surrender' ? 'PLAYER_SURRENDERED' : 'PLAYER_DROPPED',
+    params: { name: nickname },
+  });
+  broadcastState(io, roomCode);
+}
+
 registry.register({
   type: 'monopoly',
   rooms: () => roomManager.rooms.values(),
@@ -206,6 +248,8 @@ registry.register({
       notifyRemoved(ioRef, p.socketId, { gameType: 'monopoly', roomCode: code, reason, dataKeys: DATA_KEYS });
     });
     clearAuctionTimer(code);
+    liveRoom.disarmRoom(code);
+    liveRoom.closeSpectators(ioRef, code, 'monopoly', reason);
     roomManager.deleteRoom(code, reason);
     return true;
   },
@@ -295,7 +339,12 @@ function registerSocketHandlers(io) {
         let player;
         if (existing) {
           access.assertCanClaimSeat(existing, identity);
+          // Out is out: a seat somebody gave up cannot be taken back, and
+          // the client turns this refusal into a place in the gallery.
+          liveRoom.assertSeatReclaimable(existing);
           clearDisconnectTimer(mgr.state.roomCode, identity.playerId);
+          liveRoom.disarmDrop(mgr.state.roomCode, identity.playerId);
+          liveRoom.unwatch(socket);
           player = mgr.reconnectPlayer(identity.playerId, socket.id);
           if (!identity.isGuest) {
             player.nickname = identity.nickname;
@@ -339,24 +388,80 @@ function registerSocketHandlers(io) {
     // which is ambiguous (reload vs. genuinely leaving).
     socket.on('room:leave', () => {
       const { roomCode, playerId } = socket.data;
+      liveRoom.unwatch(socket);
       if (!roomCode || !playerId) return;
       const mgr = roomManager.getRoom(roomCode);
-      if (!mgr) return;
-      clearDisconnectTimer(roomCode, playerId);
-      if (mgr.state.phase === 'LOBBY') {
-        mgr.removePlayer(playerId);
-        roomManager.persist(roomCode);
-        io.to(roomCode).emit('game:state', roomStatePayload(mgr));
-        roomManager.cleanupEmptyRoom(roomCode);
-      } else {
-        mgr.markDisconnected(playerId);
-        roomManager.persist(roomCode);
-        io.to(roomCode).emit('game:state', roomStatePayload(mgr));
-      }
       socket.leave(roomCode);
       socket.data.roomCode = null;
       socket.data.playerId = null;
       socket.data.accountId = null;
+      if (!mgr) return;
+      dropPlayer(io, roomCode, playerId, 'left');
+    });
+
+    // --- watching -------------------------------------------------------
+
+    // A Monopoly board holds nothing secret, so a watcher simply receives
+    // the room's own broadcasts - and has no events to act on it with.
+    socket.on('room:spectate', (payload, cb) => {
+      try {
+        const {
+          roomCode, nickname, playerId, token, guestKey,
+        } = payload || {};
+        const mgr = roomManager.getRoom(roomCode);
+        if (!mgr) throw new GameError('Room not found. Check the code and try again.');
+        const identity = access.resolveIdentity({
+          token, playerId, nickname, guestKey,
+        });
+        if (bans.isBanned(mgr.state.roomCode, identity.playerId)) {
+          throw new AccessError('You were removed from this room.', 'BANNED');
+        }
+        const own = mgr.state.getPlayer(identity.playerId);
+        if (own && !own.exitReason && own.connected) throw new GameError('You are playing in this room.');
+        const viewer = liveRoom.watch(socket, mgr.state.roomCode, 'monopoly', identity);
+        if (!viewer) throw new GameError('This room has too many spectators already.');
+        cb?.({
+          ok: true,
+          roomCode: mgr.state.roomCode,
+          spectator: true,
+          state: { ...roomStatePayload(mgr), spectating: true },
+        });
+        broadcastState(io, mgr.state.roomCode);
+      } catch (err) {
+        cb?.(errorPayload(err, [GameError]));
+      }
+    });
+
+    socket.on('room:unspectate', () => {
+      const watched = liveRoom.unwatch(socket);
+      if (watched) broadcastState(io, watched);
+    });
+
+    // --- giving up ------------------------------------------------------
+
+    // The client has already asked for a confirmation by the time this
+    // arrives. Mid-game this is a bankruptcy, which is final.
+    socket.on('room:surrender', (payload, cb) => {
+      const { roomCode, playerId } = socket.data;
+      try {
+        const mgr = roomManager.getRoom(roomCode);
+        const player = mgr?.state.getPlayer(playerId);
+        if (!mgr || !player) throw new GameError('You are not in an active room.');
+        if (player.exitReason) throw new GameError('You have already left this game.');
+        const seat = {
+          playerId, nickname: player.nickname, accountId: player.accountId, avatarUrl: player.avatarUrl,
+        };
+        dropPlayer(io, roomCode, playerId, 'surrender');
+        if (roomManager.getRoom(roomCode)) {
+          liveRoom.watch(socket, roomCode, 'monopoly', seat);
+          broadcastState(io, roomCode);
+        }
+        cb?.({ ok: true });
+      } catch (err) {
+        const message = clientMessage(err, [GameError]);
+        sendError(socket, message);
+        cb?.({ ok: false, error: message });
+      }
     });
 
     socket.on('room:start', () => {
@@ -428,12 +533,27 @@ function registerSocketHandlers(io) {
 
     socket.on('disconnect', () => {
       const { roomCode, playerId } = socket.data;
+      const watched = liveRoom.unwatch(socket);
+      if (watched) broadcastState(io, watched);
       if (!roomCode || !playerId) return;
       const mgr = roomManager.getRoom(roomCode);
       if (!mgr) return;
+      const player = mgr.state.getPlayer(playerId);
+      if (!player || player.exitReason) return;
+      // A socket that closed AFTER its owner had already reconnected is
+      // stale: the seat now answers to a different socket, and treating
+      // this close as a disconnect would knock a player who is sitting
+      // right there offline - and start a countdown on them.
+      if (player.socketId !== socket.id) return;
 
       mgr.markDisconnected(playerId);
       roomManager.persist(roomCode);
+      // Twenty seconds to come back, counted down on every screen in the
+      // room. A player who is already bankrupt has nothing left to lose,
+      // so their seat is left exactly where it is.
+      if (!player.bankrupt && mgr.state.phase !== 'GAME_OVER') {
+        liveRoom.armDrop(roomCode, playerId, () => dropPlayer(io, roomCode, playerId, 'timeout'));
+      }
       io.to(roomCode).emit('game:state', roomStatePayload(mgr));
       if (mgr.state.phase !== 'LOBBY') {
         const cp = mgr.state.currentPlayer;

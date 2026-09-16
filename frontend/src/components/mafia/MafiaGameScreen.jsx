@@ -11,6 +11,7 @@ import Icon from '../icons';
 import { Segmented } from './MafiaSettings';
 import RoomChat from '../chat/RoomChat';
 import SocialBar from '../social/SocialBar';
+import { SpectatorBanner, SpectatorStrip, SurrenderButton } from '../room/RoomStatus';
 import { StyledName } from '../../cosmetics/Cosmetics';
 import { useOutcomeEffects } from '../../cosmetics/useGameCosmetics';
 
@@ -478,7 +479,9 @@ function GameOverScreen({ state, isHost, actions, onLeave, t }) {
   );
 }
 
-export default function MafiaGameScreen({ state, chat, actions, onLeave }) {
+export default function MafiaGameScreen({
+  state, chat, actions, onLeave, spectating,
+}) {
   const { t } = useTranslation();
   const { you, phase } = state;
   const isHost = !!you?.isHost;
@@ -550,6 +553,7 @@ export default function MafiaGameScreen({ state, chat, actions, onLeave }) {
               </div>
             </section>
 
+            {spectating && <SpectatorBanner onLeave={onLeave} />}
             <ActionPanel state={state} onVote={actions.vote} nightMode={nightMode} setNightMode={setNightMode} t={t} />
             <ResultsFeed state={state} t={t} />
           </div>
@@ -558,6 +562,13 @@ export default function MafiaGameScreen({ state, chat, actions, onLeave }) {
             <div className="flex justify-end"><SocialBar compact /></div>
             <ChatBox chat={chat} phase={phase} you={you} players={state.players} onSend={actions.sendChat} t={t} />
             {state.settings.info.showHistory && <HistoryPanel history={state.history} t={t} />}
+            <SpectatorStrip spectators={state.spectators} />
+            {/* Giving up is in every mode where a player can be knocked
+                out. It asks for a confirmation and then ends this
+                player's game - the seat does not come back. */}
+            {!spectating && you && !you.left && phase !== 'GAME_OVER' && (
+              <SurrenderButton onSurrender={actions.surrender} className="btn-danger w-full py-2 text-[12.5px]" />
+            )}
             <button type="button" onClick={onLeave} className="btn-quiet py-2 text-[12.5px]">
               {t('waiting.leave')}
             </button>

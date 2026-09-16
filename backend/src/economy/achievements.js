@@ -11,7 +11,7 @@ function achievementsFor(stats, citadels) {
     { id: 'HOST', current: stats.created, target: 5 },
     { id: 'VETERAN', current: stats.played, target: 25 },
     { id: 'CHAMPION', current: stats.wins, target: 10 },
-    { id: 'ALL_GAMES', current: ['monopoly', 'mafia', 'citadels', 'bunker', 'catan', 'cosmic'].filter((g) => games.includes(g)).length, target: 3 },
+    { id: 'ALL_GAMES', current: ['monopoly', 'mafia', 'citadels', 'bunker', 'catan', 'cosmic', 'throne'].filter((g) => games.includes(g)).length, target: 3 },
     { id: 'CITADEL_LORD', current: citadels.wins, target: 1 },
     { id: 'MASTER_BUILDER', current: Math.round(citadels.avgBuildings * 10) / 10, target: 7 },
   ];
