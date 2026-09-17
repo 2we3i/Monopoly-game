@@ -57,9 +57,10 @@ function Seat({ player, showScore = true }) {
 export function ChpokLobby({
   state, actions, onLeave, spectating,
 }) {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [copied, setCopied] = useState(null);
   const link = joinLink(state.roomCode);
+  const packsOfRating = (state.options?.packs || []).filter((p) => p.rating === state.settings.rating);
   const me = state.players.find((p) => p.isYou);
   const isHost = !!me?.isHost;
   const active = state.players.filter((p) => !p.left && p.playing);
@@ -164,13 +165,52 @@ export function ChpokLobby({
                 {!isHost && <span className="pill bg-white/[0.06] text-parch/35">{t('throne.lobby.hostOnly')}</span>}
               </div>
               <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] text-parch/50">{t('chpok.box')}</span>
+                <span className="text-[12px] text-parch/50">{t('chpok.rating')}</span>
                 <Segmented
                   disabled={!isHost}
-                  value={s.box}
-                  onChange={(v) => actions.updateSettings({ box: v })}
-                  options={(state.options?.boxes || []).map((b) => ({ value: b, label: t(`chpok.box.${b}`) }))}
+                  value={s.rating}
+                  onChange={(v) => actions.updateSettings({ rating: v })}
+                  options={(state.options?.ratings || []).map((r) => ({ value: r, label: `${r}+` }))}
                 />
+              </label>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[12px] text-parch/50">
+                  {t('chpok.packs')} · {t('chpok.packsCount', { n: packsOfRating.filter((p) => s.packs.includes(p.id)).reduce((sum, p) => sum + p.size, 0) })}
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {packsOfRating.map((pack) => {
+                    const on = s.packs.includes(pack.id);
+                    return (
+                      <button
+                        key={pack.id}
+                        type="button"
+                        disabled={!isHost}
+                        aria-pressed={on}
+                        onClick={() => {
+                          if (on && s.packs.length === 1) return;
+                          actions.updateSettings({ packs: on ? s.packs.filter((id) => id !== pack.id) : [...s.packs, pack.id] });
+                        }}
+                        className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[12px] font-semibold transition ${
+                          on ? 'border-brass/60 bg-brass/20 text-parch' : 'border-white/10 bg-white/[0.03] text-parch/50 hover:text-parch'
+                        }`}
+                      >
+                        <span>{pack.emoji}</span>
+                        {pack.title?.[language] || pack.title?.ru}
+                        <span className="text-parch/40">{pack.size}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <label className="flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.02] px-3 py-2">
+                <input
+                  type="checkbox"
+                  disabled={!isHost}
+                  checked={s.events !== false}
+                  onChange={(e) => actions.updateSettings({ events: e.target.checked })}
+                  className="h-4 w-4 accent-brass"
+                />
+                <span className="min-w-0 flex-1 text-[12.5px] text-parch/60">{t('chpok.eventsToggle')}</span>
               </label>
               <label className="flex flex-col gap-1.5">
                 <span className="text-[12px] text-parch/50">{t('chpok.rounds')}</span>
@@ -215,13 +255,22 @@ function ThemeCard({ state }) {
         <span>{t('chpok.roundOf', { n: state.round, of: state.settings.rounds })}</span>
         <PhaseClock endsAt={state.phaseEndsAt} />
       </div>
+      {state.event && state.event !== 'normal' && (
+        <div className="animate-pop-in rounded-2xl border border-brass/40 bg-brass/15 px-4 py-2">
+          <p className="text-[15px] font-black text-brass-light">{t(`chpok.event.${state.event}`)}</p>
+          <p className="text-[12px] text-parch/60">{t(`chpok.eventHint.${state.event}`)}</p>
+        </div>
+      )}
       <p className="max-w-2xl font-display text-[clamp(1.3rem,3.4vw,2.2rem)] font-black leading-tight text-parch">
         {state.theme}
       </p>
+      {state.themePack && (
+        <p className="text-[11.5px] text-parch/35">{state.themePack.emoji} {state.themePack.title?.ru}</p>
+      )}
       <div className="flex items-center gap-2">
         <span className="text-[12px] uppercase tracking-wide text-parch/40">{t('chpok.startsWith')}</span>
-        <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-parch text-[26px] font-black text-ink">
-          {state.letter}
+        <span className="flex h-12 min-w-12 items-center justify-center rounded-xl bg-parch px-2 text-[26px] font-black text-ink">
+          {state.letter || '★'}
         </span>
       </div>
     </div>
@@ -268,12 +317,12 @@ function ScreenAnswerBox({ state, actions }) {
         value={text}
         onChange={(e) => setText(e.target.value.slice(0, max))}
         onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-        placeholder={t('chpok.phone.answerPlaceholder', { letter: state.letter })}
+        placeholder={state.letter ? t('chpok.phone.answerPlaceholder', { letter: state.letter }) : t('chpok.phone.answerAny')}
         rows={2}
         className="w-full resize-none rounded-xl border border-white/12 bg-black/25 px-3.5 py-2.5 text-[15px] text-parch outline-none focus:border-brass/60"
       />
       <div className="flex items-center gap-3">
-        <span className="flex-1 text-[11.5px] text-parch/35">{t('chpok.phone.startWith', { letter: state.letter })}</span>
+        <span className="flex-1 text-[11.5px] text-parch/35">{state.letter ? t('chpok.phone.startWith', { letter: state.letter }) : t('chpok.event.anyLetter')}</span>
         <span className="text-[11.5px] text-parch/35 tnum">{text.length}/{max}</span>
         <button type="button" onClick={send} disabled={!text.trim() || sending} className="btn-primary px-5 py-2 text-[13.5px]">
           {sending ? t('chpok.phone.sending') : t('chpok.phone.send')}

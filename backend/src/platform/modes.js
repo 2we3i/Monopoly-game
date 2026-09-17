@@ -25,6 +25,7 @@ function catalog() {
     { id: 'cosmic.classic', gameId: 'cosmic', variant: 'classic', label: { en: 'Cosmic Encounter', ru: 'Космический контакт' } },
     { id: 'throne.classic', gameId: 'throne', variant: 'classic', label: { en: 'The Iron Throne', ru: 'Железный трон' } },
     { id: 'chpok.party', gameId: 'chpok', variant: 'party', label: { en: 'ЧПОК Party', ru: 'ЧПОК: вечеринка' } },
+    { id: 'memehype.party', gameId: 'memehype', variant: 'party', label: { en: 'Meme Hype', ru: 'Meme Hype' } },
   ];
 }
 

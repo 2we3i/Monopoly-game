@@ -16,6 +16,9 @@ const catan = require('../catan/CatanGame');
 const cosmic = require('../cosmic/CosmicGame');
 const throne = require('../throne/ThroneGame');
 const chpok = require('../chpok/ChpokGame');
+const chpokPacks = require('../chpok/packs');
+const memeHype = require('../memehype/MemeHypeGame');
+const memeContent = require('../memehype/content');
 const modes = require('../platform/modes');
 const registry = require('../platform/registry');
 
@@ -92,6 +95,14 @@ router.get('/games', (req, res) => {
         adult: true,
         available: modes.gameAvailable('chpok'),
       },
+      {
+        id: 'memehype',
+        minPlayers: memeHype.MIN_PLAYERS,
+        maxPlayers: memeHype.MAX_PLAYERS,
+        // Listed on the board games page, where its 16+/18+ modes are chosen.
+        tabletop: true,
+        available: modes.gameAvailable('memehype'),
+      },
     ],
   });
 });
@@ -157,12 +168,31 @@ router.get('/chpok/config', (req, res) => {
     maxPlayers: chpok.MAX_PLAYERS,
     maxAnswerLength: chpok.MAX_ANSWER_LEN,
     defaults: chpok.DEFAULT_SETTINGS,
+    packs: chpokPacks.catalog(),
     options: {
       rounds: chpok.ROUND_OPTIONS,
       answerSec: chpok.ANSWER_SEC_OPTIONS,
       voteSec: chpok.VOTE_SEC_OPTIONS,
     },
   });
+});
+
+// The Meme Hype shelf: packs and how many cards each age mode holds.
+router.get('/memehype/config', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  res.json({
+    minPlayers: memeHype.MIN_PLAYERS,
+    maxPlayers: memeHype.MAX_PLAYERS,
+    defaults: memeHype.DEFAULT_SETTINGS,
+    ratings: memeContent.RATINGS,
+    packs: memeContent.catalog(),
+  });
+});
+
+// Who took the photos on the Meme Hype cards, and under which licence.
+router.get('/memehype/credits', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  res.json({ credits: memeContent.credits() });
 });
 
 router.get('/game-modes', (req, res) => {

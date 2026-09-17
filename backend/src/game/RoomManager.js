@@ -11,6 +11,7 @@ const { CatanGame } = require('../catan/CatanGame');
 const { CosmicGame } = require('../cosmic/CosmicGame');
 const { ThroneGame } = require('../throne/ThroneGame');
 const { ChpokGame } = require('../chpok/ChpokGame');
+const { MemeHypeGame } = require('../memehype/MemeHypeGame');
 const db = require('../db/database');
 const platformDb = require('../db/platform');
 const recorder = require('../platform/recorder');
@@ -33,6 +34,7 @@ class RoomManager {
     this.cosmicRooms = new Map();
     this.throneRooms = new Map();
     this.chpokRooms = new Map();
+    this.memeHypeRooms = new Map();
     this._loadFromDisk();
     setInterval(() => db.pruneStaleRooms(ROOM_MAX_AGE_MS), 1000 * 60 * 60).unref();
   }
@@ -55,6 +57,8 @@ class RoomManager {
           this.throneRooms.set(roomCode, ThroneGame.fromJSON(state));
         } else if (state && state.gameType === 'chpok') {
           this.chpokRooms.set(roomCode, ChpokGame.fromJSON(state));
+        } else if (state && state.gameType === 'memehype') {
+          this.memeHypeRooms.set(roomCode, MemeHypeGame.fromJSON(state));
         } else {
           this.rooms.set(roomCode, GameManager.fromPersisted(state, hostId));
         }
@@ -69,7 +73,7 @@ class RoomManager {
 
   roomCount() {
     return this.rooms.size + this.mafiaRooms.size + this.citadelsRooms.size + this.bunkerRooms.size
-      + this.catanRooms.size + this.cosmicRooms.size + this.throneRooms.size + this.chpokRooms.size;
+      + this.catanRooms.size + this.cosmicRooms.size + this.throneRooms.size + this.chpokRooms.size + this.memeHypeRooms.size;
   }
 
   generateRoomCode() {
@@ -78,7 +82,7 @@ class RoomManager {
       code = Array.from({ length: 5 }, () => ROOM_CODE_CHARS[Math.floor(Math.random() * ROOM_CODE_CHARS.length)]).join('');
     } while (this.rooms.has(code) || this.mafiaRooms.has(code) || this.citadelsRooms.has(code)
       || this.bunkerRooms.has(code) || this.catanRooms.has(code) || this.cosmicRooms.has(code)
-      || this.throneRooms.has(code) || this.chpokRooms.has(code));
+      || this.throneRooms.has(code) || this.chpokRooms.has(code) || this.memeHypeRooms.has(code));
     return code;
   }
 
@@ -300,6 +304,35 @@ class RoomManager {
     this._gone(roomCode, reason);
   }
 
+  // --- Meme Hype rooms ----------------------------------------------
+
+  createMemeHypeRoom(hostId, settings, meta = null) {
+    const code = this.generateRoomCode();
+    const game = new MemeHypeGame(code, hostId, settings);
+    this.memeHypeRooms.set(code, game);
+    this.persistMemeHype(code);
+    this._logCreated(code, 'memehype', 'memehype.party', meta);
+    return game;
+  }
+
+  getMemeHypeRoom(roomCode) {
+    if (!roomCode) return null;
+    return this.memeHypeRooms.get(String(roomCode).toUpperCase()) || null;
+  }
+
+  persistMemeHype(roomCode) {
+    const game = this.memeHypeRooms.get(roomCode);
+    if (!game) return;
+    db.saveRoom(roomCode, game.hostId, game.toJSON());
+  }
+
+  deleteMemeHypeRoom(roomCode, reason = 'empty') {
+    if (!this.memeHypeRooms.has(roomCode)) return;
+    this.memeHypeRooms.delete(roomCode);
+    db.deleteRoom(roomCode);
+    this._gone(roomCode, reason);
+  }
+
   // What kind of game a code refers to, for callers that only have the
   // code (a player rejoining from a saved link, for instance).
   roomKind(roomCode) {
@@ -313,6 +346,7 @@ class RoomManager {
     if (this.cosmicRooms.has(code)) return 'cosmic';
     if (this.throneRooms.has(code)) return 'throne';
     if (this.chpokRooms.has(code)) return 'chpok';
+    if (this.memeHypeRooms.has(code)) return 'memehype';
     return null;
   }
 

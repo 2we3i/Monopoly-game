@@ -110,10 +110,49 @@ function CitadelsArt() {
   );
 }
 
+// Meme Hype: three meme cards fanned out on a neon party table.
+function MemeHypeArt() {
+  const cards = [
+    { x: 14, r: -12, from: '#ff4fa3', to: '#8a2be2', emoji: '😂' },
+    { x: 44, r: 0, from: '#ffcf3f', to: '#ff7a59', emoji: '🐱' },
+    { x: 74, r: 12, from: '#4fd8ff', to: '#3b6cff', emoji: '📼' },
+  ];
+  return (
+    <svg viewBox="0 0 120 80" className="h-full w-full" aria-hidden="true">
+      <defs>
+        <radialGradient id="hype-bg" cx="50%" cy="30%" r="80%">
+          <stop offset="0%" stopColor="#3a1d5c" />
+          <stop offset="100%" stopColor="#0b0716" />
+        </radialGradient>
+        {cards.map((c, i) => (
+          <linearGradient key={c.emoji} id={`hype-card-${i}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={c.from} />
+            <stop offset="100%" stopColor={c.to} />
+          </linearGradient>
+        ))}
+      </defs>
+      <rect width="120" height="80" rx="6" fill="url(#hype-bg)" />
+      {[[10, 12], [104, 16], [60, 8], [20, 66], [98, 70]].map(([x, y]) => (
+        <circle key={`${x}-${y}`} cx={x} cy={y} r="1.3" fill="#ffcf3f" opacity="0.7" />
+      ))}
+      {cards.map((c, i) => (
+        <g key={c.emoji} transform={`translate(${c.x} 16) rotate(${c.r} 16 24)`}>
+          <rect width="32" height="44" rx="4" fill={`url(#hype-card-${i})`} stroke="#fff" strokeOpacity="0.5" />
+          <rect x="5" y="4" width="22" height="3" rx="1.5" fill="#fff" opacity="0.9" />
+          <text x="16" y="30" textAnchor="middle" fontSize="16">{c.emoji}</text>
+          <rect x="4" y="36" width="24" height="3" rx="1.5" fill="#fff" opacity="0.9" />
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 const GAME_ART = {
+  memehype: MemeHypeArt,
   monopoly: MonopolyArt, mafia: MafiaArt, citadels: CitadelsArt, bunker: BunkerArt, catan: CatanArt, cosmic: CosmicArt, chpok: ChpokArt, chpok2: Chpok2Art, throne: ThroneArt,
 };
 const GAME_ACCENT = {
+  memehype: 'from-pink-500/25 to-transparent',
   monopoly: 'from-brass/25 to-transparent',
   mafia: 'from-rent/25 to-transparent',
   citadels: 'from-violet-500/25 to-transparent',
@@ -125,6 +164,7 @@ const GAME_ACCENT = {
   throne: 'from-amber-950/40 to-transparent',
 };
 const GAME_EMOJI = {
+  memehype: '😂',
   monopoly: '🎲', mafia: '🔪', citadels: '🏰', bunker: '☢️', catan: '🏝️', cosmic: '🛸', chpok: '🔞', chpok2: '🔞', throne: '⚔️',
 };
 
@@ -218,7 +258,7 @@ export default function MainMenu({
       .then((data) => {
         // Adult games are never listed on the front door: they live on
         // the board games page, behind the age gate.
-        if (!cancelled && data?.games) setGames(data.games.filter((g) => !g.adult));
+        if (!cancelled && data?.games) setGames(data.games.filter((g) => !g.adult && !g.tabletop));
       })
       .catch(() => { /* the built-in list is a fine fallback */ });
     return () => { cancelled = true; };

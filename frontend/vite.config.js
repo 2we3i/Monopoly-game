@@ -33,6 +33,7 @@ export default defineConfig({
       '/socket.io': { target: 'http://localhost:4000', ws: true },
       '/api': { target: 'http://localhost:4000' },
       '/avatars': { target: 'http://localhost:4000' },
+      '/memes': { target: 'http://localhost:4000' },
     },
   },
   build: { outDir: 'dist' },

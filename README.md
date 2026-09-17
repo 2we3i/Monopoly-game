@@ -62,6 +62,78 @@ The rules are pure functions in `frontend/src/components/tabletop/throne/engine.
 
 The server decides everything here: prices, balances, ownership and slots are checked on every request; rewards are computed from the recorded match history; room payloads carry only the ids of each player's visible cosmetics. Wallets, the ledger, inventory, equipment, favourites, notifications and conversations live in `platform.db` next to the match history (`backend/src/db/community.js`); the item catalogue is `backend/src/economy/catalog.js` and the reward numbers are `backend/src/economy/rules.js`.
 
+## Party games with phones: ЧПОК and Meme Hype
+
+Both run as "one big screen, a phone each". The screen opens a room and
+shows a QR code pointing at `/play/<CODE>`; each phone that scans it gets its
+own seat. `/play` asks the server which game the code belongs to and opens
+that game's controller, so every party game shares one link format.
+
+- **Shared room layer** - `backend/src/party/PartyRoom.js` (seats, host,
+  phone/screen seats, lobby, drop-outs, results) and
+  `backend/src/party/partyHandler.js` (join/create, phase clock, spectators,
+  20-second reconnect grace, surrender). On the client: `usePartyRoom`,
+  `components/play/*`.
+- **ЧПОК online** - write answers on phones, anonymous vote, round events
+  (double points, blitz, any letter, two words, a ×2 final). Content packs
+  with a 16+ or 18+ rating live in `backend/src/chpok/packs.js`; a room plays
+  only packs of its own rating. The two original boxes are packs `box1` and
+  `box2` (their themes are still `backend/src/chpok/cards.json`).
+- **Meme Hype** (3-6 players) - a situation on the screen, a private hand of
+  memes on each phone, anonymous MEM #N vote, 100 points per vote plus 100
+  for the round's best meme, a ×2 final round, and a final table with round
+  wins and votes received. If time runs out, a random meme from the
+  player's hand is played (or the round is skipped - a room setting).
+  Switching a room to 18+ needs an explicit confirmation, checked on the
+  server.
+
+### Adding Meme Hype content
+
+A pack is one file in `backend/src/memehype/content/` listed in
+`PACK_FILES` of `content/index.js`. It holds a palette and separate `16`
+and `18` sections:
+
+```js
+situations: [[category, text], ...]
+memes:      [[art, topCaption, bottomCaption, paletteKey, { image, weight, enabled }?], ...]
+```
+
+Records get stable ids (`<pack>.<rating>.s<n>` / `m<n>`) and every lookup
+takes a rating, so a 16+ room can never receive an 18+ card. A meme may set
+`image` to a picture URL; otherwise its emoji `art` is drawn. Use emoji from
+Unicode 12 or earlier so cards render on older phones and Windows 10.
+
+### Meme pictures
+
+**Your own pictures:** drop a file named after the meme's id into
+`backend/src/memehype/images/custom/` (`animals.16.m9.jpg`; jpg, jpeg, png,
+webp or gif) and restart the server - it replaces whatever the card showed.
+`npm run memes` (in `backend/`) lists every id with its current picture
+source; `--missing` shows only memes without a picture and `--html` writes a
+browsable `backend/meme-catalog.html`. The folder's README has the details,
+including adding a new meme with `image: 'file.jpg'` in its pack file.
+
+**Found photos:** some memes show a real photo from Wikimedia Commons (public domain, CC0,
+CC BY or CC BY-SA only). The photos live in `backend/src/memehype/images/`
+with `manifest.json` recording each photo's source, author and licence; the
+lobby lists them under "Photo credits" (`GET /api/memehype/credits`), as
+CC BY requires. A photo is tied to a fingerprint of its meme's content, so
+editing a meme's captions drops its photo until a new one is found.
+
+New photos are found with the Gemini API:
+
+```bash
+cd backend
+GEMINI_API_KEYS=key1,key2 node scripts/find-meme-images.js --pack animals --rating 16 --limit 10
+```
+
+Gemini writes the search queries, every candidate passes a keyword
+blocklist and a separate per-image safety check, and Gemini then picks the
+best fit. The key is read from the environment only - never commit it.
+**Look at every new photo yourself before shipping it**: the filters lower
+the risk of an unsuitable picture, they do not remove it. To drop a photo,
+delete its file and its manifest entry.
+
 ## Features
 
 - **Real-time multiplayer** over Socket.io, up to 10 players per room, with reconnect support (a dropped connection gets a 10-minute grace period before the game auto-skips that player's turn).

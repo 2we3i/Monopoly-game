@@ -13,6 +13,7 @@ const economyRoutes = require('./routes/economy');
 const socialRoutes = require('./routes/social');
 const { router: authRoutes, AVATAR_DIR } = require('./routes/authRoutes');
 const presence = require('./platform/presence');
+const memeContent = require('./memehype/content');
 const { registerSocketHandlers } = require('./socket/socketHandler');
 const { registerMafiaHandlers } = require('./socket/mafiaHandler');
 const { registerCitadelsHandlers } = require('./socket/citadelsHandler');
@@ -21,6 +22,7 @@ const { registerCatanHandlers } = require('./socket/catanHandler');
 const { registerCosmicHandlers } = require('./socket/cosmicHandler');
 const { registerThroneHandlers } = require('./socket/throneHandler');
 const { registerChpokHandlers } = require('./socket/chpokHandler');
+const { registerMemeHypeHandlers } = require('./socket/memeHypeHandler');
 const db = require('./db/database');
 const accountsDb = require('./db/accounts');
 const platformDb = require('./db/platform');
@@ -58,6 +60,10 @@ app.use('/api', apiRoutes);
 // route existing on the BACKEND is what the frontend dev-server proxy
 // and any production reverse proxy both need to forward /avatars to.
 app.use('/avatars', express.static(AVATAR_DIR));
+// Meme Hype pictures (see src/memehype/images/custom/README.md).
+// Your own meme pictures can change often, so they are cached briefly.
+app.use(memeContent.CUSTOM_URL, express.static(memeContent.CUSTOM_DIR, { maxAge: '1h' }));
+app.use('/memes', express.static(memeContent.IMAGES_DIR, { maxAge: '7d' }));
 
 const FRONTEND_DIST = process.env.FRONTEND_DIST
   ? path.resolve(process.env.FRONTEND_DIST)
@@ -67,7 +73,7 @@ const FRONTEND_DIST = process.env.FRONTEND_DIST
 app.use('/assets', express.static(path.join(FRONTEND_DIST, 'assets'), { immutable: true, maxAge: '365d' }));
 app.use(express.static(FRONTEND_DIST));
 app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/avatars')) return next();
+  if (req.path.startsWith('/api') || req.path.startsWith('/avatars') || req.path.startsWith('/memes')) return next();
   res.sendFile(path.join(FRONTEND_DIST, 'index.html'), (err) => {
     if (err) next();
   });
@@ -85,6 +91,7 @@ registerCatanHandlers(io);
 registerCosmicHandlers(io);
 registerThroneHandlers(io);
 registerChpokHandlers(io);
+registerMemeHypeHandlers(io);
 
 server.listen(PORT, '0.0.0.0', () => {
   // eslint-disable-next-line no-console

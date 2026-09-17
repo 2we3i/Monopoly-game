@@ -534,3 +534,79 @@
 .motion-off .throne-card-in,
 .motion-off .throne-die,
 .motion-off .throne-turn-ring { animation: none !important; }
+
+/* --- Meme Hype -------------------------------------------------------
+   Loud on purpose: a party-game table with neon edges, cards that pop
+   and flip, votes that land as chips and a winner that gets confetti.
+   Everything here stops when animations are switched off. */
+.table-hype {
+  background-color: #0b0716;
+  background-image:
+    radial-gradient(ellipse 70% 55% at 10% -5%, rgba(255, 64, 160, 0.28) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 60% at 95% 10%, rgba(64, 196, 255, 0.22) 0%, transparent 60%),
+    radial-gradient(ellipse 90% 60% at 50% 115%, rgba(255, 200, 40, 0.18) 0%, transparent 60%),
+    linear-gradient(180deg, #140c26 0%, #0b0716 100%);
+}
+.hype-title {
+  background: linear-gradient(90deg, #ff4fa3, #ffcf3f, #4fd8ff, #ff4fa3);
+  background-size: 300% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: hype-shimmer 6s linear infinite;
+}
+.hype-panel {
+  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  box-shadow: 0 10px 40px -18px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+}
+.hype-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  border-radius: 1rem; font-weight: 900; letter-spacing: 0.02em; color: #1a0b1f;
+  background: linear-gradient(135deg, #ffcf3f 0%, #ff7a59 55%, #ff4fa3 100%);
+  box-shadow: 0 8px 24px -10px rgba(255, 79, 163, 0.8);
+  transition: transform 0.12s ease, filter 0.12s ease, opacity 0.12s ease;
+}
+.hype-btn:active { transform: scale(0.97); }
+.hype-btn:disabled { opacity: 0.4; filter: grayscale(0.6); box-shadow: none; }
+/* The picture half of a meme card: gradient ground, emoji art, captions in
+   the classic white-with-outline meme type. */
+/* Card type is sized from the card's own width (container units), so a
+   meme reads the same on a phone and on a TV. */
+.meme-card { position: relative; overflow: hidden; border-radius: 1rem; isolation: isolate; container-type: inline-size; }
+.meme-card .meme-caption { font-size: clamp(9px, 8.2cqw, 34px); }
+.meme-card .meme-art { font-size: clamp(28px, 34cqw, 150px); }
+.meme-caption {
+  font-family: Impact, 'Anton', 'Arial Black', 'Helvetica Neue', system-ui, sans-serif;
+  font-weight: 900; text-transform: uppercase; color: #fff; line-height: 1.02; text-align: center;
+  letter-spacing: 0.01em; overflow-wrap: anywhere;
+  -webkit-text-stroke: 0.06em #000; paint-order: stroke fill;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+}
+.meme-art { filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.35)); line-height: 1; }
+@keyframes hype-shimmer { to { background-position: 300% 0; } }
+@keyframes hype-pop { 0% { transform: scale(0.6) rotate(-4deg); opacity: 0; } 70% { transform: scale(1.06) rotate(1deg); opacity: 1; } 100% { transform: none; } }
+@keyframes hype-flip { 0% { transform: perspective(900px) rotateY(90deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes hype-bump { 0% { transform: translateY(8px) scale(0.7); opacity: 0; } 40% { transform: translateY(-6px) scale(1.2); opacity: 1; } 100% { transform: none; } }
+@keyframes hype-float { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-6px) rotate(2deg); } }
+@keyframes hype-winner { 0%, 100% { box-shadow: 0 0 0 2px #ffcf3f, 0 0 24px 2px rgba(255, 207, 63, 0.35); } 50% { box-shadow: 0 0 0 3px #ff4fa3, 0 0 40px 8px rgba(255, 79, 163, 0.45); } }
+@keyframes hype-confetti { 0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(110vh) rotate(720deg); opacity: 0.8; } }
+@keyframes hype-tick { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+.hype-pop { animation: hype-pop 0.42s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.hype-flip { animation: hype-flip 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) both; }
+.hype-bump { animation: hype-bump 0.6s cubic-bezier(0.2, 0.9, 0.3, 1.3) both; }
+.hype-float { animation: hype-float 3.2s ease-in-out infinite; }
+.hype-winner { animation: hype-winner 1.6s ease-in-out infinite; }
+.hype-tick { animation: hype-tick 1s ease-in-out infinite; }
+.hype-confetti-piece { position: absolute; top: 0; width: 10px; height: 16px; border-radius: 2px; animation: hype-confetti linear forwards; }
+.motion-off .hype-title,
+.motion-off .hype-pop,
+.motion-off .hype-flip,
+.motion-off .hype-bump,
+.motion-off .hype-float,
+.motion-off .hype-winner,
+.motion-off .hype-tick,
+.motion-off .hype-confetti-piece { animation: none !important; }
+.motion-off .hype-confetti-piece { display: none; }

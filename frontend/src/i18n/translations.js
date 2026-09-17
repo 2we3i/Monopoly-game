@@ -11,6 +11,7 @@ import { cosmicEn, cosmicRu } from './cosmicTranslations';
 import { throneEn, throneRu } from './throneTranslations';
 import { throneOnlineEn, throneOnlineRu } from './throneOnlineTranslations';
 import { roomEn, roomRu } from './roomTranslations';
+import { hypeEn, hypeRu } from './hypeTranslations';
 
 export const LANGUAGES = {
   en: { label: 'English', nativeLabel: 'English' },
@@ -1070,8 +1071,8 @@ const ru = {
 };
 
 export const TRANSLATIONS = {
-  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn, ...tabletopEn, ...monopolyEn, ...catanEn, ...cosmicEn, ...throneEn, ...throneOnlineEn, ...roomEn },
-  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu, ...tabletopRu, ...monopolyRu, ...catanRu, ...cosmicRu, ...throneRu, ...throneOnlineRu, ...roomRu },
+  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn, ...tabletopEn, ...monopolyEn, ...catanEn, ...cosmicEn, ...throneEn, ...throneOnlineEn, ...roomEn, ...hypeEn },
+  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu, ...tabletopRu, ...monopolyRu, ...catanRu, ...cosmicRu, ...throneRu, ...throneOnlineRu, ...roomRu, ...hypeRu },
 };
 
 if (import.meta.env.DEV) {

@@ -21,6 +21,7 @@ import { useCatan } from './hooks/useCatan';
 import { useCosmic } from './hooks/useCosmic';
 import { useThrone } from './hooks/useThrone';
 import { useChpok } from './hooks/useChpok';
+import { useMemeHype } from './hooks/useMemeHype';
 import { useAuth } from './hooks/useAuth';
 import AuthScreen from './components/AuthScreen';
 import MainMenu from './components/MainMenu';
@@ -51,7 +52,8 @@ const CosmicGame = lazy(() => import('./components/cosmic/CosmicGame'));
 const ThroneLobby = lazy(() => import('./components/tabletop/throne/ThroneLobby'));
 const ThroneOnline = lazy(() => import('./components/tabletop/throne/ThroneOnline'));
 const ChpokOnline = lazy(() => import('./components/tabletop/chpok/ChpokOnline'));
-const PhoneController = lazy(() => import('./components/tabletop/chpok/PhoneController'));
+const PlayPage = lazy(() => import('./components/play/PlayPage'));
+const MemeHypeScreen = lazy(() => import('./components/tabletop/memehype/MemeHypeScreen'));
 const ProfilePage = lazy(() => import('./components/profile/ProfilePage'));
 const AdminPanel = lazy(() => import('./components/admin/AdminPanel'));
 const ShopPage = lazy(() => import('./components/shop/ShopPage'));
@@ -147,7 +149,8 @@ export default function App() {
       || !!localStorage.getItem('landmark_catan_room')
       || !!localStorage.getItem('landmark_cosmic_room')
       || !!localStorage.getItem('landmark_throne_room')
-      || !!localStorage.getItem('landmark_chpok_room'),
+      || !!localStorage.getItem('landmark_chpok_room')
+      || !!localStorage.getItem('landmark_memehype_room'),
   );
 
   useEffect(() => {
@@ -156,14 +159,14 @@ export default function App() {
 
   if (auth.checking) return <RehydratingScreen />;
 
-  // /play/<CODE> is what a ЧПОК QR code points at. It is deliberately not
+  // /play/<CODE> is what every party-game QR code points at. It is deliberately not
   // part of the platform shell: a phone that scanned a code wants a seat in
   // that room, not a games menu.
   if (pathname.startsWith('/play/')) {
     const code = decodeURIComponent(pathname.slice('/play/'.length)).trim().toUpperCase();
     return (
       <Suspense fallback={<RehydratingScreen />}>
-        <PhoneController roomCode={code} auth={auth} />
+        <PlayPage roomCode={code} auth={auth} />
         <NoticeToast />
       </Suspense>
     );
@@ -200,6 +203,7 @@ function AppShell({
   const cosmic = useCosmic(auth.token);
   const throne = useThrone(auth.token);
   const chpok = useChpok(auth.token, { device: 'screen' });
+  const memeHype = useMemeHype(auth.token, { device: 'screen' });
   const [hub, setHub] = useState(null); // null = main menu, 'monopoly' = its lobby
   const [joinError, setJoinError] = useState(null);
   const [joining, setJoining] = useState(false);
@@ -211,7 +215,7 @@ function AppShell({
   const identityResolved = auth.isLoggedIn || guestResolved;
   const nickname = auth.isLoggedIn ? auth.account.nickname : (localStorage.getItem(NICKNAME_KEY) || '');
   const inAnyRoom = !!(socket.roomCode || mafia.roomCode || citadels.roomCode || bunker.roomCode
-    || catan.roomCode || cosmic.roomCode || throne.roomCode || chpok.roomCode);
+    || catan.roomCode || cosmic.roomCode || throne.roomCode || chpok.roomCode || memeHype.roomCode);
   const page = platformPage(pathname);
 
   useStartSound(socket.gameState?.phase);
@@ -222,6 +226,7 @@ function AppShell({
   useStartSound(cosmic.state?.phase);
   useStartSound(throne.state?.phase);
   useStartSound(chpok.state?.phase);
+  useStartSound(memeHype.state?.phase);
 
   useEffect(() => {
     if (auth.isLoggedIn) setAuthMode(null);
@@ -246,7 +251,7 @@ function AppShell({
   // A room code alone does not say which game it belongs to - the server
   // does, so the client asks before deciding where to send the player.
   const HOOKS = {
-    mafia, citadels, bunker, catan, cosmic, throne, chpok, monopoly: socket,
+    mafia, citadels, bunker, catan, cosmic, throne, chpok, memehype: memeHype, monopoly: socket,
   };
   const joinByCode = async (code) => {
     setJoinError(null);
@@ -305,6 +310,16 @@ function AppShell({
           auth={auth}
           pathname={pathname}
           creating={chpok.busy}
+          creatingHype={memeHype.busy}
+          onPlayHype={async () => {
+            if (!auth.isLoggedIn) { requireAccount(); return; }
+            navigate('/');
+            try {
+              await memeHype.createRoom(nickname);
+            } catch (err) {
+              setJoinError(err.message);
+            }
+          }}
           onPlayOnline={async () => {
             if (!auth.isLoggedIn) { requireAccount(); return; }
             // The room screen lives on the games side of the app, so the
@@ -346,6 +361,23 @@ function AppShell({
   }
 
   if (socket.rehydrating) return <RehydratingScreen />;
+
+  // --- Meme Hype (the big screen) -------------------------------------
+  if (memeHype.state && memeHype.roomCode) {
+    const leave = () => { memeHype.leaveRoom(); setHub(null); };
+    return (
+      <>
+        <ConnectionBanner connected={memeHype.connected} connectionError={null} />
+        <ErrorBanner message={memeHype.error} />
+        <MemeHypeScreen
+          state={memeHype.state}
+          actions={memeHype.actions}
+          spectating={memeHype.spectating}
+          onLeave={leave}
+        />
+      </>
+    );
+  }
 
   // --- ЧПОК (the big screen) ------------------------------------------
   if (chpok.state && chpok.roomCode) {

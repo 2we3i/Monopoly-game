@@ -20,6 +20,8 @@ export function phaseName(t, gameType, phase) {
     catan: `catan.phase.${phase}`,
     cosmic: `cosmic.gamePhase.${phase}`,
     throne: `throne.phase.${phase}`,
+    chpok: `chpok.phase.${phase}`,
+    memehype: `hype.phase.${phase}`,
     monopoly: `admin.monopolyPhase.${phase}`,
   };
   const key = keys[gameType];

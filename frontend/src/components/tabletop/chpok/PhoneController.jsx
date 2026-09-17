@@ -132,13 +132,13 @@ function AnswerStep({ state, actions }) {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value.slice(0, max))}
-          placeholder={t('chpok.phone.answerPlaceholder', { letter: state.letter })}
+          placeholder={state.letter ? t('chpok.phone.answerPlaceholder', { letter: state.letter }) : t('chpok.phone.answerAny')}
           rows={3}
           autoFocus
           className="w-full resize-none rounded-xl border border-white/12 bg-black/25 px-3.5 py-3 text-[17px] leading-snug text-parch outline-none focus:border-brass/60"
         />
         <div className="flex items-center justify-between text-[11.5px] text-parch/35">
-          <span>{t('chpok.phone.startWith', { letter: state.letter })}</span>
+          <span>{state.letter ? t('chpok.phone.startWith', { letter: state.letter }) : t('chpok.event.anyLetter')}</span>
           <span className="tnum">{text.length}/{max}</span>
         </div>
         {problem && <p className="text-[12px] text-rent-light">{problem}</p>}
@@ -318,7 +318,23 @@ export default function PhoneController({ roomCode, auth }) {
   const out = !me || me.left || !!me.exitReason;
 
   let step = null;
-  if (chpok.spectating || out) {
+  if ((chpok.spectating || out) && state.phase === 'LOBBY') {
+    // A new game is being set up: whoever was out of the last one may sit
+    // down again.
+    step = (
+      <div className="panel flex flex-col gap-3 p-4 text-center">
+        <p className="text-[14px] text-parch/70">{t('hype.phone.newMatch')}</p>
+        <button
+          type="button"
+          onClick={() => chpok.joinRoom(roomCode, localStorage.getItem(NICKNAME_KEY) || 'Player').catch((err) => setJoinError(err.message))}
+          className="btn-primary w-full py-3.5 text-[15px]"
+        >
+          {t('chpok.phone.takeSeat')}
+        </button>
+        {joinError && <p className="text-[12px] text-rent-light">{joinError}</p>}
+      </div>
+    );
+  } else if (chpok.spectating || out) {
     step = (
       <div className="panel flex flex-col gap-2 p-4 text-center">
         <p className="text-[13.5px] text-parch/70">{t('chpok.phone.outOfGame')}</p>
@@ -378,9 +394,14 @@ export default function PhoneController({ roomCode, auth }) {
           <p className="text-[11px] uppercase tracking-[0.16em] text-parch/35">
             {t('chpok.roundOf', { n: state.round, of: state.settings.rounds })}
           </p>
-          <p className="text-[17px] font-bold leading-snug text-parch">{state.theme}</p>
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-parch text-[24px] font-black text-ink">
-            {state.letter}
+          {state.event && state.event !== 'normal' && (
+            <span className="rounded-full bg-brass/25 px-3 py-1 text-[12px] font-black text-brass-light">
+              {t(`chpok.event.${state.event}`)}
+            </span>
+          )}
+          <p className="text-[18px] font-bold leading-snug text-parch">{state.theme}</p>
+          <span className="flex h-12 min-w-12 items-center justify-center rounded-xl bg-parch px-2 text-[24px] font-black text-ink">
+            {state.letter || '★'}
           </span>
         </div>
       )}

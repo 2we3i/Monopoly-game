@@ -20,6 +20,7 @@ const ThroneGame = lazy(() => import('./throne/ThroneGame'));
 
 const THRONE_SLUG = 'iron-throne';
 const THRONE = { id: 'throne', minPlayers: 2, maxPlayers: 6 };
+const MEME_HYPE = { id: 'memehype', minPlayers: 3, maxPlayers: 6 };
 
 // Two versions of one series, in box order.
 const SERIES = ['chpok', 'chpok2'].map((id) => ({ id, minPlayers: MIN_PLAYERS, maxPlayers: MAX_PLAYERS }));
@@ -29,7 +30,9 @@ function gameFromPath(pathname) {
   return Object.values(GAMES).find((game) => game.slug === slug)?.id || null;
 }
 
-export default function TabletopPage({ auth, pathname, onPlayOnline, creating = false }) {
+export default function TabletopPage({
+  auth, pathname, onPlayOnline, creating = false, onPlayHype, creatingHype = false,
+}) {
   const { t } = useTranslation();
   const [confirmed, setConfirmed] = useState(isAgeConfirmed);
   const [asking, setAsking] = useState(false);
@@ -65,6 +68,20 @@ export default function TabletopPage({ auth, pathname, onPlayOnline, creating = 
       <section className="grid gap-4 md:grid-cols-2 4xl:gap-8">
         <GameCard game={THRONE} onPlay={() => navigate(`/tabletop/${THRONE_SLUG}`)} />
       </section>
+
+      {/* Meme Hype is 16+ by default; its 18+ mode is chosen - and
+          confirmed - inside the room, so the game itself is not gated. */}
+      {onPlayHype && (
+        <>
+          <section className="mb-6 mt-10 4xl:mb-10 4xl:mt-14">
+            <h2 className="font-display text-[clamp(1.5rem,4vw,2.2rem)] font-black leading-tight text-parch 4xl:text-[2.8rem]">{t('tabletop.partyTitle')}</h2>
+            <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-parch/55 4xl:max-w-3xl 4xl:text-[17px]">{t('tabletop.partyText')}</p>
+          </section>
+          <section className="grid gap-4 md:grid-cols-2 4xl:gap-8">
+            <GameCard game={MEME_HYPE} onPlay={() => !creatingHype && onPlayHype()} isGuest={!auth?.isLoggedIn} />
+          </section>
+        </>
+      )}
 
       <section className="mb-6 mt-10 4xl:mb-10 4xl:mt-14">
         <div className="flex flex-wrap items-center gap-2.5">

@@ -102,7 +102,7 @@ async function run() {
 
   const account = registerAccount('Host');
   const created = await emit(screen.socket, 'chpok:create', {
-    token: account.token, device: 'screen', settings: { rounds: 3, answerSec: 45, voteSec: 20 },
+    token: account.token, device: 'screen', settings: { rounds: 3, answerSec: 45, voteSec: 20, events: false },
   });
   assert(created.ok && created.roomCode, 'the big screen opens a room');
   const { roomCode } = created;
