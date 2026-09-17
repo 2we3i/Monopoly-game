@@ -8,7 +8,7 @@
 // lost and that no piece breaks the placement rules.
 
 const {
-  CatanGame, CatanError, PHASES, STEPS, COSTS, PIECES, BANK_PER_RESOURCE, DEV_DECK, handSize,
+  CatanGame, CatanError, PHASES, STEPS, COSTS, PIECES, BANK_PER_RESOURCE, DEV_DECK, MAX_PLAYERS, handSize,
 } = require('../src/catan/CatanGame');
 const {
   GEOMETRY, RESOURCES, TERRAIN_POOL, NUMBER_POOL, PORT_POOL, generateLayout, hasAdjacentRedNumbers,
@@ -152,8 +152,13 @@ test('layout: classic terrain and numbers, desert without a number, never two re
 test('lobby: player limits, host-only start and settings', () => {
   const solo = gameWith(1);
   assertThrows(() => solo.start('p1'), /at least 2/, 'one player cannot start');
-  const full = gameWith(4);
-  assertThrows(() => full.addPlayer({ playerId: 'p5', socketId: 's5', nickname: 'P5' }), /at most 4/, 'a fifth player is refused');
+  // The table is full at MAX_PLAYERS, whatever that number is today.
+  const full = gameWith(MAX_PLAYERS);
+  assertThrows(
+    () => full.addPlayer({ playerId: 'pX', socketId: 'sX', nickname: 'PX' }),
+    new RegExp(`at most ${MAX_PLAYERS}`),
+    'one player too many is refused',
+  );
   assertThrows(() => full.start('p2'), /host/, 'only the host starts');
   assertThrows(() => full.updateSettings('p2', { victoryPoints: 12 }), /host/, 'only the host changes settings');
   full.updateSettings('p1', { victoryPoints: 99, turnSec: 7 });

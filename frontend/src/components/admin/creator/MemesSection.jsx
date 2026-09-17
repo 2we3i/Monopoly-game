@@ -280,6 +280,13 @@ export default function MemesSection({ token }) {
                 <span className="block text-[11.5px] text-zinc-500">
                   {t('creator.memes.packCounts', { memes: pack.byRating[rating].memes.length, situations: pack.byRating[rating].situations.length })}
                 </span>
+                {/* A pack built from an outside source says when it was
+                    last brought in line with it. */}
+                {pack.source?.syncedAt && (
+                  <span className="block truncate text-[11px] text-zinc-600">
+                    {t('creator.memes.packSynced', { date: new Date(pack.source.syncedAt).toLocaleDateString() })}
+                  </span>
+                )}
               </span>
             </button>
             <Toggle checked={pack.enabled} onChange={() => togglePack(pack)} />

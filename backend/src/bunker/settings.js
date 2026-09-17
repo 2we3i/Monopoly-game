@@ -27,6 +27,8 @@ const LEGACY_KEYS = ['maxPlayers', 'seats', 'turnSec', 'discussSec', 'voteSec'];
 const VOTE_MODES = ['single', 'multi'];
 const TIE_RULES = ['revote', 'random', 'none', 'all'];
 const RANDOMNESS = ['balanced', 'chaotic'];
+// How much of the ridiculous shelf (absurd.js) a table wants dealt.
+const ABSURDITY = ['off', 'light', 'normal', 'full', 'only'];
 const BAGGAGE_COUNTS = [1, 2, 3, 4, 'random'];
 
 const DEFAULTS = {
@@ -59,6 +61,10 @@ const DEFAULTS = {
     // How strongly rarity is respected. 'normal' uses the catalogue's own
     // weights; 'flat' ignores rarity; 'rare' pushes the rare cards up.
     rarityBias: 'normal',
+    // How often the absurd cards - the mattress tester, the man who is
+    // certain he is a cat - are dealt alongside the serious ones. 'off'
+    // plays the straight game exactly as it always did.
+    absurdity: 'light',
   },
 
   baggage: {
@@ -229,6 +235,7 @@ function sanitize(input, base = DEFAULTS) {
       hiddenFromOwner: clampInt(ch.hiddenFromOwner, 0, 3, DEFAULTS.characters.hiddenFromOwner),
       randomness: oneOf(ch.randomness, RANDOMNESS, DEFAULTS.characters.randomness),
       rarityBias: oneOf(ch.rarityBias, ['normal', 'flat', 'rare'], DEFAULTS.characters.rarityBias),
+      absurdity: oneOf(ch.absurdity, ABSURDITY, DEFAULTS.characters.absurdity),
     },
 
     baggage: {
@@ -300,6 +307,7 @@ function schema() {
     voteModes: VOTE_MODES,
     tieRules: TIE_RULES,
     randomness: RANDOMNESS,
+    absurdity: ABSURDITY,
     rarities: content.RARITIES,
     baggageCounts: BAGGAGE_COUNTS,
     categories: content.ALL_CATEGORY_KEYS,
@@ -319,6 +327,7 @@ module.exports = {
   DEFAULTS,
   VOTE_MODES,
   TIE_RULES,
+  ABSURDITY,
   BAGGAGE_COUNTS,
   sanitize,
   schema,

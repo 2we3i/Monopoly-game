@@ -239,6 +239,18 @@ export default function BunkerSettings({
             options={['normal', 'flat', 'rare'].map((v) => ({ value: v, label: t(`bunker.settings.rarityBias.${v}`) }))}
           />
         </Row>
+        {/* How much of the ridiculous shelf is dealt. The hint changes
+            with the setting, because "a pinch" and "nothing but" are very
+            different games. */}
+        <Row title={t('bunker.settings.absurdity')} hint={t(`bunker.settings.absurdity.${s.characters.absurdity || 'light'}Hint`)}>
+          <Segmented
+            disabled={ro}
+            value={s.characters.absurdity || 'light'}
+            onChange={(v) => characters({ absurdity: v })}
+            options={(schema?.absurdity || ['off', 'light', 'normal', 'full', 'only'])
+              .map((v) => ({ value: v, label: t(`bunker.settings.absurdity.${v}`) }))}
+          />
+        </Row>
       </>
     ),
 

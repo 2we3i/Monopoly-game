@@ -16,7 +16,8 @@
 // point cards count for their owner alone until the game is over.
 
 const {
-  RESOURCES, TERRAIN_RESOURCE, GEOMETRY, generateLayout, shuffle,
+  RESOURCES, TERRAIN_RESOURCE, GEOMETRY, ISLAND_IDS, DEFAULT_ISLAND,
+  islandSpec, islandForPlayers, geometryFor, generateLayout, shuffle,
 } = require('./board');
 const { CatanError } = require('./errors');
 
@@ -36,10 +37,21 @@ const STEPS = {
 };
 
 const MIN_PLAYERS = 2;
-const MAX_PLAYERS = 4;
+// Eight seats. Which island they play on follows from how many sit down
+// (see board.js): four or fewer keep the original nineteen hexes, and a
+// full table of eight gets thirty-seven.
+const MAX_PLAYERS = 8;
+// The classic bank, still the number an old save and the classic island
+// are built on. A bigger island holds more (`islandSpec().bank`).
 const BANK_PER_RESOURCE = 19;
+// The most any one resource can be asked for in a message from a client -
+// the largest bank there is. Every trade is checked against what the
+// player and the bank actually hold, so this is only a sanity bound.
+const MAX_BANK = 30;
 const OFFLINE_GRACE_SEC = 20;
-const PLAYER_COLORS = ['red', 'blue', 'orange', 'white'];
+// Eight piece colours: the four classic ones first, so a table of four
+// looks exactly as it always did.
+const PLAYER_COLORS = ['red', 'blue', 'orange', 'white', 'green', 'purple', 'teal', 'pink'];
 const PIECES = { road: 15, settlement: 5, city: 4 };
 const LONGEST_ROAD_MIN = 5;
 const LARGEST_ARMY_MIN = 3;
@@ -52,6 +64,8 @@ const COSTS = {
   dev: { sheep: 1, wheat: 1, ore: 1 },
 };
 
+// The classic development deck, kept for old saves. A game builds its own
+// from the island it is played on.
 const DEV_DECK = [
   ...Array(14).fill('knight'),
   ...Array(5).fill('victoryPoint'),
@@ -59,9 +73,19 @@ const DEV_DECK = [
   ...Array(2).fill('yearOfPlenty'),
   ...Array(2).fill('monopoly'),
 ];
+
+// The development deck of one island, in the same shape as DEV_DECK.
+function devDeckFor(islandId) {
+  const counts = islandSpec(islandId).dev;
+  return Object.entries(counts).flatMap(([type, n]) => Array(n).fill(type));
+}
 const DEV_TYPES = ['knight', 'victoryPoint', 'roadBuilding', 'yearOfPlenty', 'monopoly'];
 
-const DEFAULT_SETTINGS = { victoryPoints: 10, turnSec: 120 };
+// `island: 'auto'` picks the board from the number of players when the
+// game starts, which is what a host wants by default; naming an island
+// pins it, so four people can play on the big board if they want to.
+const DEFAULT_SETTINGS = { victoryPoints: 10, turnSec: 120, island: 'auto' };
+const ISLAND_OPTIONS = ['auto', ...ISLAND_IDS];
 const TURN_SEC_OPTIONS = [0, 60, 90, 120, 180, 300];
 
 function clampInt(value, min, max, fallback) {
@@ -73,9 +97,11 @@ function clampInt(value, min, max, fallback) {
 function sanitizeSettings(input = {}, base = DEFAULT_SETTINGS) {
   const src = input && typeof input === 'object' ? input : {};
   const turn = Math.round(Number(src.turnSec ?? base.turnSec));
+  const island = src.island ?? base.island ?? DEFAULT_SETTINGS.island;
   return {
     victoryPoints: clampInt(src.victoryPoints ?? base.victoryPoints, 6, 15, base.victoryPoints),
     turnSec: TURN_SEC_OPTIONS.includes(turn) ? turn : base.turnSec,
+    island: ISLAND_OPTIONS.includes(island) ? island : DEFAULT_SETTINGS.island,
   };
 }
 
@@ -88,7 +114,7 @@ function handSize(hand) {
 }
 
 // A resource map from the client: only known resources, whole numbers.
-function cleanResourceMap(input, max = BANK_PER_RESOURCE) {
+function cleanResourceMap(input, max = MAX_BANK) {
   const out = emptyHand();
   if (!input || typeof input !== 'object') return out;
   RESOURCES.forEach((r) => { out[r] = clampInt(input[r], 0, max, 0); });
@@ -111,6 +137,10 @@ class CatanGame {
     this.settings = sanitizeSettings(settings);
     this.players = [];
     this.phase = PHASES.LOBBY;
+    // The island this game is being played on, fixed when it starts. A
+    // game saved before there was more than one island has none, and
+    // reads as the classic one.
+    this.island = null;
     this.layout = null;
     this.robberHex = null;
     this.buildings = {}; // vertexId -> { playerId, type: 'settlement'|'city' }
@@ -261,6 +291,26 @@ class CatanGame {
     if (this.log.length > 300) this.log.shift();
   }
 
+  // The geometry of THIS game's island: corners, sides, coast. Every rule
+  // below asks the game for it rather than reaching for a single global
+  // board, which is the whole of what made more than one island possible.
+  get geo() {
+    return geometryFor(this.island || DEFAULT_ISLAND);
+  }
+
+  // What the island this game is on (or would be on, in the lobby) holds.
+  spec() {
+    return islandSpec(this.island || this.plannedIsland());
+  }
+
+  // The island a game started right now would use: the host's choice, or
+  // the one that fits the table.
+  plannedIsland() {
+    const chosen = this.settings.island;
+    if (chosen && chosen !== 'auto' && ISLAND_IDS.includes(chosen)) return chosen;
+    return islandForPlayers(Math.max(this.players.filter((p) => !p.left).length, MIN_PLAYERS));
+  }
+
   // --- lifecycle -----------------------------------------------------
 
   start(playerId) {
@@ -277,12 +327,13 @@ class CatanGame {
         stats: { produced: 0, trades: 0, devPlayed: 0 },
       });
     });
-    this.layout = generateLayout();
+    this.island = this.plannedIsland();
+    this.layout = generateLayout(this.island);
     this.robberHex = this.layout.hexes.find((h) => h.terrain === 'desert').id;
     this.buildings = {};
     this.roads = {};
-    this.bank = Object.fromEntries(RESOURCES.map((r) => [r, BANK_PER_RESOURCE]));
-    this.devDeck = shuffle(DEV_DECK);
+    this.bank = Object.fromEntries(RESOURCES.map((r) => [r, this.spec().bank]));
+    this.devDeck = shuffle(devDeckFor(this.island));
     const first = Math.floor(Math.random() * this.players.length);
     this.order = this.players.map((_, i) => this.players[(first + i) % this.players.length].id);
     this.setup = {
@@ -318,6 +369,7 @@ class CatanGame {
     });
     Object.assign(this, {
       phase: PHASES.LOBBY,
+      island: null,
       layout: null,
       robberHex: null,
       buildings: {},
@@ -433,7 +485,7 @@ class CatanGame {
 
   playersOnHex(hexId) {
     const ids = new Set();
-    GEOMETRY.hexes[hexId].vertices.forEach((v) => {
+    this.geo.hexes[hexId].vertices.forEach((v) => {
       if (this.buildings[v]) ids.add(this.buildings[v].playerId);
     });
     return [...ids];
@@ -442,16 +494,16 @@ class CatanGame {
   // The distance rule: no settlement on a corner next to another one.
   vertexOpen(vertexId) {
     if (this.buildings[vertexId]) return false;
-    return GEOMETRY.vertices[vertexId].neighbors.every((n) => !this.buildings[n]);
+    return this.geo.vertices[vertexId].neighbors.every((n) => !this.buildings[n]);
   }
 
   touchesOwnRoad(playerId, vertexId) {
-    return GEOMETRY.vertices[vertexId].edges.some((e) => this.roads[e] === playerId);
+    return this.geo.vertices[vertexId].edges.some((e) => this.roads[e] === playerId);
   }
 
   legalSettlementVertices(playerId) {
     const inSetup = this.phase === PHASES.SETUP;
-    return GEOMETRY.vertices
+    return this.geo.vertices
       .filter((v) => this.vertexOpen(v.id) && (inSetup || this.touchesOwnRoad(playerId, v.id)))
       .map((v) => v.id);
   }
@@ -459,11 +511,11 @@ class CatanGame {
   // A road extends from the player's own building, or from the end of
   // their own road - unless an opponent's building sits on that corner.
   roadConnects(playerId, edgeId) {
-    const edge = GEOMETRY.edges[edgeId];
+    const edge = this.geo.edges[edgeId];
     return [edge.a, edge.b].some((v) => {
       const building = this.buildings[v];
       if (building) return building.playerId === playerId;
-      return GEOMETRY.vertices[v].edges.some((e) => e !== edgeId && this.roads[e] === playerId);
+      return this.geo.vertices[v].edges.some((e) => e !== edgeId && this.roads[e] === playerId);
     });
   }
 
@@ -471,9 +523,9 @@ class CatanGame {
     if (this.phase === PHASES.SETUP) {
       const from = this.setup?.lastVertex;
       if (from === null || from === undefined) return [];
-      return GEOMETRY.vertices[from].edges.filter((e) => this.roads[e] === undefined);
+      return this.geo.vertices[from].edges.filter((e) => this.roads[e] === undefined);
     }
-    return GEOMETRY.edges
+    return this.geo.edges
       .filter((e) => this.roads[e.id] === undefined && this.roadConnects(playerId, e.id))
       .map((e) => e.id);
   }
@@ -485,7 +537,7 @@ class CatanGame {
   }
 
   legalRobberHexes() {
-    return GEOMETRY.hexes.map((h) => h.id).filter((id) => id !== this.robberHex);
+    return this.geo.hexes.map((h) => h.id).filter((id) => id !== this.robberHex);
   }
 
   piecesUsed(playerId) {
@@ -505,7 +557,7 @@ class CatanGame {
   tradeRates(playerId) {
     const rates = Object.fromEntries(RESOURCES.map((r) => [r, 4]));
     (this.layout?.ports || []).forEach((port) => {
-      const edge = GEOMETRY.edges[port.edgeId];
+      const edge = this.geo.edges[port.edgeId];
       const owns = [edge.a, edge.b].some((v) => this.buildings[v]?.playerId === playerId);
       if (!owns) return;
       if (port.type === 'any') RESOURCES.forEach((r) => { rates[r] = Math.min(rates[r], 3); });
@@ -525,15 +577,15 @@ class CatanGame {
       if (length > best) best = length;
       const building = this.buildings[vertex];
       if (length > 0 && building && building.playerId !== playerId) return;
-      GEOMETRY.vertices[vertex].edges.forEach((e) => {
+      this.geo.vertices[vertex].edges.forEach((e) => {
         if (!ownSet.has(e) || used.has(e)) return;
-        const edge = GEOMETRY.edges[e];
+        const edge = this.geo.edges[e];
         used.add(e);
         walk(edge.a === vertex ? edge.b : edge.a, used, length + 1);
         used.delete(e);
       });
     };
-    const starts = new Set(own.flatMap((e) => [GEOMETRY.edges[e].a, GEOMETRY.edges[e].b]));
+    const starts = new Set(own.flatMap((e) => [this.geo.edges[e].a, this.geo.edges[e].b]));
     starts.forEach((v) => walk(v, new Set(), 0));
     return best;
   }
@@ -665,7 +717,7 @@ class CatanGame {
   // --- building ------------------------------------------------------
 
   buildSettlement(playerId, vertexId) {
-    if (!Number.isInteger(vertexId) || !GEOMETRY.vertices[vertexId]) throw new CatanError('Pick a corner of a hex.');
+    if (!Number.isInteger(vertexId) || !this.geo.vertices[vertexId]) throw new CatanError('Pick a corner of a hex.');
 
     if (this.phase === PHASES.SETUP) {
       const player = this.setupActor(playerId, 'SETTLEMENT');
@@ -676,7 +728,7 @@ class CatanGame {
       const secondRound = this.setup.index >= this.order.length;
       const gained = emptyHand();
       if (secondRound) {
-        GEOMETRY.vertices[vertexId].hexes.forEach((h) => {
+        this.geo.vertices[vertexId].hexes.forEach((h) => {
           const resource = this.hexResource(h);
           if (resource) gained[resource] += this.give(player, resource, 1);
         });
@@ -701,7 +753,7 @@ class CatanGame {
   }
 
   buildRoad(playerId, edgeId) {
-    if (!Number.isInteger(edgeId) || !GEOMETRY.edges[edgeId]) throw new CatanError('Pick a side of a hex.');
+    if (!Number.isInteger(edgeId) || !this.geo.edges[edgeId]) throw new CatanError('Pick a side of a hex.');
 
     if (this.phase === PHASES.SETUP) {
       const player = this.setupActor(playerId, 'ROAD');
@@ -808,7 +860,7 @@ class CatanGame {
     this.layout.hexes.forEach((hex) => {
       if (hex.number !== total || hex.id === this.robberHex) return;
       const resource = TERRAIN_RESOURCE[hex.terrain];
-      GEOMETRY.hexes[hex.id].vertices.forEach((v) => {
+      this.geo.hexes[hex.id].vertices.forEach((v) => {
         const b = this.buildings[v];
         if (!b) return;
         claims[resource][b.playerId] = (claims[resource][b.playerId] || 0) + (b.type === 'city' ? 2 : 1);
@@ -861,7 +913,7 @@ class CatanGame {
   moveRobber(playerId, hexId) {
     const player = this.assertTurn(playerId);
     if (this.turn.step !== STEPS.ROBBER) throw new CatanError('The robber is not moving now.');
-    if (!Number.isInteger(hexId) || !GEOMETRY.hexes[hexId]) throw new CatanError('Pick a hex.');
+    if (!Number.isInteger(hexId) || !this.geo.hexes[hexId]) throw new CatanError('Pick a hex.');
     if (hexId === this.robberHex) throw new CatanError('The robber has to move to a different hex.');
     this.robberHex = hexId;
     this.addLog('ROBBER_MOVED', { name: player.nickname, hex: hexId, terrain: this.layout.hexes[hexId].terrain });
@@ -1089,12 +1141,12 @@ class CatanGame {
 
   toJSON() {
     const {
-      gameType, roomCode, hostId, settings, players, phase, layout, robberHex, buildings, roads, bank, devDeck, order,
+      gameType, roomCode, hostId, settings, players, phase, island, layout, robberHex, buildings, roads, bank, devDeck, order,
       setup, turn, turnNumber, trade, tradeSeq, lastRoll, longestRoad, largestArmy, results, log, createdAt, startedAt,
       endedAt, phaseEndsAt,
     } = this;
     return {
-      gameType, roomCode, hostId, settings, players, phase, layout, robberHex, buildings, roads, bank, devDeck, order,
+      gameType, roomCode, hostId, settings, players, phase, island, layout, robberHex, buildings, roads, bank, devDeck, order,
       setup, turn, turnNumber, trade, tradeSeq, lastRoll, longestRoad, largestArmy, results, log, createdAt, startedAt,
       endedAt, phaseEndsAt,
     };
@@ -1103,7 +1155,7 @@ class CatanGame {
   static fromJSON(data) {
     const game = new CatanGame(data.roomCode, data.hostId, data.settings);
     const fields = [
-      'players', 'phase', 'layout', 'robberHex', 'buildings', 'roads', 'bank', 'devDeck', 'order', 'setup', 'turn',
+      'players', 'phase', 'island', 'layout', 'robberHex', 'buildings', 'roads', 'bank', 'devDeck', 'order', 'setup', 'turn',
       'turnNumber', 'trade', 'tradeSeq', 'lastRoll', 'longestRoad', 'largestArmy', 'results', 'log', 'createdAt',
       'startedAt', 'endedAt', 'phaseEndsAt',
     ];
@@ -1116,14 +1168,15 @@ class CatanGame {
   boardView() {
     if (!this.layout) return null;
     return {
-      hexes: GEOMETRY.hexes.map((h) => {
+      island: this.island || DEFAULT_ISLAND,
+      hexes: this.geo.hexes.map((h) => {
         const tile = this.layout.hexes[h.id];
         return {
           id: h.id, q: h.q, r: h.r, x: h.x, y: h.y, vertices: h.vertices, terrain: tile.terrain, number: tile.number,
         };
       }),
-      vertices: GEOMETRY.vertices.map((v) => ({ id: v.id, x: v.x, y: v.y })),
-      edges: GEOMETRY.edges.map((e) => ({ id: e.id, a: e.a, b: e.b })),
+      vertices: this.geo.vertices.map((v) => ({ id: v.id, x: v.x, y: v.y })),
+      edges: this.geo.edges.map((e) => ({ id: e.id, a: e.a, b: e.b })),
       ports: this.layout.ports.map((p) => ({ edgeId: p.edgeId, type: p.type })),
       robberHex: this.robberHex,
     };
@@ -1251,6 +1304,8 @@ class CatanGame {
 }
 
 module.exports = {
+  ISLAND_OPTIONS,
+  devDeckFor,
   CatanGame,
   CatanError,
   PHASES,

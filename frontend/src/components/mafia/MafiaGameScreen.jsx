@@ -12,6 +12,7 @@ import { Segmented } from './MafiaSettings';
 import RoomChat from '../chat/RoomChat';
 import SocialBar from '../social/SocialBar';
 import { SpectatorBanner, SpectatorStrip, SurrenderButton } from '../room/RoomStatus';
+import GameGuide from '../rules/GameGuide';
 import { StyledName } from '../../cosmetics/Cosmetics';
 import { useOutcomeEffects } from '../../cosmetics/useGameCosmetics';
 
@@ -525,6 +526,10 @@ export default function MafiaGameScreen({
           canSkip={isHost && !['GAME_OVER', 'LOBBY'].includes(phase)}
           onSkip={actions.skipPhase}
         />
+
+        {/* What this player has to do right now, with the rules one
+            tap away - the same strip every game here uses. */}
+        <GameGuide gameId="mafia" state={state} className="panel" />
 
         <div className="grid gap-3 lg:grid-cols-[1fr,20rem] 3xl:grid-cols-[1fr,25rem] 4xl:grid-cols-[1fr,34rem] 4xl:gap-5">
           <div className="flex flex-col gap-3">

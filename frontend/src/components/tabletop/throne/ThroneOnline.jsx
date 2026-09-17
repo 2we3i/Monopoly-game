@@ -20,6 +20,7 @@ import {
   RulesModal, SeaPanel, TerritoryPanel, ThronePanel, TurnBanner, useThroneText,
 } from './ThronePanels';
 import { IronThroneBadge, SigilBadge } from './throneArt';
+import { NowBar } from '../../rules/GameGuide';
 import useThroneControls from './useThroneControls';
 
 const OTHERS_BATTLE_MS = 3500;
@@ -259,6 +260,18 @@ export default function ThroneOnline({
 
       {spectating && <SpectatorBanner onLeave={onLeave} className="mx-2 mt-2 shrink-0" />}
       {state.spectators?.length > 0 && <SpectatorStrip spectators={state.spectators} className="mx-2 mt-2 shrink-0" />}
+
+      {/* The same "your action now" strip as every other game. Its rules
+          button opens this game's own, more detailed rules dialog rather
+          than putting a second one beside it. */}
+      {running && (
+        <NowBar
+          gameId="throne"
+          state={{ ...state, game: g }}
+          onOpenRules={() => setRules(true)}
+          className="mx-2 mt-2 shrink-0 border-white/10 bg-black/30"
+        />
+      )}
 
       {myHouse && g.houses[myHouse]?.out && running && (
         <p className="shrink-0 bg-[#8f2a22]/25 px-4 py-1.5 text-center text-[12.5px] text-[#f0a090]">{t('throne.online.fallen')}</p>

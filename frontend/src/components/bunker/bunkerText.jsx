@@ -7,14 +7,20 @@
 // this - `state.categories` says which - so every screen takes the state's
 // list and sorts it by this one rather than assuming a fixed seven.
 export const CHAR_ORDER = [
-  'profession', 'biology', 'health', 'hobby', 'skill', 'trait', 'extra',
+  'profession', 'biology', 'health', 'condition', 'hobby', 'skill', 'knowledge',
+  'ability', 'trait', 'phobia', 'past', 'extra',
   'baggage', 'baggage2', 'baggage3', 'baggage4', 'secret', 'secret2',
 ];
 
 // The characteristics a given game is playing with, in sheet order.
 export function charOrder(state) {
   const inPlay = state?.categories;
-  if (!Array.isArray(inPlay) || !inPlay.length) return CHAR_ORDER.slice(0, 7);
+  // A game from before any of the extra rows existed dealt the original
+  // seven; its payload says so, and this is only the fallback for a
+  // payload that says nothing at all.
+  if (!Array.isArray(inPlay) || !inPlay.length) {
+    return ['profession', 'biology', 'health', 'hobby', 'skill', 'trait', 'extra'];
+  }
   return CHAR_ORDER.filter((k) => inPlay.includes(k));
 }
 
@@ -78,6 +84,10 @@ export function cardDetail(config, key, card, language) {
   return {
     glyph: entry.glyph || null,
     rarity: entry.rarity || 'common',
+    // A card from the ridiculous shelf is marked as such: the joke is
+    // meant to be visible, and the argument about whether it is useful
+    // anyway is the point.
+    absurd: !!entry.absurd,
     description: entry.description ? entry.description[language] || entry.description.en : null,
     hasHidden: !!entry.hasHidden,
     // Present only once the property has actually been turned face up -
@@ -159,6 +169,16 @@ const ICON_PATHS = {
   skill: <><path d="M14.5 6.5a3.5 3.5 0 014.9 4.3l-8.6 8.6a2 2 0 01-2.8-2.8l7.6-7.6" /><path d="M4.5 12.5l4 4" /></>,
   // A secret: a sealed envelope.
   secret: <><rect x="3.5" y="6" width="17" height="12" rx="2" /><path d="M4 7.5l8 6 8-6" /></>,
+  // Knowledge: an open book.
+  knowledge: <><path d="M12 6.5c-2-1.4-4-2-6.5-2v12c2.5 0 4.5.6 6.5 2 2-1.4 4-2 6.5-2v-12c-2.5 0-4.5.6-6.5 2z" /><path d="M12 6.5v12" /></>,
+  // A condition or limitation: a body with a band across it.
+  condition: <><circle cx="12" cy="6" r="2.6" /><path d="M7 20v-4.5a5 5 0 0110 0V20" /><path d="M5.5 12.5h13" /></>,
+  // A past: an hourglass.
+  past: <><path d="M7 3.5h10M7 20.5h10" /><path d="M8 3.5c0 4 4 5.2 4 8.5s-4 4.5-4 8.5M16 3.5c0 4-4 5.2-4 8.5s4 4.5 4 8.5" /></>,
+  // A fear: an eye that has seen something.
+  phobia: <><path d="M12 5.5c4.2 0 7.3 3.2 8.5 6.5-1.2 3.3-4.3 6.5-8.5 6.5S4.7 15.3 3.5 12C4.7 8.7 7.8 5.5 12 5.5z" /><circle cx="12" cy="12" r="2.4" /></>,
+  // A special ability: a spark.
+  ability: <><path d="M13 3.5L6 13h5l-1 7.5L18 11h-5z" /></>,
 };
 // The extra slots reuse their group's icon.
 ['baggage2', 'baggage3', 'baggage4'].forEach((k) => { ICON_PATHS[k] = ICON_PATHS.baggage; });

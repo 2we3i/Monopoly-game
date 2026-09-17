@@ -6,6 +6,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../../i18n/LanguageContext';
+import GameGuide from '../rules/GameGuide';
 import { useCitadelsConfig } from '../../hooks/useCitadels';
 import PlayerAvatar from '../PlayerAvatar';
 import Modal from '../Modal';
@@ -738,6 +739,9 @@ export default function CitadelsGame({
         <TopBar state={state} onLeave={onLeave} t={t} actions={actions} spectating={spectating} />
         {spectating && <SpectatorBanner onLeave={onLeave} />}
         <SpectatorStrip spectators={state.spectators} />
+        {/* What this player has to do right now, with the rules one
+            tap away - the same strip every game here uses. */}
+        <GameGuide gameId="citadels" state={state} className="panel" />
         <RoleTrack state={state} lookup={lookup} t={t} />
         <div className="scrollbar-thin flex gap-2 overflow-x-auto pb-1">
           {state.players.map((p, i) => (

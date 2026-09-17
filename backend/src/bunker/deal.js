@@ -9,21 +9,30 @@
 const content = require('./content');
 const actionCards = require('./actionCards');
 
-function weightFor(entry, bias) {
-  if (bias === 'flat') return 1;
+// How much of the ridiculous shelf a table wants. 'off' removes it
+// altogether, 'only' plays nothing else, and the three in between decide
+// how often an absurd card turns up next to a serious one.
+const ABSURD_WEIGHT = {
+  off: 0, light: 0.35, normal: 1, full: 3, only: 1,
+};
+
+function weightFor(entry, bias, absurdity = 'normal') {
+  const absurdFactor = entry.a ? (ABSURD_WEIGHT[absurdity] ?? 1) : 1;
+  if (absurdFactor === 0) return 0;
+  if (bias === 'flat') return absurdFactor;
   const base = content.RARITY_WEIGHT[entry.r || 'common'] || 1;
   if (bias === 'rare') {
     // Flatten towards the rare end without ever making a common card
     // impossible: the square root pulls the extremes together.
-    return Math.sqrt(base);
+    return Math.sqrt(base) * absurdFactor;
   }
-  return base;
+  return base * absurdFactor;
 }
 
 // One entry out of `deck`, chosen by weight. Returns null for an empty deck.
-function weightedPick(deck, bias, rng) {
+function weightedPick(deck, bias, rng, absurdity = 'normal') {
   if (!deck.length) return null;
-  const weights = deck.map((entry) => weightFor(entry, bias));
+  const weights = deck.map((entry) => weightFor(entry, bias, absurdity));
   const total = weights.reduce((a, b) => a + b, 0);
   if (total <= 0) return deck[Math.floor(rng() * deck.length)];
   let roll = rng() * total;
@@ -60,11 +69,32 @@ function baggageDeck(settings) {
   return deck.length ? deck : content.DECKS.baggage;
 }
 
+// How absurd this table is playing. Unknown values (an old save, a hand
+// written config) read as 'normal', which is the catalogue's own weights.
+function absurdityOf(settings) {
+  const level = settings?.characters?.absurdity;
+  return ABSURD_WEIGHT[level] === undefined ? 'normal' : level;
+}
+
+// The deck a key is dealt from, narrowed to what the table allows. The
+// absurdity dial only ever REMOVES cards here: making them more or less
+// likely is the weighting's job, so a table at 'light' can still be dealt
+// a ghost hunter.
 function deckForKey(key, settings) {
   const def = content.categoryDef(key);
   if (!def || !def.deck) return [];
-  if (def.deck === 'baggage') return baggageDeck(settings);
-  return content.DECKS[def.deck] || [];
+  const base = def.deck === 'baggage' ? baggageDeck(settings) : content.DECKS[def.deck] || [];
+  const absurdity = absurdityOf(settings);
+  if (absurdity === 'off') {
+    const straight = base.filter((entry) => !entry.a);
+    return straight.length ? straight : base;
+  }
+  if (absurdity === 'only') {
+    const silly = base.filter((entry) => entry.a);
+    // A deck with nothing absurd in it still has to deal something.
+    return silly.length ? silly : base;
+  }
+  return base;
 }
 
 // Deals one whole table.
@@ -74,6 +104,7 @@ function deckForKey(key, settings) {
 // `chaotic` draws freely - duplicates are part of the fun.
 function dealTable(players, settings, rng = Math.random) {
   const bias = settings.characters.rarityBias;
+  const absurdity = absurdityOf(settings);
   const balanced = settings.characters.randomness === 'balanced';
   const categories = settings.characters.categories;
 
@@ -110,7 +141,7 @@ function dealTable(players, settings, rng = Math.random) {
         // dealing nothing - a big table with a small deck still plays.
         if (fresh.length) pool = fresh;
       }
-      const picked = weightedPick(pool, bias, rng);
+      const picked = weightedPick(pool, bias, rng, absurdity);
       if (!picked) return;
       mine.add(picked.id);
       used.add(picked.id);
@@ -135,7 +166,7 @@ function drawReplacement(key, player, settings, rng = Math.random) {
     .filter((k) => (content.categoryDef(k)?.slot || k) === slot && player.cards[k])
     .map((k) => player.cards[k].id));
   const pool = deckForKey(key, settings).filter((entry) => !owned.has(entry.id));
-  const picked = weightedPick(pool, settings.characters.rarityBias, rng);
+  const picked = weightedPick(pool, settings.characters.rarityBias, rng, absurdityOf(settings));
   if (!picked) return null;
   const out = { id: picked.id };
   if (settings.baggage.specialProperties && picked.hidden) out.property = picked.hidden;
@@ -178,5 +209,7 @@ function drawActionCard(settings, rng = Math.random) {
 }
 
 module.exports = {
+  ABSURD_WEIGHT,
+  absurdityOf,
   shuffle, weightedPick, biologyCard, baggageDeck, deckForKey, dealTable, drawReplacement, dealActionCards, drawActionCard,
 };

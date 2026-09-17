@@ -13,6 +13,7 @@
 // saved before any of this existed still deals, loads and scores.
 
 const legacy = require('./cards');
+const absurd = require('./absurd');
 
 // `s` is a card's contribution to the colony's survival chances, used for
 // the verdict at the end of a game. `r` is rarity, which only decides how
@@ -32,6 +33,75 @@ function card(id, s, en, ru, extra = {}) {
 }
 
 // --- new characteristic decks ----------------------------------------
+
+// More work than the original thirty-two. The shelter needs people who can
+// grow food, mend a pump, treat a wound and keep a reactor cool; it also
+// fills up with people whose work stopped meaning anything the moment the
+// sirens went off. Both are here on purpose - a table with nothing but
+// useful professions has nothing to argue about.
+const PROFESSION_EXTRA = [
+  card('doctor', 3, 'Doctor (general practice)', 'Врач общей практики', { r: 'uncommon' }),
+  card('paramedic', 3, 'Paramedic', 'Фельдшер скорой помощи', { r: 'uncommon' }),
+  card('anesthetist', 3, 'Anaesthetist', 'Анестезиолог', { r: 'rare' }),
+  card('engineer', 3, 'Engineer', 'Инженер', { r: 'uncommon' }),
+  card('rescuer', 3, 'Search and rescue worker', 'Спасатель', { r: 'uncommon' }),
+  card('miner', 2, 'Miner', 'Шахтёр'),
+  card('scientist', 2, 'Research scientist', 'Учёный'),
+  card('nuclear_engineer', 4, 'Nuclear power specialist', 'Специалист по ядерной энергетике', { r: 'legendary' }),
+  card('water_engineer', 4, 'Water treatment specialist', 'Специалист по водоснабжению', { r: 'rare' }),
+  card('agronomist', 3, 'Agronomist', 'Специалист по сельскому хозяйству', { r: 'uncommon' }),
+  card('survivalist', 3, 'Survival instructor', 'Специалист по выживанию', { r: 'rare' }),
+  card('welder_pro', 3, 'Welder', 'Сварщик', { r: 'uncommon' }),
+  card('hvac', 3, 'Ventilation engineer', 'Инженер по вентиляции', { r: 'rare' }),
+  card('archivist', 1, 'Archivist', 'Архивист'),
+  card('entrepreneur', 0, 'Entrepreneur', 'Предприниматель'),
+  card('athlete', 1, 'Professional athlete', 'Профессиональный спортсмен'),
+  card('journalist', 0, 'Journalist', 'Журналист'),
+  card('actor', -1, 'Actor', 'Актёр'),
+  card('shopkeeper', 0, 'Shop assistant', 'Продавец'),
+  card('unemployed', -1, 'Unemployed', 'Безработный'),
+  card('crime_boss', -1, 'Crime boss', 'Криминальный авторитет', { r: 'rare' }),
+  card('fisherman', 2, 'Fisherman', 'Рыбак'),
+  card('beekeeper', 2, 'Beekeeper', 'Пчеловод'),
+  card('butcher', 2, 'Butcher', 'Мясник'),
+  card('baker', 2, 'Baker', 'Пекарь'),
+  card('seamstress', 1, 'Seamstress', 'Швея'),
+  card('driver', 1, 'Lorry driver', 'Водитель грузовика'),
+  card('crane_operator', 1, 'Crane operator', 'Крановщик'),
+  card('radio_engineer', 3, 'Radio engineer', 'Радиоинженер', { r: 'uncommon' }),
+  card('dentist', 2, 'Dentist', 'Стоматолог', { r: 'uncommon' }),
+  card('psychiatrist', 2, 'Psychiatrist', 'Психиатр', { r: 'uncommon' }),
+  card('microbiologist', 3, 'Microbiologist', 'Микробиолог', { r: 'rare' }),
+  card('epidemiologist', 3, 'Epidemiologist', 'Эпидемиолог', { r: 'rare' }),
+  card('botanist', 3, 'Botanist', 'Ботаник', { r: 'uncommon' }),
+  card('meteorologist', 1, 'Meteorologist', 'Метеоролог'),
+  card('cartographer', 1, 'Cartographer', 'Картограф'),
+  card('sapper', 2, 'Bomb disposal engineer', 'Сапёр', { r: 'rare' }),
+  card('sniper', 1, 'Army sniper', 'Армейский снайпер', { r: 'uncommon' }),
+  card('medic_military', 3, 'Combat medic', 'Военный врач', { r: 'rare' }),
+  card('diver', 2, 'Commercial diver', 'Водолаз', { r: 'uncommon' }),
+  card('chemical_tech', 3, 'Chemical process technician', 'Технолог химического производства', { r: 'uncommon' }),
+  card('machinist', 2, 'Machinist', 'Токарь'),
+  card('locksmith', 2, 'Locksmith', 'Слесарь'),
+  card('it_admin', 1, 'System administrator', 'Системный администратор'),
+  card('teacher_primary', 1, 'Primary school teacher', 'Учитель начальных классов'),
+  card('midwife_pro', 3, 'Midwife', 'Акушерка', { r: 'rare' }),
+  card('nutritionist', 2, 'Nutritionist', 'Диетолог'),
+  card('logistician', 2, 'Logistics manager', 'Логист'),
+  card('translator', 0, 'Translator', 'Переводчик'),
+  card('historian', 0, 'Historian', 'Историк'),
+  card('philosopher', -1, 'Philosopher', 'Философ'),
+  card('model', -1, 'Fashion model', 'Модель'),
+  card('dj', -1, 'DJ', 'Диджей'),
+  card('banker', -1, 'Investment banker', 'Инвестиционный банкир'),
+  card('realtor', -1, 'Estate agent', 'Риелтор'),
+  card('marketer', -1, 'Marketing manager', 'Маркетолог'),
+  card('taxidermist', 1, 'Taxidermist', 'Таксидермист'),
+  card('gravedigger', 1, 'Gravedigger', 'Могильщик'),
+  card('shepherd', 2, 'Shepherd', 'Пастух'),
+  card('forester', 2, 'Forest ranger', 'Лесничий'),
+  card('tunneller', 3, 'Tunnel engineer', 'Проходчик тоннелей', { r: 'uncommon' }),
+];
 
 // Knowledge and skills - what a person can actually DO, as opposed to
 // what they are employed as (profession) or enjoy (hobby).
@@ -83,6 +153,125 @@ const SECRETS = [
   card('knows_cure', 4, 'Remembers the formula of the antidote', 'Помнит формулу противоядия', { r: 'legendary' }),
   card('addicted', -2, 'Dependent on a medicine that will run out', 'Зависим от лекарства, которое скоро закончится'),
   card('former_leader', 1, 'Led a settlement that survived two winters', 'Возглавлял поселение, пережившее две зимы', { r: 'uncommon' }),
+];
+
+// Knowledge is what a person KNOWS, as opposed to what their hands can do
+// (skill) - a distinction that matters the moment the table argues about
+// whether theory is worth a place when nobody can put it into practice.
+const KNOWLEDGE = [
+  card('medicine_theory', 3, 'Medicine, in theory', 'Медицина — в теории', { r: 'uncommon' }),
+  card('edible_plants', 3, 'Which plants are edible', 'Какие растения съедобны', { r: 'uncommon' }),
+  card('radiation_safety', 3, 'Radiation safety', 'Радиационная безопасность', { r: 'rare' }),
+  card('ballistics', 1, 'Ballistics', 'Баллистика'),
+  card('electric_theory', 2, 'Electrical theory', 'Теория электричества'),
+  card('construction_norms', 2, 'Building codes and load limits', 'Строительные нормы и нагрузки'),
+  card('anatomy', 2, 'Human anatomy', 'Анатомия человека'),
+  card('meteorology', 1, 'Weather patterns', 'Погодные закономерности'),
+  card('geology_knowledge', 2, 'Rocks, soils and groundwater', 'Породы, почвы и грунтовые воды', { r: 'uncommon' }),
+  card('law', -1, 'Law', 'Юриспруденция'),
+  card('economics', -1, 'Economics', 'Экономика'),
+  card('astronomy_knowledge', 0, 'Astronomy', 'Астрономия'),
+  card('history_knowledge', 0, 'History', 'История'),
+  card('languages_five', 1, 'Five languages', 'Пять языков'),
+  card('chemistry_knowledge', 3, 'Chemistry', 'Химия', { r: 'uncommon' }),
+  card('microbiology_knowledge', 3, 'Microbiology', 'Микробиология', { r: 'rare' }),
+  card('engineering_knowledge', 3, 'Mechanical engineering', 'Инженерная механика', { r: 'uncommon' }),
+  card('nothing_known', -2, 'Left school at fourteen', 'Бросил школу в четырнадцать'),
+  card('psychology_knowledge', 2, 'Group psychology', 'Психология малых групп', { r: 'uncommon' }),
+  card('water_chemistry', 3, 'Water chemistry', 'Химия воды', { r: 'rare' }),
+];
+
+// A condition or limitation, kept apart from general health: health says
+// how strong a body is, this says what it cannot do.
+const CONDITIONS = [
+  card('none_cond', 2, 'No limitations at all', 'Никаких ограничений', { r: 'uncommon' }),
+  card('peanut_allergy', -1, 'Severe nut allergy', 'Тяжёлая аллергия на орехи'),
+  card('needs_insulin', -3, 'Needs insulin every day', 'Ежедневно нужен инсулин', { r: 'uncommon' }),
+  card('wheelchair', -2, 'Uses a wheelchair', 'Передвигается в коляске'),
+  card('one_arm', -2, 'Lost an arm', 'Нет одной руки'),
+  card('blind_one_eye', -1, 'Blind in one eye', 'Не видит одним глазом'),
+  card('no_smell', 0, 'No sense of smell', 'Не чувствует запахов'),
+  card('lactose', 0, 'Lactose intolerant', 'Непереносимость лактозы'),
+  card('gluten', -1, 'Coeliac disease', 'Целиакия'),
+  card('back_injury', -1, 'Cannot lift anything heavy', 'Нельзя поднимать тяжести'),
+  card('needs_glasses', 0, 'Helpless without glasses', 'Беспомощен без очков'),
+  card('heart_condition', -2, 'Heart condition', 'Болезнь сердца'),
+  card('mute', -1, 'Cannot speak', 'Не может говорить'),
+  card('deaf', -1, 'Deaf', 'Глухота'),
+  card('needs_dialysis', -3, 'Needs dialysis', 'Нужен диализ', { r: 'rare' }),
+  card('chronic_pain', -1, 'Chronic pain', 'Хроническая боль'),
+  card('sleep_apnea', -1, 'Sleep apnoea', 'Апноэ во сне'),
+  card('seasonal_allergy', 0, 'Seasonal allergies', 'Сезонная аллергия'),
+  card('recovering', 1, 'Recovering from surgery, nearly well', 'Восстанавливается после операции, почти здоров'),
+  card('mild_limp', 0, 'A slight limp', 'Лёгкая хромота'),
+];
+
+// What a person was before all this. A past is the card that makes a
+// table re-read every reveal that came before it.
+const PASTS = [
+  card('war_veteran', 2, 'Fought in a war', 'Прошёл войну', { r: 'uncommon' }),
+  card('prison_ten_years', -2, 'Ten years in prison', 'Десять лет в тюрьме'),
+  card('orphanage', 1, 'Grew up in an orphanage', 'Вырос в детском доме'),
+  card('village_childhood', 2, 'Grew up in a village without running water', 'Вырос в деревне без водопровода'),
+  card('expedition_arctic', 3, 'Spent a winter at a polar station', 'Зимовал на полярной станции', { r: 'rare' }),
+  card('survived_earthquake', 2, 'Survived an earthquake under rubble', 'Пережил землетрясение под завалами', { r: 'uncommon' }),
+  card('raised_five', 2, 'Raised five children alone', 'В одиночку вырастил пятерых детей', { r: 'uncommon' }),
+  card('was_homeless', 2, 'Was homeless for three years', 'Три года жил на улице'),
+  card('cult_member', -2, 'Spent years in a cult', 'Годы провёл в секте'),
+  card('bankrupt', -1, 'Lost everything in a bankruptcy', 'Потерял всё при банкротстве'),
+  card('sailor_years', 2, 'Ten years in the merchant navy', 'Десять лет в торговом флоте', { r: 'uncommon' }),
+  card('always_rich', -1, 'Has never worked a day', 'Ни дня не работал'),
+  card('lost_family', 0, 'Lost their whole family last year', 'В прошлом году потерял всю семью'),
+  card('firefighter_past', 2, 'Was a firefighter for a decade', 'Десять лет служил в пожарной охране', { r: 'uncommon' }),
+  card('hospital_volunteer', 1, 'Volunteered in a field hospital', 'Волонтёрил в полевом госпитале'),
+  card('ran_a_farm', 3, 'Ran a farm for fifteen years', 'Пятнадцать лет держал хозяйство', { r: 'rare' }),
+  card('deserter', -2, 'Deserted their post once', 'Однажды бросил свой пост'),
+  card('shipwreck', 2, 'Survived a shipwreck', 'Пережил кораблекрушение', { r: 'uncommon' }),
+  card('nothing_notable', 0, 'An entirely ordinary life', 'Совершенно обычная жизнь'),
+  card('taught_survival', 3, 'Taught survival courses for years', 'Годами вёл курсы выживания', { r: 'rare' }),
+];
+
+// A fear is rarely fatal - but a shelter is small, dark, loud and full of
+// other people, and a fear of any of those is an argument.
+const PHOBIAS = [
+  card('claustrophobia_fear', -3, 'Enclosed spaces', 'Замкнутые пространства', { r: 'uncommon' }),
+  card('dark_fear', -2, 'The dark', 'Темнота'),
+  card('crowds_fear', -2, 'Crowds and close company', 'Толпа и теснота'),
+  card('blood_fear', -2, 'The sight of blood', 'Вид крови'),
+  card('height_fear', 0, 'Heights', 'Высота'),
+  card('water_fear', -1, 'Deep water', 'Глубокая вода'),
+  card('insects_fear', -1, 'Insects', 'Насекомые'),
+  card('dogs_fear', 0, 'Dogs', 'Собаки'),
+  card('needles_fear', -1, 'Needles and injections', 'Иглы и уколы'),
+  card('fire_fear', -1, 'Fire', 'Огонь'),
+  card('loneliness_fear', -1, 'Being alone', 'Одиночество'),
+  card('radiation_fear', -1, 'Radiation, to the point of paralysis', 'Радиация — до оцепенения'),
+  card('death_fear', 0, 'Death, plainly and openly', 'Смерть — прямо и открыто'),
+  card('nothing_fear', 2, 'Nothing frightens them', 'Ничего не боится', { r: 'rare' }),
+  card('failure_fear', 0, 'Letting people down', 'Подвести людей'),
+  card('disease_fear', -1, 'Infection', 'Заражение'),
+];
+
+// One thing a character can do that nobody else can. Abilities are the
+// loudest cards in the game: they are what a player saves for the round
+// they are about to be voted out.
+const ABILITIES = [
+  card('never_panics', 3, 'Never panics, whatever happens', 'Никогда не паникует, что бы ни случилось', { r: 'rare' }),
+  card('photographic', 2, 'Remembers everything they have read', 'Помнит всё, что прочитал', { r: 'uncommon' }),
+  card('immune_system', 4, 'Immune to the infection', 'Невосприимчив к заразе', { r: 'legendary' }),
+  card('night_vision_nat', 2, 'Sees in near darkness', 'Видит почти в полной темноте', { r: 'rare' }),
+  card('endurance_ability', 2, 'Can work for two days without sleep', 'Может работать двое суток без сна', { r: 'uncommon' }),
+  card('calms_people', 3, 'Can talk anyone down from anything', 'Способен успокоить кого угодно', { r: 'uncommon' }),
+  card('fixes_anything', 3, 'Can repair anything with what is at hand', 'Починит что угодно из того, что под рукой', { r: 'rare' }),
+  card('finds_water', 3, 'Finds water anywhere', 'Найдёт воду где угодно', { r: 'rare' }),
+  card('eats_little', 2, 'Needs a third of the rations', 'Обходится третью пайка', { r: 'uncommon' }),
+  card('heals_fast', 2, 'Heals twice as fast as anyone', 'Заживает вдвое быстрее других', { r: 'uncommon' }),
+  card('perfect_aim', 1, 'Never misses', 'Никогда не промахивается'),
+  card('reads_people', 2, 'Reads people at a glance', 'Читает людей с первого взгляда', { r: 'uncommon' }),
+  card('no_ability', -1, 'Nothing special whatsoever', 'Ничего особенного'),
+  card('leads_naturally', 2, 'People follow them without being asked', 'Люди идут за ним без просьб', { r: 'uncommon' }),
+  card('cold_resistant', 2, 'Barely feels the cold', 'Почти не чувствует холода'),
+  card('smells_gas', 3, 'Smells a gas leak before any sensor', 'Чует утечку газа раньше датчика', { r: 'rare' }),
 ];
 
 // --- baggage ----------------------------------------------------------
@@ -184,6 +373,11 @@ const BAGGAGE = [
 // dealt from; `slot` groups the baggage slots so they share one deck
 // without ever dealing the same item twice to one player.
 
+// The original thirteen keep their orders exactly; everything added later
+// takes a number after them, so an old save, an old payload and an old
+// Creator config all still line up. The ORDER a character sheet is DRAWN
+// in is a separate, presentational list on the client - it is free to slot
+// the new cards wherever they read best.
 const CATEGORIES = [
   { key: 'profession', deck: 'profession', core: true, order: 1 },
   { key: 'biology', deck: null, core: true, order: 2 }, // generated, not dealt
@@ -198,6 +392,11 @@ const CATEGORIES = [
   { key: 'baggage4', deck: 'baggage', core: false, order: 11, slot: 'baggage' },
   { key: 'secret', deck: 'secret', core: false, order: 12, slot: 'secret' },
   { key: 'secret2', deck: 'secret', core: false, order: 13, slot: 'secret' },
+  { key: 'knowledge', deck: 'knowledge', core: false, order: 14 },
+  { key: 'condition', deck: 'condition', core: false, order: 15 },
+  { key: 'past', deck: 'past', core: false, order: 16 },
+  { key: 'phobia', deck: 'phobia', core: false, order: 17 },
+  { key: 'ability', deck: 'ability', core: false, order: 18 },
 ];
 
 const BAGGAGE_KEYS = CATEGORIES.filter((c) => c.slot === 'baggage').map((c) => c.key);
@@ -205,16 +404,43 @@ const SECRET_KEYS = CATEGORIES.filter((c) => c.slot === 'secret').map((c) => c.k
 // Every key the engine can ever deal. The seven original keys come first
 // and in their original order, so old saves and old payloads line up.
 const ALL_CATEGORY_KEYS = [...CATEGORIES].sort((a, b) => a.order - b.order).map((c) => c.key);
-// What a table plays with unless it says otherwise: the original seven,
-// plus the second bag and one secret.
-const DEFAULT_CATEGORY_KEYS = ['profession', 'biology', 'health', 'hobby', 'skill', 'trait', 'extra', 'baggage', 'baggage2', 'secret'];
+// What a table plays with unless it says otherwise: a full character -
+// what they do, what they are, what they know, what they have been
+// through, what they are afraid of and the one thing they can do that
+// nobody else can, plus two bags and a secret. A host who wants the older,
+// shorter sheet simply switches the extra rows off in the settings.
+const DEFAULT_CATEGORY_KEYS = [
+  'profession', 'biology', 'health', 'condition', 'hobby', 'skill', 'knowledge',
+  'trait', 'past', 'phobia', 'ability', 'extra', 'baggage', 'baggage2', 'secret',
+];
 
-const DECKS = {
+// The serious catalogue, before the absurd shelf is mixed in.
+const STRAIGHT_DECKS = {
   ...legacy.DECKS,
+  profession: [...legacy.DECKS.profession, ...PROFESSION_EXTRA],
   baggage: BAGGAGE,
   skill: SKILLS,
   secret: SECRETS,
+  knowledge: KNOWLEDGE,
+  condition: CONDITIONS,
+  past: PASTS,
+  phobia: PHOBIAS,
+  ability: ABILITIES,
 };
+
+// The decks as the engine sees them: everything serious, plus the absurd
+// cards for the same deck. Nothing downstream distinguishes them - a
+// profession is a profession. Only `deal.js` reads the `a` flag, to decide
+// how often (or whether) an absurd card is dealt; a card already in play
+// always resolves, so switching absurdity off mid-game breaks nothing.
+const DECKS = Object.fromEntries(
+  Object.entries(STRAIGHT_DECKS).map(([name, deck]) => [name, [...deck, ...(absurd.DECKS[name] || [])]]),
+);
+
+// True for a card from the ridiculous shelf.
+function isAbsurd(id) {
+  return absurd.ALL_IDS.has(id);
+}
 
 function categoryDef(key) {
   return CATEGORIES.find((c) => c.key === key) || null;
@@ -264,6 +490,9 @@ function publicDecks() {
       id: entry.id,
       name: { en: entry.en, ru: entry.ru },
       rarity: entry.r || 'common',
+      // The client draws an absurd card differently - it is a joke the
+      // table is allowed to see coming.
+      absurd: !!entry.a,
       glyph: entry.g || null,
       description: entry.en_d ? { en: entry.en_d, ru: entry.ru_d } : null,
       hasHidden: !!entry.hidden,
@@ -280,6 +509,8 @@ module.exports = {
   RARITIES,
   RARITY_WEIGHT,
   CATEGORIES,
+  STRAIGHT_DECKS,
+  isAbsurd,
   ALL_CATEGORY_KEYS,
   DEFAULT_CATEGORY_KEYS,
   BAGGAGE_KEYS,

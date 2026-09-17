@@ -148,7 +148,9 @@ async function run() {
   // --- settings in the lobby -------------------------------------------
   await emit(screen.socket, 'memehype:settings', { settings: { packs: ['everyday', 'ussr', 'animals'] } });
   await screen.waitFor((s) => s.settings.packs.length === 3, 'three packs chosen');
-  assert(screen.state.options.packs.length === 3, 'the lobby is offered every pack');
+  // Every pack that exists, not a number written down here: adding a pack
+  // to the catalogue must not break this test.
+  assert(screen.state.options.packs.length === content.catalog().length, 'the lobby is offered every pack');
   await emit(screen.socket, 'memehype:settings', { settings: { rating: '18' } });
   assert(screen.state.settings.rating === '16', 'an unconfirmed switch to 18+ is refused');
   await emit(screen.socket, 'memehype:settings', { settings: { rating: '18', confirmAdult: true } });

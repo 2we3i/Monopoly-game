@@ -5,6 +5,7 @@
 // and are merged in at the bottom of this file.
 
 import { bunkerExtraEn, bunkerExtraRu } from './bunkerExtraTranslations';
+import { bunkerNewEn, bunkerNewRu } from './bunkerNewTranslations';
 
 const baseEn = {
   'menu.bunker.title': 'Bunker',
@@ -304,5 +305,5 @@ const baseRu = {
   'bunker.system.PLAYER_RECONNECTED': '{name} вернулся(ась).',
 };
 
-export const bunkerEn = { ...baseEn, ...bunkerExtraEn };
-export const bunkerRu = { ...baseRu, ...bunkerExtraRu };
+export const bunkerEn = { ...baseEn, ...bunkerExtraEn, ...bunkerNewEn };
+export const bunkerRu = { ...baseRu, ...bunkerExtraRu, ...bunkerNewRu };

@@ -30,6 +30,7 @@ import { usePendingAction } from '../hooks/usePendingAction';
 import Icon from './icons';
 import SocialBar from './social/SocialBar';
 import { SpectatorBanner, SpectatorStrip, SurrenderButton } from './room/RoomStatus';
+import GameGuide from './rules/GameGuide';
 import { StyledName, VictoryMark, useLook } from '../cosmetics/Cosmetics';
 import { useOutcomeEffects, useTurnSound } from '../cosmetics/useGameCosmetics';
 
@@ -531,6 +532,12 @@ export default function GameUI({
 
       {spectating && <SpectatorBanner onLeave={onLeave} className="mx-2.5 mt-2.5" />}
       {gameState.spectators?.length > 0 && <SpectatorStrip spectators={gameState.spectators} className="mx-2.5 mt-2.5" />}
+
+      {/* What this player has to do right now, with the rules one tap
+          away - the same strip every game here uses. */}
+      {gameState.phase !== 'LOBBY' && (
+        <GameGuide gameId="monopoly" state={gameState} ctx={{ isMyTurn }} className="panel mx-2.5 mt-2.5 shrink-0" />
+      )}
 
       <main className="flex min-h-0 flex-1 flex-col gap-2.5 p-2.5 lg:flex-row">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-2.5">

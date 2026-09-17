@@ -13,6 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../../../i18n/LanguageContext';
+import GameGuide from '../../rules/GameGuide';
 import { useChpok } from '../../../hooks/useChpok';
 import { PhaseClock, SurrenderButton } from '../../room/RoomStatus';
 import LanguageSwitcher from '../../LanguageSwitcher';
@@ -388,6 +389,9 @@ export default function PhoneController({ roomCode, auth }) {
       </header>
 
       {chpok.error && <p className="rounded-xl bg-rent/20 px-3 py-2 text-[12.5px] text-rent-light">{chpok.error}</p>}
+
+      {/* What to do now, and the rules, without leaving the round. */}
+      <GameGuide gameId="chpok" state={state} className="panel" />
 
       {state.phase !== 'LOBBY' && state.phase !== 'GAME_OVER' && (
         <div className="panel flex flex-col items-center gap-2 px-4 py-4 text-center">

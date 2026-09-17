@@ -17,6 +17,7 @@ import {
   PhoneFrame, PhoneJoinForm, ReconnectStrip, usePhoneSeat,
 } from '../../play/PhoneShell';
 import MemeCard from './MemeCard';
+import GameGuide from '../../rules/GameGuide';
 import {
   Avatar, Confetti, StatusBadge, TimerRing,
 } from './parts';
@@ -117,7 +118,7 @@ function PickStep({ state, actions, setFooter }) {
               className={`hype-pop rounded-2xl transition ${on ? 'scale-[1.03] ring-4 ring-amber-300' : 'opacity-90 active:scale-95'}`}
               style={{ animationDelay: `${i * 0.05}s` }}
             >
-              <MemeCard meme={m} size="md" />
+              <MemeCard meme={m} size="md" meta />
             </button>
           );
         })}
@@ -185,7 +186,7 @@ function VoteStep({ state, actions, setFooter }) {
               className={`hype-flip relative rounded-2xl transition ${on ? 'scale-[1.03] ring-4 ring-sky-400' : ''} ${c.mine ? 'opacity-40' : 'active:scale-95'}`}
               style={{ animationDelay: `${i * 0.08}s` }}
             >
-              <MemeCard meme={c.meme} size="md" label={`MEM #${c.index}`} />
+              <MemeCard meme={c.meme} size="md" label={`MEM #${c.index}`} meta />
               {c.mine && (
                 <span className="absolute inset-x-2 bottom-2 rounded-lg bg-black/75 py-1 text-center text-[12px] font-black text-white">
                   {t('hype.phone.yours')}
@@ -358,6 +359,8 @@ export default function MemeHypePhone({ roomCode, auth }) {
         <span className="min-w-0 flex-1 truncate text-right text-[12px] font-bold text-white/50">{t(`hype.phase.${state.phase}`)}</span>
       </header>
       {room.error && <p className="rounded-xl bg-rose-500/20 px-3 py-2 text-[13px] text-rose-200">{room.error}</p>}
+      {/* What to do now, and the rules, without leaving the round. */}
+      <GameGuide gameId="memehype" state={state} className="hype-panel" />
       {!out && (state.phase === 'PICK' || state.phase === 'VOTE' || state.phase === 'REVEAL') && <Situation state={state} />}
       {step}
     </PhoneFrame>

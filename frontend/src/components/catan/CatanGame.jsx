@@ -9,6 +9,7 @@ import {
   useEffect, useMemo, useRef, useState,
 } from 'react';
 import { useTranslation } from '../../i18n/LanguageContext';
+import GameGuide from '../rules/GameGuide';
 import PlayerAvatar from '../PlayerAvatar';
 import Modal from '../Modal';
 import Icon from '../icons';
@@ -1001,6 +1002,9 @@ export default function CatanGame({
         <TopBar state={state} onLeave={onLeave} t={t} actions={actions} spectating={spectating} />
         {spectating && <SpectatorBanner onLeave={onLeave} />}
         <SpectatorStrip spectators={state.spectators} />
+        {/* What this player has to do right now, with the rules one
+            tap away - the same strip every game here uses. */}
+        <GameGuide gameId="catan" state={state} className="panel shrink-0" />
         <div className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-[minmax(0,1fr),22rem] 3xl:grid-cols-[minmax(0,1fr),26rem] 4xl:grid-cols-[minmax(0,1fr),32rem]">
           <div className="flex min-w-0 flex-col gap-3 lg:min-h-0">
             <div className="relative h-[60vh] min-h-[320px] lg:h-auto lg:min-h-[280px] lg:flex-1">

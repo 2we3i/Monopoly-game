@@ -76,6 +76,7 @@ const PACK_FILES = [
   require('./everyday'), // eslint-disable-line global-require
   require('./ussr'), // eslint-disable-line global-require
   require('./animals'), // eslint-disable-line global-require
+  require('./trending'), // eslint-disable-line global-require
 ];
 
 function normalizePack(file) {
@@ -121,6 +122,13 @@ function normalizePack(file) {
               title: photo.title, author: photo.author, license: photo.license, source: photo.source,
             }
             : null,
+          // A card can carry a proper name of its own and a note about
+          // where it came from - a pack built from an outside source (the
+          // shared meme sheet) uses both; the older packs simply do not
+          // set them.
+          title: extra.title || null,
+          description: extra.description || null,
+          source: extra.source || null,
           weight: extra.weight || 1,
           enabled: extra.enabled !== false,
         };
@@ -130,6 +138,8 @@ function normalizePack(file) {
   return {
     id: file.id,
     palette,
+    // Where the pack's content comes from, when it is not this file.
+    source: file.source || null,
     order: file.order || 99,
     emoji: file.emoji,
     accent: file.accent,
@@ -296,6 +306,7 @@ function catalog() {
     accent: p.accent,
     title: p.title,
     description: p.description,
+    source: p.source || null,
     sizes: Object.fromEntries(RATINGS.map((r) => [r, {
       situations: p.byRating[r].situations.filter((s) => s.enabled).length,
       memes: p.byRating[r].memes.filter((m) => m.enabled).length,

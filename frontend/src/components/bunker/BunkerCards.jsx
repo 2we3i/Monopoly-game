@@ -383,7 +383,9 @@ export function EventBanner({ state, t }) {
       <div className="min-w-0 flex-1">
         <p className="section-label text-orange-300">{t('bunker.events.title')}</p>
         <h3 className="text-[15px] font-bold text-parch 4xl:text-[18px]">{t(`bunker.event.${event.id}.name`)}</h3>
-        <p className="text-[12.5px] leading-snug text-parch/60">{t(`bunker.event.${event.id}.text`)}</p>
+        {/* The event's own numbers go into its text: which two players
+            argued, how many months are left, whose find it was. */}
+        <p className="text-[12.5px] leading-snug text-parch/60">{t(`bunker.event.${event.id}.text`, event.params || {})}</p>
       </div>
       <span className="shrink-0 text-[11px] text-parch/30 tnum">R{event.round}</span>
     </section>

@@ -23,6 +23,7 @@ import {
 import {
   HandPanel, CardHistory, PrivateFeed, EventBanner,
 } from './BunkerCards';
+import GameGuide from '../rules/GameGuide';
 
 function useCountdown(endsAt) {
   const [left, setLeft] = useState(() => (endsAt ? Math.max(0, endsAt - Date.now()) : 0));
@@ -124,9 +125,20 @@ function BunkerInfo({
 }
 
 function CharRow({
-  name, card, isOwn, isPublic, fresh, blind, config, language, t,
+  name, card, isOwn, isPublic, fresh, blind, held = true, config, language, t,
 }) {
   const label = t(`bunker.char.${name}`);
+  // A slot this player simply does not have - an event handed the find to
+  // somebody else - reads as empty rather than as a card being held back.
+  if (!card && !held) {
+    return (
+      <li className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] opacity-40 4xl:py-2 4xl:text-[14px]">
+        <CharIcon name={name} className="h-4 w-4 shrink-0 text-parch/20" />
+        <span className="w-[6.5rem] shrink-0 text-parch/30 4xl:w-[8rem]">{label}</span>
+        <span className="text-parch/25">{t('bunker.noCard')}</span>
+      </li>
+    );
+  }
   if (!card) {
     return (
       <li className="bunker-hatch flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] 4xl:py-2 4xl:text-[14px]">
@@ -143,6 +155,9 @@ function CharRow({
   }
   const detail = cardDetail(config, name, card, language);
   const isItem = name.startsWith('baggage');
+  // Rarity is shown on items; absurdity is shown on anything, because it
+  // changes how the table should read a card rather than how rare it is.
+  const showAbsurd = isPublic && detail?.absurd;
   return (
     <li
       key={`${name}-${isPublic}`}
@@ -157,6 +172,14 @@ function CharRow({
       <span className="min-w-0 flex-1">
         <span className={`block break-words font-semibold ${isPublic ? 'text-parch' : 'text-parch/65'}`}>
           {cardText(config, name, card, language, t)}
+          {showAbsurd && (
+            <span
+              title={t('bunker.absurdHint')}
+              className="ml-1.5 whitespace-nowrap rounded border border-fuchsia-400/30 bg-fuchsia-400/[0.10] px-1 py-px align-middle text-[9.5px] font-bold uppercase tracking-wide text-fuchsia-200"
+            >
+              {t('bunker.absurdBadge')}
+            </span>
+          )}
         </span>
         {/* An item says what it is and how rare it is; a sealed property
             is advertised as sealed, and shown once something opens it. */}
@@ -262,6 +285,7 @@ const PlayerCard = memo(({
             name={name}
             card={player.cards?.[name] || null}
             isOwn={player.isYou}
+            held={!player.heldKeys || player.heldKeys.includes(name)}
             isPublic={player.revealed.includes(name)}
             fresh={player.revealedThisRound === name || out}
             blind={player.isYou && (state.you?.blind || []).includes(name)}
@@ -379,7 +403,41 @@ function DiscussionPanel({ state, t, actions }) {
   );
 }
 
+// Nothing is sent by a single tap: a vote against a person is confirmed
+// first, with the consequence spelled out, so a mis-tap can never put
+// somebody outside.
+function VoteConfirm({
+  target, state, t, onConfirm, onCancel,
+}) {
+  const multi = state.vote.mode === 'multi';
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div className="bunker-plate w-full max-w-md animate-scale-in border-orange-500/35 p-5">
+        <p className="section-label text-orange-300">{t('bunker.voteTitle')}</p>
+        <h3 className="mt-1 font-display text-[20px] font-black leading-tight text-parch">
+          {t('bunker.confirmVoteTitle', { number: target.number, name: target.nickname })}
+        </h3>
+        <p className="mt-2 text-[13px] leading-snug text-parch/60">{t('bunker.confirmVoteText')}</p>
+        {multi && <p className="mt-1 text-[12.5px] text-parch/45">{t('bunker.confirmVoteTextMulti', { n: state.vote.votesPerPlayer })}</p>}
+        <p className="mt-1 text-[12.5px] text-parch/45">
+          {state.settings.voting.allowChange ? t('bunker.confirmVoteChange') : t('bunker.confirmVoteFinal')}
+        </p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <button type="button" onClick={onConfirm} className="btn-danger py-2.5">{t('bunker.confirmVoteYes')}</button>
+          <button type="button" onClick={onCancel} className="btn-quiet py-2.5">{t('bunker.confirmVoteNo')}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function VotePanel({ state, t, actions }) {
+  const [pending, setPending] = useState(null);
   const candidates = state.players.filter((p) => state.vote.candidates.includes(p.id));
   const mine = state.you?.myVotes || [];
   const myVote = state.players.find((p) => p.id === mine[0]);
@@ -387,6 +445,13 @@ function VotePanel({ state, t, actions }) {
   const multi = state.vote.mode === 'multi';
   const live = state.vote.live || [];
   const votesFor = (id) => live.find((r) => r.playerId === id)?.votes || 0;
+
+  // The candidate the confirmation is open for, looked up in state on
+  // every render so the dialog always names who that seat is now. The
+  // vote itself is checked again on the server, which is what actually
+  // refuses a target who is no longer a candidate.
+  const pendingPlayer = pending ? state.players.find((p) => p.id === pending) : null;
+  const missing = Math.max(0, (state.vote.voterCount || 0) - (state.vote.votedCount || 0));
 
   let headline = t('bunker.waitVotes');
   if (state.you?.canVote) {
@@ -402,6 +467,10 @@ function VotePanel({ state, t, actions }) {
       </p>
       <h2 className="mt-0.5 text-[16px] font-bold text-parch 4xl:text-[20px]">{headline}</h2>
       {state.finalVote && <p className="mt-1 text-[12.5px] text-orange-200/80">{t('bunker.finalVoteText', { n: Math.max(0, state.aliveCount - state.seats) })}</p>}
+      {/* Why this vote is between these people and not the whole table. */}
+      {state.vote.reason && state.vote.reason !== 'normal' && (
+        <p className="mt-1 text-[12.5px] text-orange-200/80">{t(`bunker.voteReason.${state.vote.reason}`)}</p>
+      )}
       <div className="mt-2 flex flex-wrap gap-1.5">
         {state.vote.secret && <span className="pill bg-white/[0.07] text-parch/60">🕶️ {t('bunker.secretVoteBadge')}</span>}
         {multi && <span className="pill bg-white/[0.07] text-parch/60">{t('bunker.multiVoteBadge', { n: state.vote.votesPerPlayer })}</span>}
@@ -412,6 +481,23 @@ function VotePanel({ state, t, actions }) {
           <div className="h-full rounded-full bg-parch/60 transition-all duration-300" style={{ width: `${progress}%` }} />
         </div>
         <span className="font-mono text-[12.5px] text-parch/55 tnum">{t('bunker.votedCount', { n: state.vote.votedCount, m: state.vote.voterCount })}</span>
+      </div>
+      {/* Who has already voted - never who for, unless this table's own
+          rules show that anyway. */}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="section-label">{t('bunker.whoVotedTitle')}</span>
+        {state.players.filter((p) => p.status === 'alive').map((p) => (
+          <span
+            key={p.id}
+            title={p.hasVoted ? p.nickname : `${p.nickname} · ${t('bunker.notVotedYet')}`}
+            className={`rounded-md border px-1.5 py-px font-mono text-[11.5px] tnum ${
+              p.hasVoted ? 'border-go/35 bg-go/[0.10] text-go-light' : 'border-white/[0.08] bg-black/25 text-parch/35'
+            }`}
+          >
+            {p.hasVoted ? '✓' : '·'}№{p.number}
+          </span>
+        ))}
+        {missing > 0 && <span className="text-[11.5px] text-parch/35">{t('bunker.needVotes', { n: missing })}</span>}
       </div>
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 4xl:grid-cols-4">
         {candidates.map((p) => {
@@ -426,7 +512,9 @@ function VotePanel({ state, t, actions }) {
               key={p.id}
               type="button"
               disabled={!clickable}
-              onClick={() => actions.vote(p.id)}
+              // Choosing a candidate opens the confirmation; only taking a
+              // vote back - which is harmless - happens on the tap itself.
+              onClick={() => (chosen ? actions.vote(p.id) : setPending(p.id))}
               className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed 4xl:py-3 ${
                 chosen ? 'border-orange-400/60 bg-orange-500/10' : 'border-white/10 bg-black/25 enabled:hover:border-orange-400/40 enabled:hover:bg-orange-500/[0.06] disabled:opacity-50'
               }`}
@@ -440,12 +528,21 @@ function VotePanel({ state, t, actions }) {
               {self
                 ? <span className="text-[11px] text-parch/40">{t('sidebar.you')}</span>
                 : chosen
-                  ? <span className="text-[12px] font-semibold text-orange-300">✓</span>
+                  ? <span className="text-[12px] font-semibold text-orange-300" title={t('bunker.withdrawVote')}>✓</span>
                   : state.you?.canVote && <span className="text-[12px] font-semibold text-orange-300">{t('bunker.vote')}</span>}
             </button>
           );
         })}
       </div>
+      {pendingPlayer && (
+        <VoteConfirm
+          target={pendingPlayer}
+          state={state}
+          t={t}
+          onConfirm={() => { actions.vote(pendingPlayer.id); setPending(null); }}
+          onCancel={() => setPending(null)}
+        />
+      )}
     </section>
   );
 }
@@ -583,7 +680,7 @@ function GameOver({
                 <StyledName nickname={p.nickname} cosmetics={p.cosmetics} />
               </p>
               <ul className="space-y-0.5 text-[12px]">
-                {sheet.map((name) => (
+                {sheet.filter((name) => !p.heldKeys || p.heldKeys.includes(name)).map((name) => (
                   <li key={name} className="flex gap-2">
                     <span className={`w-[6rem] shrink-0 ${results.mutedCategories?.includes(name) ? 'text-parch/25 line-through' : 'text-parch/40'}`}>
                       {t(`bunker.char.${name}`)}
@@ -679,10 +776,21 @@ export default function BunkerGame({
           />
         </div>
 
-        {/* What the table is being asked to do right now, in one line. */}
-        <p className="bunker-plate px-4 py-2 text-[12.5px] text-parch/60">
-          {t(`bunker.goal.${state.phase}`, { n: Math.max(0, state.aliveCount - state.seats) })}
-        </p>
+        {/* What THIS player has to do right now, and the rules one tap
+            away - the same strip every other game on the platform uses. */}
+        <GameGuide gameId="bunker" state={state} className="bunker-plate" />
+
+        {/* What an event has left in force on the whole table. */}
+        {(state.tableEffects || []).length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 px-1">
+            <span className="section-label">{t('bunker.tableEffects')}</span>
+            {[...new Set(state.tableEffects)].map((e) => (
+              <span key={e} className="pill bg-orange-500/15 text-orange-200" title={t(`bunker.effect.${e}.text`)}>
+                {t(`bunker.effect.${e}.name`)}
+              </span>
+            ))}
+          </div>
+        )}
 
         <EventBanner state={state} t={t} />
 

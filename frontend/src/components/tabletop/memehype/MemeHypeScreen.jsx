@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '../../../i18n/LanguageContext';
+import GameGuide from '../../rules/GameGuide';
 import { Segmented } from '../../mafia/MafiaSettings';
 import QrCode from '../../ui/QrCode';
 import SocialBar from '../../social/SocialBar';
@@ -376,7 +377,7 @@ function VoteBoard({ state, actions }) {
               className={`hype-flip rounded-2xl text-left ${chosen ? 'ring-4 ring-sky-400' : ''} ${canPick ? 'transition hover:-translate-y-1' : 'cursor-default'}`}
               style={{ animationDelay: `${i * 0.12}s` }}
             >
-              <MemeCard meme={c.meme} size="md" label={`MEM #${c.index}`} />
+              <MemeCard meme={c.meme} size="md" label={`MEM #${c.index}`} meta />
             </button>
           );
         })}
@@ -404,7 +405,7 @@ function RevealBoard({ state }) {
         {result.entries.map((e, i) => (
           <div key={e.pickId} className="hype-flip flex flex-col gap-2" style={{ animationDelay: `${i * 0.15}s` }}>
             <div className={`rounded-2xl ${e.winner ? 'hype-winner' : ''}`}>
-              <MemeCard meme={e.meme} size="md" label={`MEM #${e.index}`} />
+              <MemeCard meme={e.meme} size="md" label={`MEM #${e.index}`} meta />
             </div>
             <div className="flex items-center gap-2">
               <Avatar player={byId[e.playerId] || { id: e.playerId, nickname: e.nickname }} size={28} />
@@ -523,6 +524,10 @@ function Game({
           )}
         </Header>
         {spectating && <SpectatorBanner onLeave={onLeave} />}
+
+        {/* What this player has to do right now, with the rules one
+            tap away - the same strip every game here uses. */}
+        <GameGuide gameId="memehype" state={state} className="hype-panel" />
 
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),300px]">
           <div className="flex min-w-0 flex-col gap-4">

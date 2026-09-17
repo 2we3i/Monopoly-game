@@ -79,6 +79,12 @@ export default {
           '0%': { transform: 'translateX(-120%)' },
           '100%': { transform: 'translateX(220%)' },
         },
+        // The rules sheet slides in from the edge rather than appearing on
+        // top, so it reads as a panel beside the game, not a takeover.
+        'slide-in-right': {
+          '0%': { transform: 'translateX(16px)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
       },
       animation: {
         'pop-in': 'pop-in 0.2s ease-out',
@@ -88,6 +94,7 @@ export default {
         'turn-ring': 'turn-ring 2.4s ease-out infinite',
         tumble: 'tumble 0.55s cubic-bezier(0.3,0.8,0.3,1)',
         sheen: 'sheen 1.6s ease-in-out infinite',
+        'slide-in-right': 'slide-in-right 0.22s cubic-bezier(0.22,1,0.36,1)',
       },
     },
   },

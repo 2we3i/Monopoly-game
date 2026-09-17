@@ -48,11 +48,26 @@ The board is an SVG galaxy with the warp and colony track in the middle, each sy
 
 The board is an SVG island in a zoom/pan viewport: the wheel zooms smoothly around the cursor between sensible limits, a drag pans (a small threshold keeps clicks and drags apart, so a drag never places a piece), two fingers pinch, and hovering a hex explains what it produces, its number and chance, the robber and who collects there. The engine (`backend/src/catan/CatanGame.js`, geometry and layouts in `board.js`) validates every action and builds a separate payload per player: other hands arrive only as counts, hidden victory points only for their owner, and the corners and sides a player may build on come from their own legal moves.
 
+## Rules and guidance, in every game
+
+Every game carries the same two things, and they are the same components in all of them (`frontend/src/components/rules/`):
+
+- **"Your action now"** - one line, always on screen, that says what THIS player has to do at this exact moment ("Your turn - choose one card to reveal", "Vote for the player to be excluded", "Discard 4 resource cards"), coloured by whether it is your move, a wait, or something urgent. It reads only the payload that game's screen already receives (`nowAction.js`); a payload it does not recognise leaves the strip silent rather than breaking the screen.
+- **The rules panel** - a side sheet that opens over part of the table and closes on Escape, on the backdrop or on its own button, so reading the rules never means leaving the match. Three tabs: *What now?*, *In short*, *Full rules*. The full rules are the same eight blocks for every game - the goal, how a round goes (with the step the table is on highlighted), what the things on screen mean, how to win, what you can do, the rules that surprise people, when the game ends, and an example - so the second game a player opens it in is already familiar. The content is bilingual data in `rules/content/` and adding a game is adding an entry there.
+
+The Iron Throne keeps its own, more detailed rules dialog: its strip opens that one instead of putting a second rules button beside the first.
+
 ## Bunker
 
-4–16 players. A random catastrophe strikes and the shelter has fewer places than people (half the table by default, or the host's number). Everyone is dealt seven secret characteristic cards - profession, biology, health, hobby, baggage, character and an extra fact - drawn without duplicates within a game. Each round the players take turns revealing one of their own cards (round 1 is always the profession); from round 2 the reveals are followed by a discussion and a vote, and the player with the most votes is left outside with all their cards turned over. A tie goes to a runoff between the tied players; a second tie excludes nobody that round, and once every card is on the table a deadlock is settled by lot. The game ends when no more people remain than places: the survivors win, and the end screen shows every card, who was left outside and when, and a verdict on the colony's chances.
+4–16 players. A random catastrophe strikes and the shelter has fewer places than people (half the table by default, or the host's number). Everyone is dealt a whole secret character - by default fifteen cards: profession, biology, health, a condition or limitation, hobby, skills, knowledge, a special ability, character, a fear, a past, an extra fact, two pieces of baggage and a secret - drawn without duplicates within a game. A host can switch any row off in the settings, back to the original seven if they want the older, shorter sheet. Each round the players take turns revealing one of their own cards (round 1 is always the profession); from round 2 the reveals are followed by a discussion and a vote, and the player with the most votes is left outside with all their cards turned over. A tie goes to a runoff between the tied players; a second tie excludes nobody that round, and once every card is on the table a deadlock is settled by lot. The game ends when no more people remain than places: the survivors win, and the end screen shows every card, who was left outside and when, and a verdict on the colony's chances.
 
-The lobby sets the room size, the number of places and the reveal / discussion / vote timers. The server's clock moves the game on (a missed reveal is made automatically), the host can cut a discussion or a result screen short, and a player who leaves mid-game counts as leaving the bunker. As in the other games, each player receives their own payload: another player's hidden card is simply not in it, and every action (reveal only your own card, only on your turn, only once; vote only once, never for yourself, only for a candidate) is checked on the server. Cards are data in `backend/src/bunker/cards.js`; the rules are `BunkerGame.js`.
+**The ridiculous shelf.** Alongside the surgeons and the engineers, the decks hold absurd characters - a professional mattress tester, a man certain he is a cat, someone who has trained fifteen years for the end of the world. They are dealt from the same decks as everything else and score like everything else, so some of them are genuinely worth a place and others are a liability in a funny hat; a revealed one is marked **Absurd** on the sheet so the table knows what it is arguing about. How often they come up is one setting (`characters.absurdity`: off / a pinch / normal / a lot / nothing but); the content is `backend/src/bunker/absurd.js` and adding to it needs no engine change.
+
+**Events** (off by default, one setting away) happen to the shelter between rounds: places lost or gained, supplies spoiled or found, a room sealed, the power out (no action cards that round), a water shortage (everyone reveals one more card), an argument (two named players must each open a card and the round's vote is between those two alone), an unknown object handed to one person sealed even from them, a changed forecast, a demand for one kind of specialist, contamination, and a round where the vote sends out two people instead of one. Each event declares what it does; the engine only applies the declaration (`backend/src/bunker/events.js`).
+
+**The vote** shows who is standing, how many votes are in and how many are still missing, who has already voted, and why the candidates are who they are (a runoff, an argument, the final vote). Choosing a player opens a confirmation that spells out the consequence before any vote is cast, so a mis-tap can never put somebody outside.
+
+The lobby sets the room size, the number of places and the reveal / discussion / vote timers. The server's clock moves the game on (a missed reveal is made automatically), the host can cut a discussion or a result screen short, and a player who leaves mid-game counts as leaving the bunker. As in the other games, each player receives their own payload: another player's hidden card is simply not in it, and every action (reveal only your own card, only on your turn, only once; vote only once, never for yourself, only for a candidate) is checked on the server. Cards are data: the original decks in `backend/src/bunker/cards.js`, everything added since in `content.js` (the new characteristic decks and the wider profession list) and `absurd.js`. The rules are `BunkerGame.js`, and they never name an individual card, item or event.
 
 ## The Iron Throne (board games section)
 
@@ -118,6 +133,21 @@ Records get stable ids (`<pack>.<rating>.s<n>` / `m<n>`) and every lookup
 takes a rating, so a 16+ room can never receive an 18+ card. A meme may set
 `image` to a picture URL; otherwise its emoji `art` is drawn. Use emoji from
 Unicode 12 or earlier so cards render on older phones and Windows 10.
+
+### The "Trending" pack and the shared sheet
+
+`МЕМЫ 4: «В тренде»` is built from a shared Google Sheet of memes rather than from a hand-written file. The sheet holds a meme's name and a link to where it came from; the sync script turns that into ordinary cards:
+
+```bash
+cd backend
+npm run sync-memes            # pull the sheet and update the pack
+node scripts/sync-meme-sheet.js --dry            # show what would change
+node scripts/sync-meme-sheet.js --file local.csv # from a local CSV instead
+```
+
+The merge never loses a card. A row is matched to an existing card by an `id` column if the sheet has one, then by a slug made from its name, then by a loosely normalised name - so a fixed typo or a changed link updates the card that is already there instead of adding a second one. Rows the sheet no longer contains are flagged (`missingSince`) and keep playing, because a card can vanish from a spreadsheet by accident and a card vanishing from a deck cannot be undone. The stored list (`content/sheetData.json`) is append-only: card ids here are built from a card's position in its pack, and keeping that order fixed is what keeps every uploaded picture and every Creator edit attached to the card it was made for.
+
+Columns are found by their heading, in whatever order and under whatever name the sheet uses, so restructuring the sheet does not break the import: a name column is required, and `link`, `id`, `rating` and `emoji` columns are used if they are there. A name with an obscenity in it goes on the 18+ shelf unless a rating column says otherwise. The sheet gives no picture, so a card shows its name over drawn art until somebody adds a real one the usual way (below); the source link travels with the card for whoever goes looking.
 
 ### Meme pictures
 

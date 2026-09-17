@@ -519,6 +519,15 @@ class BunkerGame {
     return { id: list[Math.floor(this.rng() * list.length)].id };
   }
 
+  // How long this table has to stay under ground. Normally the
+  // catastrophe's own figure; an event can push it either way, and once it
+  // has, the number the game carries wins over the catalogue's.
+  catastropheMonths() {
+    if (Number.isFinite(this.catastrophe?.months)) return this.catastrophe.months;
+    const entry = legacyCards.CATASTROPHES.find((c) => c.id === this.catastrophe?.id);
+    return entry ? entry.months : 12;
+  }
+
   // Which of a character's own cards are hidden from the character too.
   // Never the profession: the first round would have nothing to open.
   pickBlindKeys() {
@@ -703,7 +712,14 @@ class BunkerGame {
     }
     this.phase = PHASES.VOTE;
     this.votes = {};
-    this.voteCandidates = candidates || this.alivePlayers().map((p) => p.id);
+    // An argument between two people is settled between those two: the
+    // rest of the table votes, but only the pair can be voted out.
+    const duel = !candidates && !revote ? this.effectsOf('duel')[0] : null;
+    const duelPair = duel
+      ? (duel.params.playerIds || []).filter((id) => this.getPlayer(id)?.status === 'alive')
+      : [];
+    this.voteCandidates = candidates
+      || (duelPair.length >= 2 ? duelPair : this.alivePlayers().map((p) => p.id));
     this.revote = revote;
     this.setDeadline(this.settings.voteSec);
     if (revote) {
@@ -918,6 +934,15 @@ class BunkerGame {
       finish('protected', [], { reason: 'protected', leaders });
       return;
     }
+    // When the air will not stretch to everyone, the runner-up goes too -
+    // but never so far that the bunker ends up below its own capacity.
+    if (this.hasEffect('doubleExclusion') && this.alivePlayers().length - this.seats >= 2) {
+      const runnerUp = tally.find((row) => row.playerId !== leaders[0] && row.votes > 0 && canExclude(row.playerId));
+      if (runnerUp) {
+        finish('excludedTwo', [leaders[0], runnerUp.playerId]);
+        return;
+      }
+    }
     finish('excluded', [leaders[0]]);
   }
 
@@ -1022,6 +1047,7 @@ class BunkerGame {
       if (held.usedAt) reason = 'used';
       else if (!def) reason = 'unknown';
       else if (player.status !== 'alive') reason = 'excluded';
+      else if (this.hasEffect('noCards')) reason = 'noCards';
       else if (!actionCardDefs.playableIn(this.phase, held.id)) reason = 'wrongPhase';
       else if (limits.maxUsesPerRound > 0 && uses.round >= limits.maxUsesPerRound) reason = 'roundLimit';
       else if (limits.maxUsesPerGame > 0 && uses.game >= limits.maxUsesPerGame) reason = 'gameLimit';
@@ -1037,6 +1063,8 @@ class BunkerGame {
     const actor = this.getPlayer(playerId);
     if (!actor) throw new BunkerError('Player not found.');
     if (actor.status !== 'alive') throw new BunkerError('Players outside the bunker cannot play cards.');
+    // An event can shut the whole system down for a round.
+    if (this.hasEffect('noCards')) throw new BunkerError('Nothing can be played this round.');
 
     // A specific copy if the caller named one, otherwise the first unused
     // copy of that card in their hand.
@@ -1318,6 +1346,12 @@ class BunkerGame {
       excludedRound: p.excludedRound,
       exclusionReason: p.exclusionReason,
       cards: this.phase === PHASES.LOBBY ? {} : this.cardsVisibleTo(viewer, p),
+      // Which rows of the sheet this player actually holds a card in. It
+      // is the whole sheet for everyone, until an event hands one person
+      // something nobody else has - and then a closed row and a row that
+      // is simply not theirs must not look the same. No secret travels
+      // here: the event that dealt it said out loud who got it.
+      heldKeys: this.phase === PHASES.LOBBY ? [] : categories.filter((k) => p.cards[k] !== undefined),
       revealed: p.revealed,
       openProperties: p.openProperties || [],
       // How many action cards they still hold - never which ones.
@@ -1328,7 +1362,9 @@ class BunkerGame {
       hasVoted: inVote ? this.hasVoted(p.id) : false,
       // The public effects on this seat: everyone can see who is protected
       // or holding a double vote, which is what makes those cards matter.
-      effects: this.effects.filter((e) => e.params.playerId === p.id).map((e) => e.type),
+      effects: this.effects
+        .filter((e) => e.params.playerId === p.id || (e.params.playerIds || []).includes(p.id))
+        .map((e) => e.type),
       isYou: viewer ? p.id === viewer.id : false,
     }));
 
@@ -1377,9 +1413,15 @@ class BunkerGame {
         ? seatsFor(Math.max(this.players.length, this.settings.players.min), this.settings.seats)
         : this.seats,
       aliveCount: this.phase === PHASES.LOBBY ? this.players.length : alive.length,
-      catastrophe: this.catastrophe,
+      catastrophe: this.catastrophe ? { ...this.catastrophe, months: this.catastropheMonths() } : null,
       bunker: this.bunker,
       activeEvent: this.activeEvent,
+      // Effects on the whole table rather than on one seat - the power
+      // being out, the air running short. The UI reads these to explain
+      // why a button is not there.
+      tableEffects: this.effects
+        .filter((e) => !e.params.playerId && !(e.params.playerIds || []).length)
+        .map((e) => e.type),
       eventLog: this.eventLog.slice(-20),
       cardHistory: this.cardHistory.slice(-40),
       turn: this.phase === PHASES.REVEAL
@@ -1389,6 +1431,8 @@ class BunkerGame {
         ? {
           candidates: this.voteCandidates,
           revote: this.revote,
+          // Why these candidates and not the whole table.
+          reason: this.finalVote ? 'final' : this.revote ? 'revote' : this.hasEffect('duel') ? 'duel' : 'normal',
           secret: secretVote,
           mode: this.settings.voting.mode,
           votesPerPlayer: this.settings.voting.votesPerPlayer,

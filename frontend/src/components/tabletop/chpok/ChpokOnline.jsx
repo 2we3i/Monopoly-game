@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '../../../i18n/LanguageContext';
+import GameGuide from '../../rules/GameGuide';
 import { Segmented } from '../../mafia/MafiaSettings';
 import QrCode from '../../ui/QrCode';
 import Icon from '../../icons';
@@ -522,6 +523,10 @@ export function ChpokScreen({
         </header>
 
         {spectating && <SpectatorBanner onLeave={onLeave} />}
+
+        {/* What this player has to do right now, with the rules one
+            tap away - the same strip every game here uses. */}
+        <GameGuide gameId="chpok" state={state} className="panel" />
 
         {state.phase !== 'GAME_OVER' && <ThemeCard state={state} />}
 

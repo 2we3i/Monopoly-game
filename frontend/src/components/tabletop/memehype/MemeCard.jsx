@@ -26,7 +26,7 @@ function pictureCount(art = '') {
 const ART_SIZE = { 1: 40, 2: 30, 3: 22 };
 
 export default function MemeCard({
-  meme, size = 'md', className = '', label = null, style,
+  meme, size = 'md', className = '', label = null, style, meta = false,
 }) {
   if (!meme) return null;
   const s = SIZES[size] || SIZES.md;
@@ -69,6 +69,16 @@ export default function MemeCard({
         )}
       </div>
       <p className="meme-caption min-h-[1em]">{meme.bottom}</p>
+      {/* A card that carries a name of its own says it, quietly, under the
+          captions: these are memes people know BY name, and reading it is
+          what tells a player they are holding the one they think they
+          are. Cards without a name (the older, drawn packs) show nothing
+          extra and look exactly as they always did. */}
+      {meta && meme.title && (
+        <p className="relative z-10 mt-1 truncate rounded-md bg-black/45 px-1.5 py-0.5 text-center text-[10px] font-semibold tracking-wide text-white/80">
+          {meme.title}
+        </p>
+      )}
     </div>
   );
 }
