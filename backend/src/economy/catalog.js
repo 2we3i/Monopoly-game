@@ -19,7 +19,7 @@ const PRICE_BANDS = {
   mythic: [6000, 9500],
 };
 
-const CATEGORIES = ['token', 'nickname', 'avatar', 'profile', 'effects', 'titles', 'badges', 'emotes', 'sounds'];
+const CATEGORIES = ['token', 'nickname', 'avatar', 'profile', 'effects', 'titles', 'badges', 'emotes', 'sounds', 'fields'];
 
 // slot -> how many items of that slot can be equipped at once.
 const SLOTS = {
@@ -47,6 +47,10 @@ const SLOTS = {
   sound_win: { category: 'sounds', capacity: 1 },
   sound_reward: { category: 'sounds', capacity: 1 },
   sound_event: { category: 'sounds', capacity: 1 },
+  // A name (with its own picture) a player gives a board square. It shows
+  // on the board while that player owns the square. Several can be worn,
+  // one per square (or group / kind of square) they point at.
+  tile_name: { category: 'fields', capacity: 24 },
 };
 
 const ITEMS = [];
@@ -244,10 +248,85 @@ item('sound_reward_harp', 'sound_reward', 'rare', 480, 'Harp glissando', 'Арф
 item('sound_event_bell', 'sound_event', 'common', 70, 'Tower bell', 'Колокол', { preset: 'bell' });
 item('sound_event_arcade', 'sound_event', 'uncommon', 200, 'Arcade blip', 'Аркадный сигнал', { preset: 'arcade' });
 
-const BY_ID = new Map(ITEMS.map((i) => [i.id, i]));
+// --- names for board squares -----------------------------------------------
+// Shown on the Monopoly board on the squares the wearer owns. The Creator
+// adds more from the panel, with their own pictures.
+const tileName = (id, rarity, price, en, ru, glyph, colors, target) => item(id, 'tile_name', rarity, price, en, ru, {
+  names: { en, ru }, glyph, colors, target,
+});
+tileName('tile_name_aurora_terminal', 'uncommon', 250, 'Aurora Terminal', 'Терминал «Аврора»', '🚉', ['#60a5fa', '#1e3a8a'], { layout: '*', tileType: 'RAILROAD' });
+tileName('tile_name_tesla_works', 'rare', 600, 'Tesla Works', 'Завод Теслы', '⚡', ['#fde047', '#854d0e'], { layout: '*', tileType: 'UTILITY' });
+tileName('tile_name_brass_tower', 'epic', 1200, 'Brass Tower', 'Латунная башня', '🏙️', ['#e3bb5c', '#3d2e0f'], { layout: '*', group: 'blue' });
+
+// --- the Creator's edits ----------------------------------------------------
+//
+// ITEMS above is the catalogue as the code ships it. The Creator can change
+// an item's price, rarity, names, description or picture, switch it off, and
+// add new items (for example a name for a board square). Those edits are
+// installed here (economy/shopAdmin.js) and every lookup below goes through
+// the result. An item that has owners is never removed: it is retired, so
+// it stays in their inventory but is no longer sold.
+
+const EDITABLE = ['price', 'rarity', 'name', 'description', 'enabled', 'image', 'visual', 'source', 'requirement'];
+
+let effectiveItems = ITEMS;
+let BY_ID = new Map(ITEMS.map((i) => [i.id, i]));
+
+function applyPatch(base, patch) {
+  const out = { ...base };
+  EDITABLE.forEach((key) => {
+    if (patch[key] !== undefined) out[key] = patch[key];
+  });
+  if (out.source !== 'shop') out.price = null;
+  return out;
+}
+
+// rows: [{ id, custom, data, deletedAt }] from the shop_items table.
+function install(rows = []) {
+  const byId = new Map(ITEMS.map((i) => [i.id, { ...i }]));
+  rows.forEach((row) => {
+    if (!row?.id || !row.data) return;
+    if (row.custom) {
+      const d = row.data;
+      if (!SLOTS[d.slot] || !RARITIES.includes(d.rarity)) return;
+      const created = {
+        id: row.id,
+        slot: d.slot,
+        category: SLOTS[d.slot].category,
+        rarity: d.rarity,
+        price: d.source && d.source !== 'shop' ? null : d.price,
+        source: d.source || 'shop',
+        requirement: d.requirement || null,
+        name: d.name,
+        description: d.description || null,
+        image: d.image || null,
+        visual: d.visual || {},
+        enabled: d.enabled !== false,
+        custom: true,
+        createdOrder: ITEMS.length + byId.size,
+      };
+      if (row.deletedAt) created.retired = true;
+      byId.set(row.id, created);
+    } else if (byId.has(row.id)) {
+      byId.set(row.id, applyPatch(byId.get(row.id), row.data));
+    }
+  });
+  effectiveItems = [...byId.values()];
+  BY_ID = byId;
+  return effectiveItems.length;
+}
+
+function allItems() {
+  return effectiveItems;
+}
 
 function getItem(id) {
   return typeof id === 'string' ? BY_ID.get(id) || null : null;
+}
+
+// Can this item be bought right now?
+function forSale(item) {
+  return !!item && item.source === 'shop' && !!item.price && item.enabled !== false && !item.retired;
 }
 
 function rarityRank(rarity) {
@@ -255,11 +334,11 @@ function rarityRank(rarity) {
 }
 
 function starterItems() {
-  return ITEMS.filter((i) => i.source === 'starter');
+  return effectiveItems.filter((i) => i.source === 'starter');
 }
 
 function itemsWithRequirement(source) {
-  return ITEMS.filter((i) => i.source === source);
+  return effectiveItems.filter((i) => i.source === source && i.requirement);
 }
 
 module.exports = {
@@ -268,7 +347,11 @@ module.exports = {
   CATEGORIES,
   SLOTS,
   ITEMS,
+  EDITABLE,
+  install,
+  allItems,
   getItem,
+  forSale,
   rarityRank,
   starterItems,
   itemsWithRequirement,

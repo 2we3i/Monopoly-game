@@ -10,6 +10,7 @@
 // restart in the middle of a game does not produce a duplicate.
 
 const platformDb = require('../db/platform');
+const testing = require('./testing');
 
 const open = new Map(); // roomCode -> matchId
 
@@ -27,6 +28,8 @@ function openMatchId(roomCode) {
 // [{ playerId, accountId, nickname }], results: { winner, players: [...] } }
 function observe(summary) {
   if (!summary || !summary.roomCode) return;
+  // A Creator's test match is never recorded and never pays anything.
+  if (testing.isTestRoom(summary.roomCode)) return;
   const { roomCode, stage } = summary;
   const matchId = openMatchId(roomCode);
 

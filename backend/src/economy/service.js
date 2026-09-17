@@ -30,7 +30,7 @@ class EconomyError extends Error {
 const VISIBLE_SLOTS = [
   'token_shape', 'token_frame', 'token_aura', 'token_trail', 'token_victory',
   'name_style', 'name_decor', 'name_intro', 'avatar_frame', 'title', 'badge',
-  'effect_join', 'profile_bg', 'profile_card',
+  'effect_join', 'profile_bg', 'profile_card', 'tile_name',
 ];
 
 const loadoutCache = new Map();
@@ -102,7 +102,8 @@ function publicCatalog() {
     categories: catalog.CATEGORIES,
     slots: catalog.SLOTS,
     priceBands: catalog.PRICE_BANDS,
-    items: catalog.ITEMS.map(({ createdOrder, ...item }) => ({ ...item, order: createdOrder })),
+    items: catalog.allItems()
+      .map(({ createdOrder, ...item }) => ({ ...item, order: createdOrder, forSale: catalog.forSale(item) })),
     // How crowns are earned, so the shop can explain it with the real numbers.
     rules: {
       match: rules.MATCH_REWARDS,
@@ -112,7 +113,7 @@ function publicCatalog() {
       minMatchMinutes: Math.round(rules.MIN_MATCH_MS / 60000),
       smallTableMultipliers: { 2: rules.tableMultiplier(2), 3: rules.tableMultiplier(3) },
       leaderboardMinMatches: rules.LEADERBOARD_MIN_MATCHES,
-      events: [{ id: 'weekend_festival', multiplier: 1.25 }],
+      events: rules.EVENTS.map((e) => ({ id: e.id, multiplier: e.multiplier })),
     },
   };
 }
@@ -135,6 +136,9 @@ function buy(accountId, itemId) {
   const item = catalog.getItem(itemId);
   if (!item) throw new EconomyError('Unknown item.', 'UNKNOWN_ITEM', 404);
   if (item.source !== 'shop' || !item.price) throw new EconomyError('This item cannot be bought - it is earned by playing.', 'NOT_FOR_SALE');
+  if (!catalog.forSale(item)) throw new EconomyError('This item is not on sale right now.', 'NOT_FOR_SALE');
+  // eslint-disable-next-line global-require
+  if (!require('../platform/settings').get().platform.shopOpen) throw new EconomyError('The shop is closed for now.', 'SHOP_CLOSED', 503);
   if (owns(accountId, item)) throw new EconomyError('You already own this item.', 'ALREADY_OWNED', 409);
 
   community.transaction(() => {
@@ -163,6 +167,13 @@ function equip(accountId, itemId) {
     if (capacity === 1) {
       community.equipAt(accountId, item.slot, 0, item.id);
       return;
+    }
+    if (item.slot === 'tile_name') {
+      // One name per square (or group of squares): a new one replaces
+      // whatever was worn for the same target.
+      const key = tileTargetKey(item);
+      inSlot.filter((r) => tileTargetKey(catalog.getItem(r.itemId)) === key).forEach((r) => community.unequip(accountId, r.itemId));
+      community.compactSlot(accountId, item.slot);
     }
     if (inSlot.length >= capacity) {
       // A full multi-slot drops the item equipped longest ago.
@@ -201,6 +212,165 @@ function setFavorite(accountId, itemId, on) {
 function ownsEmote(accountId, emoteId) {
   const item = catalog.getItem(emoteId);
   return !!item && item.slot === 'emote' && owns(accountId, item);
+}
+
+// --- names for board squares ----------------------------------------------------
+//
+// A tile_name item's visual says which squares it may name:
+//   target: { layout: 'classic' | '*', tileId }   one square of one board
+//           { layout, group: 'brown' }              every square of a colour group
+//           { layout, tileType: 'RAILROAD' }        every station / utility / property
+// and what to show: names: { en, ru } and an optional image.
+
+function tileTargetKey(item) {
+  const target = item?.visual?.target || {};
+  if (Number.isInteger(target.tileId)) return `${target.layout || '*'}:tile:${target.tileId}`;
+  if (target.group) return `${target.layout || '*'}:group:${target.group}`;
+  if (target.tileType) return `${target.layout || '*'}:type:${target.tileType}`;
+  return `${target.layout || '*'}:any`;
+}
+
+function tileMatches(item, layoutId, tile) {
+  const target = item?.visual?.target || {};
+  if (target.layout && target.layout !== '*' && target.layout !== layoutId) return 0;
+  if (Number.isInteger(target.tileId)) return target.tileId === tile.id ? 4 : 0;
+  if (target.group) return tile.group === target.group ? 3 : 0;
+  if (target.tileType) return tile.type === target.tileType ? 2 : 0;
+  return ['PROPERTY', 'RAILROAD', 'UTILITY'].includes(tile.type) ? 1 : 0;
+}
+
+// The board as players see it: every owned square named by its owner's
+// equipped tile_name item, when there is one. The rules engine keeps the
+// real board - this only changes what is drawn.
+function decorateBoard(board, properties, players, layoutId) {
+  if (!Array.isArray(board) || !properties) return board;
+  const owners = new Map();
+  (players || []).forEach((p) => { if (p.accountId) owners.set(p.id, p.accountId); });
+  if (!owners.size) return board;
+  const names = new Map();
+  owners.forEach((accountId, playerId) => {
+    const ids = loadout(accountId).tile_name;
+    const items = (Array.isArray(ids) ? ids : []).map((id) => catalog.getItem(id)).filter(Boolean);
+    if (items.length) names.set(playerId, items);
+  });
+  if (!names.size) return board;
+  let changed = false;
+  const out = board.map((tile) => {
+    const owner = properties[tile.id]?.ownerId;
+    const items = owner && names.get(owner);
+    if (!items) return tile;
+    let best = null;
+    let bestScore = 0;
+    items.forEach((item) => {
+      const score = tileMatches(item, layoutId, tile);
+      if (score > bestScore) {
+        best = item;
+        bestScore = score;
+      }
+    });
+    if (!best) return tile;
+    changed = true;
+    const v = best.visual || {};
+    return {
+      ...tile,
+      name: v.names?.en || best.name?.en || tile.name,
+      nameRu: v.names?.ru || best.name?.ru || tile.nameRu,
+      image: best.image || v.image || tile.image,
+      skin: {
+        itemId: best.id, ownerId: owner, baseName: tile.name, baseNameRu: tile.nameRu,
+      },
+    };
+  });
+  return changed ? out : board;
+}
+
+// --- the Creator's economy tools -------------------------------------------------
+
+const ADJUST_MODES = ['add', 'remove', 'set'];
+const MAX_BALANCE = 1000000000;
+
+// Adds, removes or sets a balance. Returns what it was and what it is now.
+// Every change is a ledger row (kind 'admin') carrying who did it and why.
+function adjustBalance({
+  accountId, mode, amount, reason, by, byName,
+}) {
+  if (!accountsDb.findById(accountId)) throw new EconomyError('User not found.', 'UNKNOWN_USER', 404);
+  if (!ADJUST_MODES.includes(mode)) throw new EconomyError('Unknown operation.', 'BAD_MODE');
+  const value = Number(amount);
+  if (!Number.isInteger(value) || value < 0 || value > MAX_BALANCE) throw new EconomyError('The amount must be a whole number from 0 to 1 000 000 000.', 'BAD_AMOUNT');
+  if (mode !== 'set' && value === 0) throw new EconomyError('The amount must be above zero.', 'BAD_AMOUNT');
+  const why = typeof reason === 'string' ? reason.trim().slice(0, 300) : '';
+  if (why.length < 3) throw new EconomyError('Give a reason (at least 3 characters).', 'REASON_REQUIRED');
+  ensureStarter(accountId);
+
+  let result = null;
+  community.transaction(() => {
+    const before = community.wallet(accountId).balance;
+    let delta = 0;
+    if (mode === 'add') delta = Math.min(value, MAX_BALANCE - before);
+    if (mode === 'remove') delta = -Math.min(value, before);
+    if (mode === 'set') delta = value - before;
+    const after = before + delta;
+    community.adminLedger({
+      accountId,
+      amount: delta,
+      details: {
+        mode, requested: value, before, after, reason: why, by, byName,
+      },
+    });
+    result = {
+      before, after, delta, mode, requested: value,
+    };
+  })();
+  if (result.delta !== 0) {
+    notify(accountId, 'balance_adjusted', { delta: result.delta, balance: result.after, reason: why });
+  }
+  pushWallet(accountId);
+  return result;
+}
+
+function grantItemByCreator(accountId, itemId, { by, byName, reason = null } = {}) {
+  if (!accountsDb.findById(accountId)) throw new EconomyError('User not found.', 'UNKNOWN_USER', 404);
+  const item = catalog.getItem(itemId);
+  if (!item) throw new EconomyError('Unknown item.', 'UNKNOWN_ITEM', 404);
+  ensureStarter(accountId);
+  const granted = community.grantItem(accountId, item.id, 'creator');
+  if (!granted) throw new EconomyError('The user already owns this item.', 'ALREADY_OWNED', 409);
+  notify(accountId, 'item_granted', {
+    itemId: item.id, reason: 'creator', note: reason, by: byName || by || null,
+  });
+  return { itemId: item.id, inventory: community.inventory(accountId) };
+}
+
+function revokeItem(accountId, itemId) {
+  const item = catalog.getItem(itemId);
+  const id = item ? item.id : String(itemId || '');
+  let removed = false;
+  community.transaction(() => {
+    community.unequip(accountId, id);
+    if (item) community.compactSlot(accountId, item.slot);
+    removed = community.revokeItem(accountId, id);
+  })();
+  invalidate(accountId);
+  pushLoadout(accountId);
+  if (!removed) throw new EconomyError('The user does not own this item.', 'NOT_OWNED', 404);
+  return { itemId: id, inventory: community.inventory(accountId) };
+}
+
+// Everything the Creator sees about one account's crowns and items.
+function accountEconomyForCreator(accountId) {
+  ensureStarter(accountId);
+  return {
+    wallet: community.wallet(accountId),
+    inventory: community.inventory(accountId),
+    loadout: loadout(accountId),
+    ledger: community.ledgerFor(accountId, 200),
+  };
+}
+
+// Drops cached loadouts after the catalogue changes.
+function invalidateAll() {
+  loadoutCache.clear();
 }
 
 // --- leaderboard --------------------------------------------------------------
@@ -416,6 +586,15 @@ function onMatchFinished(matchId, summary) {
 
 module.exports = {
   EconomyError,
+  ADJUST_MODES,
+  decorateBoard,
+  tileTargetKey,
+  adjustBalance,
+  grantItemByCreator,
+  revokeItem,
+  accountEconomyForCreator,
+  invalidate,
+  invalidateAll,
   VISIBLE_SLOTS,
   publicCatalog,
   accountEconomy,

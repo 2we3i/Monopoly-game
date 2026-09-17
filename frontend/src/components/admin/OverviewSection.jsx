@@ -142,9 +142,11 @@ export default function OverviewSection({ token }) {
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brass-light" />
                   <div className="min-w-0">
                     <p className="text-zinc-200">
-                      {t(`admin.audit.${a.action}`, {
-                        target: a.details?.nickname || a.target, status: a.details?.status ? t(`admin.modes.status.${a.details.status}`) : '',
-                      })}
+                      {t(`admin.audit.${a.action}`) === `admin.audit.${a.action}`
+                        ? `${t(`creator.action.${a.action}`)} · ${a.targetLabel || a.details?.nickname || a.target || ''}`
+                        : t(`admin.audit.${a.action}`, {
+                          target: a.details?.nickname || a.target, status: a.details?.status ? t(`admin.modes.status.${a.details.status}`) : '',
+                        })}
                     </p>
                     <p className="text-[11px] text-zinc-500">{a.adminName} · {formatDate(a.createdAt, language)}</p>
                   </div>

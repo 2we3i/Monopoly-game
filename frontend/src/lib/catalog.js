@@ -98,10 +98,11 @@ export function resolveLook(catalog, ids) {
 export function withItem(ids, item) {
   if (!item) return ids || {};
   const next = { ...(ids || {}) };
-  const multi = item.slot === 'badge' || item.slot === 'emote';
+  const multi = item.slot === 'badge' || item.slot === 'emote' || item.slot === 'tile_name';
   if (multi) {
     const current = Array.isArray(next[item.slot]) ? next[item.slot] : [];
-    next[item.slot] = current.includes(item.id) ? current : [item.id, ...current].slice(0, item.slot === 'badge' ? 3 : 6);
+    const limit = { badge: 3, emote: 6, tile_name: 24 }[item.slot];
+    next[item.slot] = current.includes(item.id) ? current : [item.id, ...current].slice(0, limit);
   } else {
     next[item.slot] = item.id;
   }

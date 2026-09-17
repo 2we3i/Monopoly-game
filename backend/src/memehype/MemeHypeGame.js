@@ -209,7 +209,9 @@ class MemeHypeGame extends PartyRoom {
     const id = this.situationDeck.pop();
     this.usedSituations.push(id);
     if (this.usedSituations.length > 1000) this.usedSituations.splice(0, this.usedSituations.length - 1000);
-    return content.situationsFor(this.settings.rating, this.settings.packs).find((s) => s.id === id);
+    return content.situationsFor(this.settings.rating, this.settings.packs).find((s) => s.id === id)
+      // A situation switched off in the panel after the deck was shuffled.
+      || content.situationById(id, this.settings.rating);
   }
 
   // A card nobody is holding, preferring one this player has not seen

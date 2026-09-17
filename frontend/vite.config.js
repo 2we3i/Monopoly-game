@@ -34,6 +34,8 @@ export default defineConfig({
       '/api': { target: 'http://localhost:4000' },
       '/avatars': { target: 'http://localhost:4000' },
       '/memes': { target: 'http://localhost:4000' },
+      // Pictures uploaded from the Creator's panel.
+      '/media': { target: 'http://localhost:4000' },
     },
   },
   build: { outDir: 'dist' },

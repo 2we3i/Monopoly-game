@@ -246,7 +246,7 @@ function registerCatanHandlers(io) {
           token, playerId, nickname, guestKey,
         });
         access.assertCanCreate(identity);
-        modes.assertAvailable(MODE_ID);
+        modes.assertAvailable(MODE_ID, identity.accountId);
         const game = roomManager.createCatanRoom(identity.playerId, settings, {
           accountId: identity.accountId, nickname: identity.nickname,
         });
@@ -313,7 +313,7 @@ function registerCatanHandlers(io) {
     socket.on('catan:start', act((game, playerId) => {
       game.assertHost(playerId);
       access.assertCanStart(socket.data.catanAccountId);
-      modes.assertAvailable(MODE_ID);
+      modes.assertAvailable(MODE_ID, socket.data.catanAccountId);
       game.start(playerId);
     }));
 
@@ -322,7 +322,7 @@ function registerCatanHandlers(io) {
       access.assertCanStart(socket.data.catanAccountId);
       game.restart(playerId);
       if (p.startNow) {
-        modes.assertAvailable(MODE_ID);
+        modes.assertAvailable(MODE_ID, socket.data.catanAccountId);
         game.start(playerId);
       }
     }));

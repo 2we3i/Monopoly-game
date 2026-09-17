@@ -10,6 +10,7 @@ import PlayerAvatar from './PlayerAvatar';
 import ProfileMenu from './ProfileMenu';
 import SocialBar from './social/SocialBar';
 import FramedAvatar from '../cosmetics/FramedAvatar';
+import { isTestArmed } from '../lib/testMatch';
 import { StyledName, useLook } from '../cosmetics/Cosmetics';
 
 function DieGlyph({ className = '' }) {
@@ -52,7 +53,8 @@ function ModePicker({ modes, selectedId, onSelect, language, t }) {
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {modes.map((mode) => {
         const isSelected = mode.id === selectedId;
-        const unavailable = mode.available === false;
+        const testArmed = isTestArmed('monopoly', mode.id);
+        const unavailable = mode.available === false && !testArmed;
         const label = mode.label[language] || mode.label.en;
         const description = mode.description[language] || mode.description.en;
         return (
@@ -69,6 +71,7 @@ function ModePicker({ modes, selectedId, onSelect, language, t }) {
             <p className="mt-0.5 text-xs leading-snug text-ink-faint">{description}</p>
             <p className="mt-1.5 text-[11px] font-medium text-brass-deep">
               {unavailable ? t('menu.unavailable') : t('landing.tiles', { count: mode.tileCount })}
+              {testArmed && ` · ${t('creator.test.badge')}`}
             </p>
           </button>
         );
@@ -131,7 +134,7 @@ function LandingScreen({
 
   useEffect(() => {
     if (modes && modes.length > 0 && !selectedModeId) {
-      const firstAvailable = modes.find((m) => m.available !== false);
+      const firstAvailable = modes.find((m) => isTestArmed('monopoly', m.id)) || modes.find((m) => m.available !== false);
       if (firstAvailable) setSelectedModeId(firstAvailable.id);
     }
   }, [modes, selectedModeId]);

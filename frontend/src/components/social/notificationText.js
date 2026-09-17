@@ -19,6 +19,7 @@ export const NOTIFICATION_ICON = {
   item_granted: 'gift',
   rank_up: 'arrowUp',
   game_event: 'flag',
+  balance_adjusted: 'coin',
 };
 
 export const NOTIFICATION_TONE = {
@@ -34,6 +35,7 @@ export const NOTIFICATION_TONE = {
   item_granted: '#c084fc',
   rank_up: '#34d399',
   game_event: '#94a3b8',
+  balance_adjusted: '#e3bb5c',
 };
 
 export function describeNotification(n, { t, language, catalog }) {
@@ -65,6 +67,11 @@ export function describeNotification(n, { t, language, catalog }) {
       return { title: t('notif.purchase.title'), body: `${itemName(item, language) || p.itemId} · ${p.price} ${t('wallet.crownsShort')}` };
     case 'item_granted':
       return { title: t('notif.item.title'), body: `${itemName(item, language) || p.itemId} · ${t(`notif.item.reason.${p.reason}`)}` };
+    case 'balance_adjusted':
+      return {
+        title: t('notif.balance.title', { sign: p.delta > 0 ? '+' : '−', amount: Math.abs(p.delta || 0).toLocaleString() }),
+        body: t('notif.balance.body', { balance: (p.balance ?? 0).toLocaleString(), reason: p.reason || '' }),
+      };
     case 'rank_up':
       return { title: t('notif.rank.title', { rank: p.to }), body: t('notif.rank.body') };
     default:

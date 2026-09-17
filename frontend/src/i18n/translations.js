@@ -12,6 +12,7 @@ import { throneEn, throneRu } from './throneTranslations';
 import { throneOnlineEn, throneOnlineRu } from './throneOnlineTranslations';
 import { roomEn, roomRu } from './roomTranslations';
 import { hypeEn, hypeRu } from './hypeTranslations';
+import { creatorEn, creatorRu } from './creatorTranslations';
 
 export const LANGUAGES = {
   en: { label: 'English', nativeLabel: 'English' },
@@ -73,7 +74,7 @@ const en = {
   'game.rollDice': 'Roll dice',
   'game.tryForDoubles': 'Try for doubles',
   'game.inJail': "You're in Jail",
-  'game.payJailFine': 'Pay $50 fine',
+  'game.payJailFine': 'Pay ${amount} fine',
   'game.useJailCard': 'Use jail card',
   'game.endTurn': 'End turn',
   'game.declareBankruptcy': 'Declare bankruptcy',
@@ -598,7 +599,7 @@ const ru = {
   'game.rollDice': 'Бросить кубики',
   'game.tryForDoubles': 'Попытаться выбросить дубль',
   'game.inJail': 'Вы в тюрьме',
-  'game.payJailFine': 'Заплатить $50 штрафа',
+  'game.payJailFine': 'Заплатить ${amount} штрафа',
   'game.useJailCard': 'Использовать карту освобождения',
   'game.endTurn': 'Закончить ход',
   'game.declareBankruptcy': 'Объявить банкротство',
@@ -1071,8 +1072,8 @@ const ru = {
 };
 
 export const TRANSLATIONS = {
-  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn, ...tabletopEn, ...monopolyEn, ...catanEn, ...cosmicEn, ...throneEn, ...throneOnlineEn, ...roomEn, ...hypeEn },
-  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu, ...tabletopRu, ...monopolyRu, ...catanRu, ...cosmicRu, ...throneRu, ...throneOnlineRu, ...roomRu, ...hypeRu },
+  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn, ...tabletopEn, ...monopolyEn, ...catanEn, ...cosmicEn, ...throneEn, ...throneOnlineEn, ...roomEn, ...hypeEn, ...creatorEn },
+  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu, ...tabletopRu, ...monopolyRu, ...catanRu, ...cosmicRu, ...throneRu, ...throneOnlineRu, ...roomRu, ...hypeRu, ...creatorRu },
 };
 
 if (import.meta.env.DEV) {

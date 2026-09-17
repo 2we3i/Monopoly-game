@@ -133,6 +133,7 @@ module.exports = {
   STREAK_REWARDS,
   ACHIEVEMENT_REWARDS,
   LEADERBOARD_MIN_MATCHES,
+  EVENTS,
   tableMultiplier,
   podiumPlace,
   activeEvents,

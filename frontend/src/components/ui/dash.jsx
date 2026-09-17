@@ -255,12 +255,12 @@ export function Dialog({
 }
 
 export function Drawer({
-  title, subtitle, onClose, children, footer,
+  title, subtitle, onClose, children, footer, wide = false,
 }) {
   useEscape(onClose);
   return (
     <div className="fixed inset-0 z-[60] flex justify-end bg-black/55 backdrop-blur-[2px]" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
-      <aside className="flex h-full w-full max-w-2xl animate-slide-up flex-col 4xl:max-w-4xl border-l border-white/[0.08] bg-[#101216] shadow-deep sm:animate-fade-in">
+      <aside className={`flex h-full w-full animate-slide-up flex-col border-l border-white/[0.08] bg-[#101216] shadow-deep sm:animate-fade-in ${wide ? 'max-w-5xl 3xl:max-w-6xl 4xl:max-w-[1900px]' : 'max-w-2xl 4xl:max-w-4xl'}`}>
         <header className="flex items-start gap-3 border-b border-white/[0.07] px-5 py-4">
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-[16px] font-semibold text-zinc-50">{title}</h2>

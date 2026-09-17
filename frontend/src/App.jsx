@@ -56,6 +56,7 @@ const PlayPage = lazy(() => import('./components/play/PlayPage'));
 const MemeHypeScreen = lazy(() => import('./components/tabletop/memehype/MemeHypeScreen'));
 const ProfilePage = lazy(() => import('./components/profile/ProfilePage'));
 const AdminPanel = lazy(() => import('./components/admin/AdminPanel'));
+const Announcement = lazy(() => import('./components/platform/Announcement'));
 const ShopPage = lazy(() => import('./components/shop/ShopPage'));
 const InventoryPage = lazy(() => import('./components/shop/InventoryPage'));
 const MessagesPage = lazy(() => import('./components/social/MessagesPage'));
@@ -185,6 +186,7 @@ export default function App() {
       </Suspense>
       <NoticeToast />
       <ToastStack />
+      <Suspense fallback={null}><Announcement /></Suspense>
       {!pathname.startsWith('/messages') && <MessengerDrawer />}
       <ProfilePeek />
       <EffectHost />

@@ -95,7 +95,7 @@ export default function LobbiesSection({ token }) {
           onChange={setGame}
           options={[
             { value: 'all', label: t('common.all') },
-            ...['monopoly', 'mafia', 'citadels', 'bunker', 'catan', 'cosmic', 'throne'].map((id) => ({ value: id, label: gameName(t, id) })),
+            ...['monopoly', 'mafia', 'citadels', 'bunker', 'catan', 'cosmic', 'throne', 'chpok', 'memehype'].map((id) => ({ value: id, label: gameName(t, id) })),
           ]}
         />
         <Segmented
@@ -122,6 +122,7 @@ export default function LobbiesSection({ token }) {
                 <span className="flex items-center gap-1">
                   <span className="font-mono font-semibold tracking-wider text-zinc-100">{r.code}</span>
                   <CopyButton text={inviteLink(r.code)} label="" copiedLabel="" />
+                  {r.test && <Badge tone="violet">{t('creator.test.badge')}</Badge>}
                 </span>
               ),
             },

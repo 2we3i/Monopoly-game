@@ -24,7 +24,7 @@ const LOADOUT_SLOTS = [
   'token_shape', 'token_frame', 'token_aura', 'token_trail', 'token_victory',
   'name_style', 'name_decor', 'name_intro', 'avatar_frame', 'title', 'badge',
   'profile_bg', 'profile_card', 'effect_join', 'effect_win', 'effect_loss', 'effect_reward', 'effect_rankup', 'effect_podium',
-  'emote', 'sound_start', 'sound_win', 'sound_reward', 'sound_event',
+  'emote', 'sound_start', 'sound_win', 'sound_reward', 'sound_event', 'tile_name',
 ];
 
 function Loadout({ auth, social, catalog, onPreview }) {

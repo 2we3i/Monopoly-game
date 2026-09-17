@@ -124,6 +124,10 @@ function requireAuth(req, res, next) {
 
 router.post('/register', (req, res) => {
   const { nickname, password } = req.body || {};
+  // eslint-disable-next-line global-require
+  if (!require('../platform/settings').get().platform.registrationOpen) {
+    return res.status(403).json({ error: 'Registration is closed for now.', code: 'REGISTRATION_CLOSED' });
+  }
   const nicknameError = validateNickname(nickname);
   if (nicknameError) return res.status(400).json({ error: nicknameError });
   const passwordError = validatePassword(password);

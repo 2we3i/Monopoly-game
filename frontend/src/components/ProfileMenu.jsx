@@ -175,7 +175,7 @@ export default function ProfileMenu({ auth, savedNickname, onSwitchIdentity }) {
                 onClick={() => { setOpen(false); navigate('/admin'); }}
                 className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-ink transition-colors hover:bg-brass/10"
               >
-                {t('admin.open')}
+                {auth.isCreator ? t('creator.open') : t('admin.open')}
               </button>
             )}
           </div>

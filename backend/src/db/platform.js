@@ -85,6 +85,24 @@ db.exec(`
   );
 `);
 
+// Additive migration: the Creator's journal records who acted in which
+// role, on what kind of target, the value before and after, and why.
+{
+  const auditColumns = new Set(db.prepare('PRAGMA table_info(admin_actions)').all().map((c) => c.name));
+  [
+    ['admin_role', 'TEXT'],
+    ['target_type', 'TEXT'],
+    ['target_label', 'TEXT'],
+    ['old_json', 'TEXT'],
+    ['new_json', 'TEXT'],
+    ['reason', 'TEXT'],
+    ['critical', 'INTEGER NOT NULL DEFAULT 0'],
+  ].forEach(([name, type]) => {
+    if (!auditColumns.has(name)) db.exec(`ALTER TABLE admin_actions ADD COLUMN ${name} ${type}`);
+  });
+  db.exec('CREATE INDEX IF NOT EXISTS admin_actions_created ON admin_actions(created_at)');
+}
+
 // Additive migration: the final place of a seat, for ranked games.
 if (!db.prepare('PRAGMA table_info(match_players)').all().some((c) => c.name === 'place')) {
   db.exec('ALTER TABLE match_players ADD COLUMN place INTEGER');
@@ -192,26 +210,89 @@ function setModeRow({ modeId, status, pausedUntil = null, updatedBy = null }) {
 // --- audit -----------------------------------------------------------------
 
 const auditStmt = db.prepare(`
-  INSERT INTO admin_actions (admin_id, admin_name, action, target, details_json, created_at)
-  VALUES (@adminId, @adminName, @action, @target, @detailsJson, @createdAt)
+  INSERT INTO admin_actions (admin_id, admin_name, admin_role, action, target, target_type, target_label,
+    details_json, old_json, new_json, reason, critical, created_at)
+  VALUES (@adminId, @adminName, @adminRole, @action, @target, @targetType, @targetLabel,
+    @detailsJson, @oldJson, @newJson, @reason, @critical, @createdAt)
 `);
 const recentAuditStmt = db.prepare('SELECT * FROM admin_actions ORDER BY id DESC LIMIT ?');
 
-function audit({ adminId, adminName, action, target = null, details = null }) {
-  auditStmt.run({
-    adminId, adminName, action, target, detailsJson: details ? JSON.stringify(details) : null, createdAt: Date.now(),
+const json = (value) => (value === undefined || value === null ? null : JSON.stringify(value));
+const parse = (text) => {
+  if (!text) return null;
+  try { return JSON.parse(text); } catch { return null; }
+};
+
+function audit({
+  adminId, adminName, adminRole = null, action, target = null, targetType = null, targetLabel = null,
+  details = null, oldValue = null, newValue = null, reason = null, critical = false,
+}) {
+  const { lastInsertRowid } = auditStmt.run({
+    adminId,
+    adminName,
+    adminRole,
+    action,
+    target: target == null ? null : String(target),
+    targetType,
+    targetLabel,
+    detailsJson: json(details),
+    oldJson: json(oldValue),
+    newJson: json(newValue),
+    reason: reason || null,
+    critical: critical ? 1 : 0,
+    createdAt: Date.now(),
   });
+  return Number(lastInsertRowid);
+}
+
+function auditRow(r) {
+  return {
+    id: r.id,
+    adminId: r.admin_id,
+    adminName: r.admin_name,
+    adminRole: r.admin_role || null,
+    action: r.action,
+    target: r.target,
+    targetType: r.target_type || null,
+    targetLabel: r.target_label || null,
+    details: parse(r.details_json),
+    oldValue: parse(r.old_json),
+    newValue: parse(r.new_json),
+    reason: r.reason || null,
+    critical: !!r.critical,
+    createdAt: r.created_at,
+  };
 }
 
 function recentAudit(limit = 20) {
-  return recentAuditStmt.all(limit).map((r) => ({
-    id: r.id,
-    adminName: r.admin_name,
-    action: r.action,
-    target: r.target,
-    details: r.details_json ? JSON.parse(r.details_json) : null,
-    createdAt: r.created_at,
-  }));
+  return recentAuditStmt.all(limit).map(auditRow);
+}
+
+// The journal with filters, newest first, a page at a time.
+function searchAudit({
+  q = '', action = '', targetType = '', adminId = '', target = '', critical = false, since = 0, until = 0, before = 0, limit = 100,
+} = {}) {
+  const where = [];
+  const args = [];
+  if (action) { where.push('action = ?'); args.push(action); }
+  if (targetType) { where.push('target_type = ?'); args.push(targetType); }
+  if (adminId) { where.push('admin_id = ?'); args.push(adminId); }
+  if (target) { where.push('target = ?'); args.push(target); }
+  if (critical) where.push('critical = 1');
+  if (since) { where.push('created_at >= ?'); args.push(since); }
+  if (until) { where.push('created_at < ?'); args.push(until); }
+  if (before) { where.push('id < ?'); args.push(before); }
+  if (q) {
+    where.push("(LOWER(COALESCE(admin_name,'') || ' ' || action || ' ' || COALESCE(target,'') || ' ' || COALESCE(target_label,'') || ' ' || COALESCE(reason,'') || ' ' || COALESCE(details_json,'')) LIKE ?)");
+    args.push(`%${String(q).toLowerCase()}%`);
+  }
+  const sql = `SELECT * FROM admin_actions ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY id DESC LIMIT ?`;
+  const rows = db.prepare(sql).all(...args, Math.max(1, Math.min(500, limit)));
+  return rows.map(auditRow);
+}
+
+function auditActions() {
+  return db.prepare('SELECT action, COUNT(*) n FROM admin_actions GROUP BY action ORDER BY action').all();
 }
 
 // --- queries: platform -----------------------------------------------------
@@ -521,6 +602,8 @@ module.exports = {
   setModeRow,
   audit,
   recentAudit,
+  searchAudit,
+  auditActions,
   platformTotals,
   modePopularity,
   modePlayerCounts,

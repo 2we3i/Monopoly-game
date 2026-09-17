@@ -129,6 +129,7 @@ function normalizePack(file) {
   });
   return {
     id: file.id,
+    palette,
     order: file.order || 99,
     emoji: file.emoji,
     accent: file.accent,
@@ -139,12 +140,127 @@ function normalizePack(file) {
   };
 }
 
-const PACKS = PACK_FILES.map(normalizePack).sort((a, b) => a.order - b.order);
+// The packs exactly as the files describe them.
+const BASE_PACKS = PACK_FILES.map(normalizePack).sort((a, b) => a.order - b.order);
+
+// The packs in play: the files plus whatever the Creator changed from the
+// panel (edited captions and pictures, switched-off cards, new cards). Kept
+// as the same array and maps, rebuilt in place by install(), so a change
+// reaches the next card dealt - and a card already in someone's hand keeps
+// resolving (a deleted card is only switched off, never forgotten).
+const PACKS = [...BASE_PACKS];
 const PACK_IDS = PACKS.map((p) => p.id);
 const MEMES_BY_ID = new Map();
-PACKS.forEach((pack) => RATINGS.forEach((rating) => {
-  pack.byRating[rating].memes.forEach((m) => MEMES_BY_ID.set(m.id, m));
-}));
+const SITUATIONS_BY_ID = new Map();
+
+const LOCAL_IMAGE = /^(\/|https?:\/\/)/;
+
+function applyMeme(meme, patch, palette) {
+  if (!patch) return meme;
+  const out = { ...meme };
+  ['art', 'top', 'bottom'].forEach((key) => {
+    if (typeof patch[key] === 'string') out[key] = patch[key];
+  });
+  if (patch.bg && palette[patch.bg]) out.colors = palette[patch.bg];
+  if (patch.image === '') {
+    out.image = null;
+    out.imageSource = null;
+    out.credit = null;
+  } else if (typeof patch.image === 'string' && LOCAL_IMAGE.test(patch.image)) {
+    out.image = patch.image;
+    out.imageSource = 'creator';
+    out.credit = null;
+  }
+  if (patch.enabled === false || patch.deleted) out.enabled = false;
+  else if (patch.enabled === true) out.enabled = true;
+  if (patch.deleted) out.deleted = true;
+  if (Number.isFinite(patch.weight) && patch.weight > 0) out.weight = patch.weight;
+  if (patch.title) out.title = patch.title;
+  if (patch.description) out.description = patch.description;
+  out.edited = true;
+  return out;
+}
+
+function applySituation(situation, patch) {
+  if (!patch) return situation;
+  const out = { ...situation };
+  if (typeof patch.text === 'string' && patch.text.trim()) out.text = patch.text.trim();
+  if (typeof patch.category === 'string' && patch.category.trim()) out.category = patch.category.trim();
+  if (patch.enabled === false || patch.deleted) out.enabled = false;
+  else if (patch.enabled === true) out.enabled = true;
+  if (patch.deleted) out.deleted = true;
+  out.edited = true;
+  return out;
+}
+
+// overrides: { [cardId]: patch, ['pack:<id>']: { enabled } }
+// custom: [{ id, pack, rating, data: { kind, ... }, deletedAt }]
+function install({ overrides = {}, custom = [] } = {}) {
+  const packs = BASE_PACKS.map((base) => {
+    const packPatch = overrides[`pack:${base.id}`] || {};
+    return {
+      ...base,
+      enabled: packPatch.enabled === undefined ? base.enabled : packPatch.enabled !== false,
+      byRating: Object.fromEntries(RATINGS.map((rating) => [rating, {
+        situations: base.byRating[rating].situations.map((s) => applySituation(s, overrides[s.id])),
+        memes: base.byRating[rating].memes.map((m) => applyMeme(m, overrides[m.id], base.palette)),
+      }])),
+    };
+  });
+  custom.forEach((row) => {
+    const pack = packs.find((p) => p.id === row.pack);
+    if (!pack || !RATINGS.includes(row.rating)) return;
+    const d = row.data || {};
+    const shelf = pack.byRating[row.rating];
+    if (d.kind === 'situation') {
+      shelf.situations.push(applySituation({
+        id: row.id, pack: pack.id, rating: row.rating, category: d.category || 'misc', text: d.text || '', weight: 1, enabled: d.enabled !== false, custom: true,
+      }, row.deletedAt ? { deleted: true } : overrides[row.id]));
+      return;
+    }
+    const colors = pack.palette[d.bg] || Object.values(pack.palette)[0] || ['#555', '#222'];
+    shelf.memes.push(applyMeme({
+      id: row.id,
+      pack: pack.id,
+      rating: row.rating,
+      art: d.art || '',
+      top: d.top || '',
+      bottom: d.bottom || '',
+      colors,
+      image: d.image && LOCAL_IMAGE.test(d.image) ? d.image : null,
+      imageSource: d.image ? 'creator' : null,
+      credit: null,
+      weight: 1,
+      enabled: d.enabled !== false,
+      custom: true,
+      title: d.title || null,
+      description: d.description || null,
+    }, row.deletedAt ? { deleted: true } : overrides[row.id]));
+  });
+  PACKS.splice(0, PACKS.length, ...packs);
+  MEMES_BY_ID.clear();
+  SITUATIONS_BY_ID.clear();
+  PACKS.forEach((pack) => RATINGS.forEach((rating) => {
+    pack.byRating[rating].memes.forEach((m) => MEMES_BY_ID.set(m.id, m));
+    pack.byRating[rating].situations.forEach((s) => SITUATIONS_BY_ID.set(s.id, s));
+  }));
+}
+install();
+
+function situationById(id, rating) {
+  const s = SITUATIONS_BY_ID.get(id);
+  return s && (!rating || s.rating === rating) ? s : null;
+}
+
+function baseMeme(id) {
+  for (const pack of BASE_PACKS) {
+    for (const rating of RATINGS) {
+      const found = pack.byRating[rating].memes.find((m) => m.id === id);
+      if (found) return found;
+    }
+  }
+  return null;
+}
 
 function packById(id) {
   return PACKS.find((p) => p.id === id && p.enabled) || null;
@@ -181,8 +297,8 @@ function catalog() {
     title: p.title,
     description: p.description,
     sizes: Object.fromEntries(RATINGS.map((r) => [r, {
-      situations: p.byRating[r].situations.length,
-      memes: p.byRating[r].memes.length,
+      situations: p.byRating[r].situations.filter((s) => s.enabled).length,
+      memes: p.byRating[r].memes.filter((m) => m.enabled).length,
     }])),
   }));
 }
@@ -209,5 +325,6 @@ module.exports = {
   CUSTOM_EXT,
   credits,
   unmatchedCustom,
-  RATINGS, PACK_IDS, PACKS, packById, situationsFor, memesFor, memeById, catalog,
+  RATINGS, PACK_IDS, PACKS, BASE_PACKS, packById, situationsFor, memesFor, memeById, situationById, baseMeme, catalog,
+  install,
 };

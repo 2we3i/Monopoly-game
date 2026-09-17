@@ -238,7 +238,7 @@ function registerCitadelsHandlers(io) {
           token, playerId, nickname, guestKey,
         });
         access.assertCanCreate(identity);
-        modes.assertAvailable(MODE_ID);
+        modes.assertAvailable(MODE_ID, identity.accountId);
         const game = roomManager.createCitadelsRoom(identity.playerId, settings, {
           accountId: identity.accountId, nickname: identity.nickname,
         });
@@ -305,7 +305,7 @@ function registerCitadelsHandlers(io) {
     socket.on('citadels:start', act((game, playerId) => {
       game.assertHost(playerId);
       access.assertCanStart(socket.data.citadelsAccountId);
-      modes.assertAvailable(MODE_ID);
+      modes.assertAvailable(MODE_ID, socket.data.citadelsAccountId);
       game.start(playerId);
     }));
 
@@ -314,7 +314,7 @@ function registerCitadelsHandlers(io) {
       access.assertCanStart(socket.data.citadelsAccountId);
       game.restart(playerId);
       if (p.startNow) {
-        modes.assertAvailable(MODE_ID);
+        modes.assertAvailable(MODE_ID, socket.data.citadelsAccountId);
         game.start(playerId);
       }
     }));

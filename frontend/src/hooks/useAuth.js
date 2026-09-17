@@ -138,7 +138,10 @@ export function useAuth() {
     account,
     token,
     isLoggedIn: !!account,
-    isAdmin: account?.role === 'admin',
+    // The Creator is an administrator too; the panel shows each role what
+    // the server allows it (GET /api/admin/me returns the permissions).
+    isAdmin: account?.role === 'admin' || account?.role === 'creator',
+    isCreator: account?.role === 'creator',
     checking,
     blocked,
     clearBlocked: () => setBlocked(null),

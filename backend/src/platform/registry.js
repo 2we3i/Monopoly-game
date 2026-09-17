@@ -19,6 +19,7 @@
 // status }], maxPlayers, details }.
 
 const recorder = require('./recorder');
+const testing = require('./testing');
 
 const adapters = new Map();
 
@@ -35,7 +36,8 @@ function listRooms() {
   adapters.forEach((adapter) => {
     for (const room of adapter.rooms()) {
       try {
-        out.push(adapter.summary(room));
+        const summary = adapter.summary(room);
+        out.push(testing.isTestRoom(summary.code) ? { ...summary, test: true } : summary);
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error(`Could not summarise a ${adapter.type} room:`, err.message);

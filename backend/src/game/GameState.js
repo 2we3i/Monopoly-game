@@ -3,7 +3,7 @@
 
 const { CardDeck, CHANCE_TEMPLATE, CHEST_TEMPLATE } = require('./cards');
 const { TILE_TYPES } = require('./boardLayouts/tileTypes');
-const { getLayout, DEFAULT_LAYOUT_ID } = require('./boardLayouts');
+const { getLayout, layoutForSavedGame, DEFAULT_LAYOUT_ID } = require('./boardLayouts');
 
 const STARTING_MONEY = 1500;
 const GO_SALARY = 200;
@@ -25,13 +25,41 @@ const AUCTION_RESUME_MS = Math.min(15000, AUCTION_DURATION_MS);
 const AUCTION_MIN_BID = 10;
 const AUCTION_MIN_STEP = 10;
 
+// The numbers a room plays by. The Creator can change them per board from
+// the panel (platform/modeConfig.js); a room copies them when it is
+// created, so a change only ever reaches games that start afterwards.
+const DEFAULT_RULES = Object.freeze({
+  startingMoney: STARTING_MONEY,
+  goSalary: GO_SALARY,
+  jailFine: JAIL_FINE,
+  maxJailTurns: MAX_JAIL_TURNS,
+  mortgageRounds: MORTGAGE_ROUNDS,
+  auctionMs: AUCTION_DURATION_MS,
+});
+
+function normalizeRules(rules) {
+  const src = rules && typeof rules === 'object' ? rules : {};
+  const int = (value, min, max, fallback) => {
+    const n = Number(value);
+    return Number.isInteger(n) && n >= min && n <= max ? n : fallback;
+  };
+  return {
+    startingMoney: int(src.startingMoney, 0, 1000000, DEFAULT_RULES.startingMoney),
+    goSalary: int(src.goSalary, 0, 100000, DEFAULT_RULES.goSalary),
+    jailFine: int(src.jailFine, 0, 100000, DEFAULT_RULES.jailFine),
+    maxJailTurns: int(src.maxJailTurns, 1, 10, DEFAULT_RULES.maxJailTurns),
+    mortgageRounds: int(src.mortgageRounds, 1, 100, DEFAULT_RULES.mortgageRounds),
+    auctionMs: int(src.auctionMs, 1000, 5 * 60 * 1000, DEFAULT_RULES.auctionMs),
+  };
+}
+
 const PLAYER_COLORS = [
   '#e63946', '#2a9d8f', '#f4a261', '#457b9d',
   '#a663cc', '#ffb703', '#06d6a0', '#ef476f',
   '#118ab2', '#d4622a',
 ];
 
-function makePlayer({ id, socketId, nickname, colorIndex, avatarUrl = null, accountId = null }) {
+function makePlayer({ id, socketId, nickname, colorIndex, avatarUrl = null, accountId = null, startingMoney = STARTING_MONEY }) {
   return {
     id,
     socketId,
@@ -39,7 +67,7 @@ function makePlayer({ id, socketId, nickname, colorIndex, avatarUrl = null, acco
     avatarUrl,
     accountId,
     color: PLAYER_COLORS[colorIndex % PLAYER_COLORS.length],
-    money: STARTING_MONEY,
+    money: startingMoney,
     position: 0,
     inJail: false,
     jailTurns: 0,
@@ -52,10 +80,11 @@ function makePlayer({ id, socketId, nickname, colorIndex, avatarUrl = null, acco
 }
 
 class GameState {
-  constructor(roomCode, modeId = DEFAULT_LAYOUT_ID) {
+  constructor(roomCode, modeId = DEFAULT_LAYOUT_ID, { rules = null, layout = null, decks = null } = {}) {
     this.roomCode = roomCode;
     this.modeId = modeId;
-    this.layout = getLayout(modeId);
+    this.layout = layout || getLayout(modeId);
+    this.rules = normalizeRules(rules);
     this.players = [];
     this.properties = {};
     this.currentPlayerIndex = 0;
@@ -66,8 +95,14 @@ class GameState {
     this.pendingAction = null;
     this.winnerId = null;
     this.turnStartedAt = Date.now();
-    this.chanceDeck = new CardDeck(CHANCE_TEMPLATE);
-    this.chestDeck = new CardDeck(CHEST_TEMPLATE);
+    // The card texts and effects this room plays with (the Creator can edit
+    // the decks); kept with the room so a restore reads the same cards.
+    this.decks = {
+      chance: Array.isArray(decks?.chance) && decks.chance.length ? decks.chance : CHANCE_TEMPLATE,
+      chest: Array.isArray(decks?.chest) && decks.chest.length ? decks.chest : CHEST_TEMPLATE,
+    };
+    this.chanceDeck = new CardDeck(this.decks.chance);
+    this.chestDeck = new CardDeck(this.decks.chest);
     this.createdAt = Date.now();
     this.lastMove = null;
     // Trades are independent of turn order - unlike dice rolls or
@@ -154,6 +189,8 @@ class GameState {
       modeId: this.modeId,
       board: this.layout.board,
       sideLength: this.layout.sideLength,
+      rules: this.rules,
+      decks: this.decks.chance === CHANCE_TEMPLATE && this.decks.chest === CHEST_TEMPLATE ? null : this.decks,
       players: this.players,
       properties: this.properties,
       currentPlayerIndex: this.currentPlayerIndex,
@@ -179,7 +216,14 @@ class GameState {
   }
 
   static fromJSON(data) {
-    const gs = new GameState(data.roomCode, data.modeId || DEFAULT_LAYOUT_ID);
+    // The board and the rules the game was started with, not whatever the
+    // panel says now: an edit never changes a game already in progress.
+    const modeId = data.modeId || DEFAULT_LAYOUT_ID;
+    const gs = new GameState(data.roomCode, modeId, {
+      rules: data.rules,
+      decks: data.decks,
+      layout: layoutForSavedGame(modeId, data.board, data.sideLength),
+    });
     gs.players = data.players;
     gs.properties = data.properties;
     gs.round = Number.isInteger(data.round) && data.round > 0 ? data.round : 1;
@@ -197,7 +241,7 @@ class GameState {
       if (!p.priceChanges) p.priceChanges = {};
       if (p.mortgaged && !Number.isInteger(p.mortgageExpiresRound)) {
         p.mortgagedRound = gs.round;
-        p.mortgageExpiresRound = gs.round + MORTGAGE_ROUNDS + 1;
+        p.mortgageExpiresRound = gs.round + gs.rules.mortgageRounds + 1;
       }
       if (!p.mortgaged) {
         p.mortgagedRound = null;
@@ -213,8 +257,8 @@ class GameState {
     gs.winnerId = data.winnerId || null;
     gs.turnStartedAt = data.turnStartedAt || Date.now();
     gs.createdAt = data.createdAt || Date.now();
-    gs.chanceDeck.restore(data.chanceDeck, CHANCE_TEMPLATE);
-    gs.chestDeck.restore(data.chestDeck, CHEST_TEMPLATE);
+    gs.chanceDeck.restore(data.chanceDeck, gs.decks.chance);
+    gs.chestDeck.restore(data.chestDeck, gs.decks.chest);
     gs.players.forEach((p) => { p.connected = false; p.socketId = null; });
     // Trades persisted before a server restart are pending decisions that
     // were never resolved - restoring them lets the two parties still
@@ -236,6 +280,8 @@ class GameState {
 
 module.exports = {
   GameState,
+  DEFAULT_RULES,
+  normalizeRules,
   STARTING_MONEY,
   GO_SALARY,
   MAX_JAIL_TURNS,

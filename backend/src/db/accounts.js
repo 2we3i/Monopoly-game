@@ -1,13 +1,13 @@
 // accounts.js
 // Persistence for registered player accounts: nickname, password (hashed
 // - never stored/logged in plaintext), an optional avatar, and the
-// account's standing: role (user/admin), block status and activity
+// account's standing: role (user/admin/creator), block status and activity
 // timestamps. No email, no personal information. Guests never get a row.
 
 const path = require('path');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
-const { DATA_DIR, ADMIN_ACCOUNT_IDS } = require('../config');
+const { DATA_DIR, ADMIN_ACCOUNT_IDS, CREATOR_ACCOUNT_IDS } = require('../config');
 
 const DB_PATH = path.join(DATA_DIR, 'accounts.db');
 const db = new Database(DB_PATH);
@@ -37,6 +37,10 @@ const MIGRATED_COLUMNS = [
   ['blocked_by_name', 'TEXT'],
   ['last_login_at', 'INTEGER'],
   ['last_seen_at', 'INTEGER'],
+  // Who last changed the role from the Creator's panel, and when. A role
+  // set there counts even when ADMIN_ACCOUNT_ID is configured.
+  ['role_set_by', 'TEXT'],
+  ['role_set_at', 'INTEGER'],
 ];
 const existingColumns = new Set(db.prepare('PRAGMA table_info(accounts)').all().map((c) => c.name));
 MIGRATED_COLUMNS.forEach(([name, type]) => {
@@ -100,11 +104,59 @@ const unblockStmt = db.prepare(`
 const demoteAllStmt = db.prepare("UPDATE accounts SET role = 'user' WHERE role = 'admin'");
 const promoteStmt = db.prepare("UPDATE accounts SET role = 'admin' WHERE id = ?");
 
-// The single source of truth for "is this account the administrator".
-function isAdmin(row) {
-  if (!row) return false;
-  if (ADMIN_ACCOUNT_IDS.length) return ADMIN_ACCOUNT_IDS.includes(row.id);
+const ROLES = ['user', 'admin', 'creator'];
+const creatorCountStmt = db.prepare("SELECT COUNT(*) n FROM accounts WHERE role = 'creator'");
+const setRoleStmt = db.prepare('UPDATE accounts SET role = @role, role_set_by = @by, role_set_at = @at WHERE id = @id');
+
+// Has anybody been made the Creator (by configuration or in the database)?
+// Until then the administrators act as creators - an upgrade never leaves
+// the platform without an owner.
+function creatorDesignated() {
+  return CREATOR_ACCOUNT_IDS.length > 0 || creatorCountStmt.get().n > 0;
+}
+
+function adminByConfig(row) {
+  if (ADMIN_ACCOUNT_IDS.length) {
+    // The configured ids are admins regardless of the database; a role the
+    // Creator granted in the panel counts as well.
+    return ADMIN_ACCOUNT_IDS.includes(row.id) || (row.role === 'admin' && !!row.role_set_by);
+  }
   return row.role === 'admin';
+}
+
+// The single source of truth for an account's role.
+function roleOf(row) {
+  if (!row) return 'user';
+  if (CREATOR_ACCOUNT_IDS.includes(row.id) || row.role === 'creator') return 'creator';
+  if (adminByConfig(row)) return creatorDesignated() ? 'admin' : 'creator';
+  return 'user';
+}
+
+// Is this account an administrator (the Creator is one too)?
+function isAdmin(row) {
+  return roleOf(row) !== 'user';
+}
+
+function isCreator(row) {
+  return roleOf(row) === 'creator';
+}
+
+// A role fixed by the environment cannot be changed from the panel.
+function roleLockedByConfig(row) {
+  return !!row && (CREATOR_ACCOUNT_IDS.includes(row.id) || ADMIN_ACCOUNT_IDS.includes(row.id));
+}
+
+function setRole(accountId, role, byAccountId) {
+  if (!ROLES.includes(role)) throw new Error(`Unknown role "${role}".`);
+  setRoleStmt.run({
+    id: accountId, role, by: byAccountId || 'system', at: Date.now(),
+  });
+  checkpoint();
+  return findById(accountId);
+}
+
+function listByRole() {
+  return getAllStmt.all().filter((row) => roleOf(row) !== 'user');
 }
 
 function isBlocked(row) {
@@ -118,7 +170,7 @@ function toPublicAccount(row) {
     nickname: row.nickname,
     avatarPath: row.avatar_path,
     createdAt: row.created_at,
-    role: isAdmin(row) ? 'admin' : 'user',
+    role: roleOf(row),
     status: row.status || 'active',
   };
 }
@@ -135,6 +187,9 @@ function toAdminAccount(row) {
     blockedAt: row.blocked_at || null,
     blockedBy: row.blocked_by || null,
     blockedByName: row.blocked_by_name || null,
+    roleLocked: roleLockedByConfig(row),
+    roleSetBy: row.role_set_by || null,
+    roleSetAt: row.role_set_at || null,
   };
 }
 
@@ -237,7 +292,14 @@ module.exports = {
   verifyPassword,
   toPublicAccount,
   toAdminAccount,
+  ROLES,
+  roleOf,
   isAdmin,
+  isCreator,
+  creatorDesignated,
+  roleLockedByConfig,
+  setRole,
+  listByRole,
   isBlocked,
   touchLogin,
   touchSeen,

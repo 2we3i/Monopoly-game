@@ -251,7 +251,7 @@ function registerCosmicHandlers(io) {
           token, playerId, nickname, guestKey,
         });
         access.assertCanCreate(identity);
-        modes.assertAvailable(MODE_ID);
+        modes.assertAvailable(MODE_ID, identity.accountId);
         const game = roomManager.createCosmicRoom(identity.playerId, settings, {
           accountId: identity.accountId, nickname: identity.nickname,
         });
@@ -318,7 +318,7 @@ function registerCosmicHandlers(io) {
     socket.on('cosmic:start', act((game, playerId) => {
       game.assertHost(playerId);
       access.assertCanStart(socket.data.cosmicAccountId);
-      modes.assertAvailable(MODE_ID);
+      modes.assertAvailable(MODE_ID, socket.data.cosmicAccountId);
       game.start(playerId);
     }));
 
@@ -327,7 +327,7 @@ function registerCosmicHandlers(io) {
       access.assertCanStart(socket.data.cosmicAccountId);
       game.restart(playerId);
       if (p.startNow) {
-        modes.assertAvailable(MODE_ID);
+        modes.assertAvailable(MODE_ID, socket.data.cosmicAccountId);
         game.start(playerId);
       }
     }));

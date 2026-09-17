@@ -7,10 +7,19 @@
 const platformDb = require('../db/platform');
 const { LAYOUT_OPTIONS, DEFAULT_LAYOUT_ID } = require('../game/boardLayouts');
 const { AccessError } = require('./access');
+const testing = require('./testing');
+const modeConfig = require('./modeConfig');
 
 const STATUSES = ['enabled', 'disabled', 'paused'];
 
 function catalog() {
+  return baseCatalog().map((m) => {
+    const cfg = modeConfig.effective(m.id);
+    return cfg.label ? { ...m, label: { ...m.label, ...Object.fromEntries(Object.entries(cfg.label).filter(([, v]) => v)) } } : m;
+  });
+}
+
+function baseCatalog() {
   return [
     ...LAYOUT_OPTIONS.map((layout) => ({
       id: `monopoly.${layout.id}`,
@@ -48,17 +57,20 @@ function isAvailable(modeId) {
   return statusOf(modeId).status === 'enabled';
 }
 
-function assertAvailable(modeId) {
-  const known = catalog().some((m) => m.id === modeId);
+// accountId is who is asking: a Creator who armed a test match of this
+// mode may open it even while it is switched off for everyone else.
+function assertAvailable(modeId, accountId = null) {
+  const known = baseCatalog().some((m) => m.id === modeId);
   if (!known) throw new AccessError(`Unknown game mode "${modeId}".`, 'UNKNOWN_MODE');
   const { status, pausedUntil } = statusOf(modeId);
   if (status === 'enabled') return;
+  if (accountId && testing.bypassesAvailability(accountId, modeId)) return;
   const until = status === 'paused' && pausedUntil ? ` until ${new Date(pausedUntil).toISOString()}` : '';
   throw new AccessError(`This game mode is ${status === 'paused' ? 'temporarily unavailable' : 'disabled'}${until}.`, 'MODE_UNAVAILABLE');
 }
 
 function setStatus(modeId, status, { pauseMinutes = null, updatedBy = null } = {}) {
-  if (!catalog().some((m) => m.id === modeId)) throw new AccessError('Unknown game mode.', 'UNKNOWN_MODE');
+  if (!baseCatalog().some((m) => m.id === modeId)) throw new AccessError('Unknown game mode.', 'UNKNOWN_MODE');
   if (!STATUSES.includes(status)) throw new AccessError('Unknown status.', 'BAD_STATUS');
   let pausedUntil = null;
   if (status === 'paused') {

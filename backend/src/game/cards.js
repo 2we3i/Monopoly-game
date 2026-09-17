@@ -74,6 +74,14 @@ class CardDeck {
 
   restore(state, template) {
     if (!state) return;
+    this.template = template;
+    // A saved order that does not fit this deck (an old room restored with
+    // a different deck) is dealt again rather than drawing missing cards.
+    if (!Array.isArray(state.order) || state.order.some((id) => !template[id])) {
+      this.deck = shuffle(template.map((c, i) => ({ ...c, id: i })));
+      this.pointer = 0;
+      return;
+    }
     this.deck = state.order.map((id) => ({ ...template[id], id }));
     this.pointer = state.pointer;
   }

@@ -232,7 +232,7 @@ function registerBunkerHandlers(io) {
           token, playerId, nickname, guestKey,
         });
         access.assertCanCreate(identity);
-        modes.assertAvailable(MODE_ID);
+        modes.assertAvailable(MODE_ID, identity.accountId);
         const game = roomManager.createBunkerRoom(identity.playerId, settings, {
           accountId: identity.accountId, nickname: identity.nickname,
         });
@@ -299,7 +299,7 @@ function registerBunkerHandlers(io) {
     socket.on('bunker:start', act((game, playerId) => {
       game.assertHost(playerId);
       access.assertCanStart(socket.data.bunkerAccountId);
-      modes.assertAvailable(MODE_ID);
+      modes.assertAvailable(MODE_ID, socket.data.bunkerAccountId);
       game.start(playerId);
     }));
 
@@ -308,7 +308,7 @@ function registerBunkerHandlers(io) {
       access.assertCanStart(socket.data.bunkerAccountId);
       game.restart(playerId);
       if (p.startNow) {
-        modes.assertAvailable(MODE_ID);
+        modes.assertAvailable(MODE_ID, socket.data.bunkerAccountId);
         game.start(playerId);
       }
     }));

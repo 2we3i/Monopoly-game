@@ -79,7 +79,7 @@ router.get('/users/:id', handle((req, res) => {
       createdAt: row.created_at,
       online: presence.isOnline(row.id),
       blocked: accounts.isBlocked(row),
-      role: accounts.isAdmin(row) ? 'admin' : 'user',
+      role: accounts.roleOf(row),
     },
     loadout: economy.cosmeticIds(row.id) || {},
     stats: {

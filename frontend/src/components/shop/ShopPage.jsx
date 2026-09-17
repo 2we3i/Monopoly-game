@@ -153,6 +153,8 @@ function DetailPanel({
           </Button>
           <Button icon="box" onClick={() => navigate('/inventory')}>{t('nav.inventory')}</Button>
         </div>
+      ) : item.forSale === false && item.source === 'shop' ? (
+        <p className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[12.5px] text-zinc-400">{t('shop.notOnSale')}</p>
       ) : item.price ? (
         <Button tone="primary" icon="bag" onClick={() => onBuy(item)} className="py-2.5 text-[14px] 4xl:text-[16px]">
           {t('shop.buyFor', { price: item.price.toLocaleString() })}
@@ -295,6 +297,8 @@ export default function ShopPage({ auth }) {
     const min = minPrice === '' ? null : Number(minPrice);
     const max = maxPrice === '' ? null : Number(maxPrice);
     const list = catalog.items.filter((i) => {
+      // Items the Creator took off sale stay visible only to their owners.
+      if ((i.enabled === false || i.retired) && !social.ownedIds.has(i.id)) return false;
       if (category !== 'all' && i.category !== category) return false;
       if (rarities.length && !rarities.includes(i.rarity)) return false;
       if ((min != null || max != null) && !i.price) return false;

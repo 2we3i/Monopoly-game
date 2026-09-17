@@ -254,7 +254,7 @@ function registerThroneHandlers(io) {
           token, playerId, nickname, guestKey,
         });
         access.assertCanCreate(identity);
-        modes.assertAvailable(MODE_ID);
+        modes.assertAvailable(MODE_ID, identity.accountId);
         const game = roomManager.createThroneRoom(identity.playerId, settings, {
           accountId: identity.accountId, nickname: identity.nickname,
         });
@@ -317,7 +317,7 @@ function registerThroneHandlers(io) {
     socket.on('throne:start', run((game, playerId) => {
       game.assertHost(playerId);
       access.assertCanStart(socket.data.throneAccountId);
-      modes.assertAvailable(MODE_ID);
+      modes.assertAvailable(MODE_ID, socket.data.throneAccountId);
       game.start(playerId);
     }));
 
@@ -326,7 +326,7 @@ function registerThroneHandlers(io) {
       access.assertCanStart(socket.data.throneAccountId);
       game.restart(playerId);
       if (p.startNow) {
-        modes.assertAvailable(MODE_ID);
+        modes.assertAvailable(MODE_ID, socket.data.throneAccountId);
         game.start(playerId);
       }
     }));

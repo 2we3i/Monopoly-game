@@ -4,8 +4,7 @@
 
 const { TILE_TYPES } = require('./boardLayouts/tileTypes');
 const {
-  GameState, GO_SALARY, MAX_JAIL_TURNS, JAIL_FINE, PLAYER_COLORS, makePlayer,
-  MORTGAGE_ROUNDS, AUCTION_DURATION_MS, AUCTION_EXTEND_MS, AUCTION_MIN_BID, AUCTION_MIN_STEP,
+  GameState, PLAYER_COLORS, makePlayer, AUCTION_MIN_BID, AUCTION_MIN_STEP,
 } = require('./GameState');
 const { DEFAULT_LAYOUT_ID } = require('./boardLayouts');
 
@@ -47,8 +46,8 @@ class GameError extends Error {
 }
 
 class GameManager {
-  constructor(roomCode, hostId, modeId = DEFAULT_LAYOUT_ID) {
-    this.state = new GameState(roomCode, modeId);
+  constructor(roomCode, hostId, modeId = DEFAULT_LAYOUT_ID, options = {}) {
+    this.state = new GameState(roomCode, modeId, options);
     this.hostId = hostId;
     // Tests replace the clock; the server always uses real time.
     this.clock = null;
@@ -89,6 +88,7 @@ class GameManager {
       colorIndex: state.players.length,
       avatarUrl,
       accountId,
+      startingMoney: state.rules.startingMoney,
     });
     // Proof that a later reconnect to this guest seat comes from the same
     // browser; see platform/access.js. Stripped before state is broadcast.
@@ -263,16 +263,17 @@ class GameManager {
       return { movedFromJail: true };
     }
     player.jailTurns += 1;
-    if (player.jailTurns >= MAX_JAIL_TURNS) {
-      player.money -= JAIL_FINE;
+    const { jailFine, maxJailTurns } = state.rules;
+    if (player.jailTurns >= maxJailTurns) {
+      player.money -= jailFine;
       player.inJail = false;
       player.jailTurns = 0;
-      state.addLog(`${player.nickname} paid $${JAIL_FINE} after 3 failed attempts and left Jail.`, 'PAID_JAIL_FINE', { name: player.nickname, amount: JAIL_FINE, reason: 'forced' });
+      state.addLog(`${player.nickname} paid $${jailFine} after ${maxJailTurns} failed attempts and left Jail.`, 'PAID_JAIL_FINE', { name: player.nickname, amount: jailFine, reason: 'forced' });
       this._movePlayer(player, d1 + d2);
       state.phase = 'ACTION';
       return { paidFineAndMoved: true };
     }
-    state.addLog(`${player.nickname} failed to roll doubles in Jail (attempt ${player.jailTurns}/${MAX_JAIL_TURNS}).`, 'JAIL_FAILED_ATTEMPT', { name: player.nickname, attempt: player.jailTurns, max: MAX_JAIL_TURNS });
+    state.addLog(`${player.nickname} failed to roll doubles in Jail (attempt ${player.jailTurns}/${maxJailTurns}).`, 'JAIL_FAILED_ATTEMPT', { name: player.nickname, attempt: player.jailTurns, max: maxJailTurns });
     state.phase = 'ACTION';
     return { stillInJail: true };
   }
@@ -283,12 +284,13 @@ class GameManager {
     const player = state.currentPlayer;
     if (!player.inJail) throw new GameError('You are not in jail.');
     if (state.phase !== 'ROLLING') throw new GameError('Cannot pay fine right now.');
-    if (player.money < JAIL_FINE) throw new GameError('Not enough money to pay the fine.');
-    player.money -= JAIL_FINE;
+    const { jailFine } = state.rules;
+    if (player.money < jailFine) throw new GameError('Not enough money to pay the fine.');
+    player.money -= jailFine;
     player.inJail = false;
     player.jailTurns = 0;
     state.lastMove = null;
-    state.addLog(`${player.nickname} paid $${JAIL_FINE} to get out of Jail.`, 'PAID_JAIL_FINE', { name: player.nickname, amount: JAIL_FINE, reason: 'voluntary' });
+    state.addLog(`${player.nickname} paid $${jailFine} to get out of Jail.`, 'PAID_JAIL_FINE', { name: player.nickname, amount: jailFine, reason: 'voluntary' });
   }
 
   useGetOutOfJailCard(playerId) {
@@ -338,8 +340,8 @@ class GameManager {
       teleport: false,
     };
     if (passedGo) {
-      player.money += GO_SALARY;
-      state.addLog(`${player.nickname} passed Start and collected $${GO_SALARY}.`, 'COLLECTED_GO', { name: player.nickname, amount: GO_SALARY });
+      player.money += state.rules.goSalary;
+      state.addLog(`${player.nickname} passed Start and collected $${state.rules.goSalary}.`, 'COLLECTED_GO', { name: player.nickname, amount: state.rules.goSalary });
     }
     this._resolveTile(player);
   }
@@ -356,8 +358,8 @@ class GameManager {
       teleport: false,
     };
     if (passedGo) {
-      player.money += GO_SALARY;
-      state.addLog(`${player.nickname} passed Start and collected $${GO_SALARY}.`, 'COLLECTED_GO', { name: player.nickname, amount: GO_SALARY });
+      player.money += state.rules.goSalary;
+      state.addLog(`${player.nickname} passed Start and collected $${state.rules.goSalary}.`, 'COLLECTED_GO', { name: player.nickname, amount: state.rules.goSalary });
     }
     this._resolveTile(player, opts);
   }
@@ -669,7 +671,7 @@ class GameManager {
     if (propState.houses > 0) throw new GameError('Sell houses before mortgaging.');
     propState.mortgaged = true;
     propState.mortgagedRound = state.round;
-    propState.mortgageExpiresRound = state.round + MORTGAGE_ROUNDS + 1;
+    propState.mortgageExpiresRound = state.round + state.rules.mortgageRounds + 1;
     player.money += Math.floor(tile.price / 2);
     state.addLog(`${player.nickname} mortgaged ${tile.name}.`, 'MORTGAGED', { name: player.nickname, tileId: tile.id });
   }
@@ -1105,8 +1107,8 @@ class GameManager {
       reason,
       previousOwnerId,
       startedAt: now,
-      endsAt: now + AUCTION_DURATION_MS,
-      duration: AUCTION_DURATION_MS,
+      endsAt: now + state.rules.auctionMs,
+      duration: state.rules.auctionMs,
       minBid: AUCTION_MIN_BID,
       minStep: AUCTION_MIN_STEP,
       highestBid: 0,
@@ -1147,7 +1149,8 @@ class GameManager {
     auction.highestBid = value;
     auction.highestBidderId = playerId;
     auction.bids.push({ playerId, amount: value, at: now });
-    if (auction.endsAt - now < AUCTION_EXTEND_MS) auction.endsAt = now + AUCTION_EXTEND_MS;
+    const extendMs = Math.min(10000, this.state.rules.auctionMs);
+    if (auction.endsAt - now < extendMs) auction.endsAt = now + extendMs;
     this._closeAuctionIfDecided();
     return value;
   }

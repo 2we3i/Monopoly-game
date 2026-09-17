@@ -24,6 +24,7 @@ services:
       # shown on each profile page). See README.md, "Accounts, permissions and the
       # admin panel".
       ADMIN_ACCOUNT_ID: ${ADMIN_ACCOUNT_ID:-}
+      CREATOR_ACCOUNT_ID: ${CREATOR_ACCOUNT_ID:-}
     volumes:
       # Persists both SQLite databases (rooms + accounts) and uploaded
       # avatars across container restarts/rebuilds. Without this volume,

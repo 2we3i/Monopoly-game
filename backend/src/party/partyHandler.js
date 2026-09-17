@@ -292,7 +292,7 @@ function createPartyHandler(spec) {
             token, playerId, nickname, guestKey,
           });
           access.assertCanCreate(identity);
-          modes.assertAvailable(modeId);
+          modes.assertAvailable(modeId, identity.accountId);
           const game = store.create(identity.playerId, settings, {
             accountId: identity.accountId, nickname: identity.nickname,
           });
@@ -357,7 +357,7 @@ function createPartyHandler(spec) {
       socket.on(ev('start'), run((game, playerId) => {
         game.assertHost(playerId);
         access.assertCanStart(socket.data[KEYS.account]);
-        modes.assertAvailable(modeId);
+        modes.assertAvailable(modeId, socket.data[KEYS.account]);
         game.start(playerId);
       }));
 
@@ -367,7 +367,7 @@ function createPartyHandler(spec) {
         clearTimer(game.roomCode);
         game.restart(playerId);
         if (p.startNow) {
-          modes.assertAvailable(modeId);
+          modes.assertAvailable(modeId, socket.data[KEYS.account]);
           game.start(playerId);
         }
       }));

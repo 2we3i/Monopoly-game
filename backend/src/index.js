@@ -7,11 +7,23 @@ const express = require('express');
 const cors = require('cors');
 const { Server } = require('socket.io');
 
+// Server errors are kept for the Creator's panel from the very start.
+const errorLog = require('./platform/errorLog');
+
+errorLog.install();
+
+// The Creator's edits (boards, shop items, memes, economy numbers) are
+// installed before any room is restored or any route answers.
+const creatorBoot = require('./platform/boot');
+
+creatorBoot.installAll();
+
 const apiRoutes = require('./routes/api');
 const adminRoutes = require('./routes/admin');
 const economyRoutes = require('./routes/economy');
 const socialRoutes = require('./routes/social');
 const { router: authRoutes, AVATAR_DIR } = require('./routes/authRoutes');
+const media = require('./platform/media');
 const presence = require('./platform/presence');
 const memeContent = require('./memehype/content');
 const { registerSocketHandlers } = require('./socket/socketHandler');
@@ -64,6 +76,9 @@ app.use('/avatars', express.static(AVATAR_DIR));
 // Your own meme pictures can change often, so they are cached briefly.
 app.use(memeContent.CUSTOM_URL, express.static(memeContent.CUSTOM_DIR, { maxAge: '1h' }));
 app.use('/memes', express.static(memeContent.IMAGES_DIR, { maxAge: '7d' }));
+// Pictures uploaded from the Creator's panel. A replaced picture gets a new
+// file name, so caching them never shows a stale one.
+app.use(media.MEDIA_URL, express.static(media.MEDIA_DIR, { maxAge: '7d' }));
 
 const FRONTEND_DIST = process.env.FRONTEND_DIST
   ? path.resolve(process.env.FRONTEND_DIST)
@@ -73,11 +88,14 @@ const FRONTEND_DIST = process.env.FRONTEND_DIST
 app.use('/assets', express.static(path.join(FRONTEND_DIST, 'assets'), { immutable: true, maxAge: '365d' }));
 app.use(express.static(FRONTEND_DIST));
 app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/avatars') || req.path.startsWith('/memes')) return next();
+  if (req.path.startsWith('/api') || req.path.startsWith('/avatars') || req.path.startsWith('/memes') || req.path.startsWith('/media')) return next();
   res.sendFile(path.join(FRONTEND_DIST, 'index.html'), (err) => {
     if (err) next();
   });
 });
+
+// An error thrown by a route is recorded and answered as JSON.
+app.use(errorLog.expressHandler);
 
 // Presence first, so a socket's account is known before any game event.
 presence.attach(io);

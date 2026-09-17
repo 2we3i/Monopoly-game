@@ -35,9 +35,69 @@ function TokenDisc({ look, size = 44, hop = null }) {
   );
 }
 
+// A name for a board square: its picture (or glyph) under the name.
+function FieldNameThumb({ item, language }) {
+  const v = item.visual || {};
+  const name = v.names?.[language] || v.names?.en || itemName(item, language);
+  const [from, to] = v.colors?.length ? v.colors : ['#e3bb5c', '#3d2e0f'];
+  return (
+    <span className="flex h-20 w-16 flex-col overflow-hidden rounded-md border border-ink/20 bg-board-tile shadow-tile 4xl:h-24 4xl:w-20">
+      <span className="h-2 w-full" style={{ background: `linear-gradient(90deg, ${from}, ${to})` }} />
+      <span className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+        {item.image
+          ? <img src={item.image} alt="" className="h-full w-full object-cover" loading="lazy" />
+          : <span className="text-[24px] leading-none">{v.glyph || '🏷️'}</span>}
+      </span>
+      <span className="line-clamp-2 px-1 pb-1 text-center text-[8.5px] font-bold uppercase leading-tight text-ink 4xl:text-[10px]">{name}</span>
+    </span>
+  );
+}
+
+export function fieldTargetText(item, t) {
+  const target = item?.visual?.target || {};
+  const board = target.layout && target.layout !== '*' ? target.layout : null;
+  const where = board ? '' : ` ${t('field.anyBoard')}`;
+  if (Number.isInteger(target.tileId)) return t('field.target.tile', { tile: target.tileId, board: board || '*' });
+  if (target.group) return `${t('field.target.group', { group: target.group })}${where}`;
+  if (target.tileType) return `${t(`field.target.type.${target.tileType}`)}${where}`;
+  return `${t('field.target.any')}${where}`;
+}
+
+function FieldStage({ item }) {
+  const { t, language } = useTranslation();
+  const v = item.visual || {};
+  const name = v.names?.[language] || v.names?.en || itemName(item, language);
+  const [from, to] = v.colors?.length ? v.colors : ['#e3bb5c', '#3d2e0f'];
+  return (
+    <div className="flex flex-col items-center gap-3 rounded-xl bg-gradient-to-b from-[#f7efdd] to-[#e6d7b9] p-4 shadow-inner">
+      <div className="flex items-end gap-1.5">
+        {['#c4453a', null, '#3a6ea8'].map((c, i) => (c ? (
+          <div key={c} className="relative h-24 w-14 rounded-md border border-ink/15 bg-board-tile opacity-60 4xl:h-32 4xl:w-20">
+            <span className="absolute inset-x-0 top-0 h-3 rounded-t-md" style={{ backgroundColor: c }} />
+          </div>
+        ) : (
+          <div key={i} className="relative flex h-32 w-24 flex-col overflow-hidden rounded-md border-2 border-brass bg-board-tile shadow-lift 4xl:h-44 4xl:w-32">
+            <span className="h-3.5 w-full" style={{ background: `linear-gradient(90deg, ${from}, ${to})` }} />
+            <span className="flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+              {item.image
+                ? <img src={item.image} alt="" className="h-full w-full object-cover" />
+                : <span className="text-[34px] leading-none">{v.glyph || '🏷️'}</span>}
+            </span>
+            <span className="px-1 py-1 text-center text-[10px] font-bold uppercase leading-tight text-ink 4xl:text-[12px]">{name}</span>
+          </div>
+        )))}
+      </div>
+      <p className="rounded-full bg-ink/80 px-3 py-1 text-[11.5px] font-semibold text-parch">{fieldTargetText(item, t)}</p>
+      <p className="text-center text-[12px] text-ink/70">{t('field.previewHint')}</p>
+      {item.description?.[language] && <p className="text-center text-[12px] text-ink/80">{item.description[language]}</p>}
+    </div>
+  );
+}
+
 // A small, mostly still picture of an item, for cards and lists.
 export function ItemThumb({ item, nickname = 'Player' }) {
   const look = useMemo(() => resolveLook(null, null), []);
+  const { language } = useTranslation();
   if (!item) return null;
   const single = { ...look, [slotKey(item.slot)]: item };
   switch (item.category) {
@@ -68,8 +128,10 @@ export function ItemThumb({ item, nickname = 'Player' }) {
       return <span className="text-[36px] leading-none 4xl:text-[44px]">{item.visual.glyph}</span>;
     case 'sounds':
       return <span className="text-[32px] leading-none 4xl:text-[40px]">{SOUND_GLYPH[item.visual.preset] || '🔊'}</span>;
+    case 'fields':
+      return <FieldNameThumb item={item} language={language} />;
     default:
-      return null;
+      return item.image ? <img src={item.image} alt="" className="h-16 w-16 rounded-lg object-cover" /> : null;
   }
 }
 
@@ -272,8 +334,11 @@ export default function ItemPreview({
         </div>
       );
       break;
+    case 'fields':
+      stage = <FieldStage item={item} />;
+      break;
     default:
-      stage = null;
+      stage = item.image ? <img src={item.image} alt="" className="mx-auto max-h-64 rounded-xl object-contain" /> : null;
   }
   return (
     <div className="flex flex-col gap-2" data-preview={item.id}>

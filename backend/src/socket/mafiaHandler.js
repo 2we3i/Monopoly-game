@@ -273,7 +273,7 @@ function registerMafiaHandlers(io) {
           token, playerId, nickname, guestKey,
         });
         access.assertCanCreate(identity);
-        modes.assertAvailable(MODE_ID);
+        modes.assertAvailable(MODE_ID, identity.accountId);
         const initial = presetId ? presetSettings(presetId) : settings;
         const game = roomManager.createMafiaRoom(identity.playerId, initial, {
           accountId: identity.accountId, nickname: identity.nickname,
@@ -368,7 +368,7 @@ function registerMafiaHandlers(io) {
         if (!game) throw new MafiaError('You are not in a Mafia room.');
         game.assertHost(playerId);
         access.assertCanStart(socket.data.mafiaAccountId);
-        modes.assertAvailable(MODE_ID);
+        modes.assertAvailable(MODE_ID, socket.data.mafiaAccountId);
         game.start(playerId);
         broadcast(io, roomCode);
         schedulePhase(io, roomCode);
@@ -438,7 +438,7 @@ function registerMafiaHandlers(io) {
         // off meanwhile), the room simply stays in the lobby.
         if (payload?.startNow) {
           try {
-            modes.assertAvailable(MODE_ID);
+            modes.assertAvailable(MODE_ID, socket.data.mafiaAccountId);
             game.start(playerId);
           } catch (startErr) {
             if (!(startErr instanceof MafiaError) && !(startErr instanceof AccessError)) throw startErr;

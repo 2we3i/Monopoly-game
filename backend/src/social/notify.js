@@ -21,6 +21,7 @@ const TYPES = new Set([
   'item_granted',
   'rank_up',
   'game_event',
+  'balance_adjusted',
 ]);
 
 function notify(accountId, type, payload = {}, { groupKey = null } = {}) {

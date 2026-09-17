@@ -195,6 +195,14 @@ router.get('/memehype/credits', (req, res) => {
   res.json({ credits: memeContent.credits() });
 });
 
+// Platform switches every visitor needs: an announcement, and whether
+// registration and the shop are open.
+router.get('/platform', (req, res) => {
+  res.set('Cache-Control', 'no-cache');
+  // eslint-disable-next-line global-require
+  res.json(require('../platform/settings').publicSettings());
+});
+
 router.get('/game-modes', (req, res) => {
   res.json({ modes: monopolyModes() });
 });

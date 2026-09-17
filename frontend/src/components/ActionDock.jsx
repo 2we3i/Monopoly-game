@@ -137,10 +137,10 @@ export default function ActionDock({
               <button
                 type="button"
                 onClick={actions.payJailFine}
-                disabled={me.money < 50}
+                disabled={me.money < (gameState.rules?.jailFine ?? 50)}
                 className="btn-ghost py-3"
               >
-                {t('game.payJailFine')}
+                {t('game.payJailFine', { amount: gameState.rules?.jailFine ?? 50 })}
               </button>
               {me.getOutOfJailFreeCards > 0 && (
                 <button type="button" onClick={actions.useJailCard} className="btn-ghost py-3">

@@ -17,9 +17,20 @@ const {
 } = require('./roomSockets');
 const roomChat = require('../social/roomChat');
 const liveRoom = require('./liveRoom');
+const economy = require('../economy/service');
 
 const { AccessError } = access;
 const DISCONNECT_GRACE_MS = 1000 * 60 * 10;
+const modeConfig = require('../platform/modeConfig');
+
+// How long a disconnected player's turn waits before the server moves for
+// them - the Creator can tune it per board ("bots" in the mode config).
+function disconnectGraceMs(roomCode) {
+  const mgr = roomManager.getRoom(roomCode);
+  if (!mgr) return DISCONNECT_GRACE_MS;
+  const cfg = modeConfig.effective(modes.monopolyModeId(mgr.state.modeId));
+  return cfg.customized && cfg.bots?.disconnectGraceSec ? cfg.bots.disconnectGraceSec * 1000 : DISCONNECT_GRACE_MS;
+}
 const disconnectTimers = new Map();
 // One timer per room with a running auction, keyed by auction id and
 // closing time so a bid that extends the auction re-arms it exactly once.
@@ -32,6 +43,8 @@ let ioRef = null;
 // count down to the same auction deadline whatever its own clock says.
 function roomStatePayload(mgr) {
   const state = mgr.state.toJSON();
+  // Squares named by their owners (shop items) - only what is drawn changes.
+  state.board = economy.decorateBoard(state.board, state.properties, state.players, mgr.state.modeId);
   state.players = roomChat.decoratePlayers(
     state.players.map(({ guestKeyHash, ...p }) => ({ ...p, isGuest: !p.accountId })),
     (p) => p.accountId,
@@ -128,7 +141,7 @@ function scheduleAutoSkip(io, roomCode, playerId) {
       broadcastState(io, roomCode);
     }
     disconnectTimers.delete(key);
-  }, DISCONNECT_GRACE_MS);
+  }, disconnectGraceMs(roomCode));
   disconnectTimers.set(key, timer);
 }
 
@@ -296,7 +309,7 @@ function registerSocketHandlers(io) {
         if (!LAYOUT_OPTIONS.some((opt) => opt.id === layoutId)) {
           throw new GameError(`Unknown game mode "${modeId}".`);
         }
-        modes.assertAvailable(modes.monopolyModeId(layoutId));
+        modes.assertAvailable(modes.monopolyModeId(layoutId), identity.accountId);
 
         const mgr = roomManager.createRoom(identity.playerId, layoutId, {
           accountId: identity.accountId, nickname: identity.nickname,
@@ -470,7 +483,7 @@ function registerSocketHandlers(io) {
       try {
         if (socket.data.playerId !== mgr.hostId) throw new GameError('Only the host can start the game.');
         access.assertCanStart(socket.data.accountId);
-        modes.assertAvailable(modes.monopolyModeId(mgr.state.modeId));
+        modes.assertAvailable(modes.monopolyModeId(mgr.state.modeId), socket.data.accountId);
         mgr.startGame(socket.data.playerId);
         broadcastState(io, mgr.state.roomCode);
       } catch (err) {

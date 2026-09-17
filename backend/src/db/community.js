@@ -154,6 +154,73 @@ function applyLedger({ accountId, amount, kind, ref, details = null }) {
   return true;
 }
 
+// A change made by the Creator: always written (each has its own ref) and
+// never counted as crowns earned or spent by playing.
+const adminBalanceStmt = db.prepare('UPDATE wallets SET balance = balance + @amount, updated_at = @at WHERE account_id = @accountId');
+let adminSeq = 0;
+function adminLedger({ accountId, amount, details = null }) {
+  ensureWallet(accountId);
+  adminSeq += 1;
+  const ref = `admin:${now()}:${adminSeq}:${Math.random().toString(36).slice(2, 8)}`;
+  insertLedgerStmt.run({
+    accountId, amount, kind: 'admin', ref, detailsJson: details ? JSON.stringify(details) : null, createdAt: now(),
+  });
+  if (amount !== 0) adminBalanceStmt.run({ accountId, amount, at: now() });
+  return ref;
+}
+
+// The ledger across every account, for the Creator's economy page.
+function ledgerSearch({
+  accountId = '', kind = '', before = 0, limit = 100,
+} = {}) {
+  const where = [];
+  const args = [];
+  if (accountId) {
+    where.push('account_id = ?');
+    args.push(accountId);
+  }
+  if (kind) {
+    where.push('kind = ?');
+    args.push(kind);
+  }
+  if (before) {
+    where.push('id < ?');
+    args.push(before);
+  }
+  const sql = `SELECT * FROM ledger ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY id DESC LIMIT ?`;
+  return db.prepare(sql).all(...args, Math.max(1, Math.min(500, limit))).map((r) => ({
+    id: r.id,
+    accountId: r.account_id,
+    amount: r.amount,
+    kind: r.kind,
+    ref: r.ref,
+    details: r.details_json ? JSON.parse(r.details_json) : null,
+    createdAt: r.created_at,
+  }));
+}
+
+function economyTotals() {
+  const one = (sql, ...args) => db.prepare(sql).get(...args);
+  return {
+    wallets: one('SELECT COUNT(*) n FROM wallets').n,
+    circulation: one('SELECT COALESCE(SUM(balance), 0) v FROM wallets').v,
+    earned: one('SELECT COALESCE(SUM(earned), 0) v FROM wallets').v,
+    spent: one('SELECT COALESCE(SUM(spent), 0) v FROM wallets').v,
+    adminAdded: one("SELECT COALESCE(SUM(amount), 0) v FROM ledger WHERE kind = 'admin' AND amount > 0").v,
+    adminRemoved: one("SELECT COALESCE(SUM(-amount), 0) v FROM ledger WHERE kind = 'admin' AND amount < 0").v,
+    purchases: one("SELECT COUNT(*) n FROM ledger WHERE kind = 'purchase'").n,
+    itemsOwned: one('SELECT COUNT(*) n FROM inventory').n,
+    byKind: db.prepare('SELECT kind, COUNT(*) n, COALESCE(SUM(amount), 0) total FROM ledger GROUP BY kind ORDER BY n DESC').all(),
+    topItems: db.prepare("SELECT ref itemId, COUNT(*) n, COALESCE(SUM(-amount), 0) crowns FROM ledger WHERE kind = 'purchase' GROUP BY ref ORDER BY n DESC LIMIT 15").all(),
+  };
+}
+
+function allWallets() {
+  return db.prepare('SELECT * FROM wallets').all().map((r) => ({
+    accountId: r.account_id, balance: r.balance, earned: r.earned, spent: r.spent, winStreak: r.win_streak, bestStreak: r.best_streak, updatedAt: r.updated_at,
+  }));
+}
+
 function setStreak(accountId, streak) {
   ensureWallet(accountId);
   setStreakStmt.run({ accountId, streak, at: now() });
@@ -195,6 +262,10 @@ const removeFavoriteStmt = db.prepare('DELETE FROM favorites WHERE account_id = 
 
 function grantItem(accountId, itemId, source) {
   return ownStmt.run(accountId, itemId, source, now()).changes > 0;
+}
+
+function revokeItem(accountId, itemId) {
+  return db.prepare('DELETE FROM inventory WHERE account_id = ? AND item_id = ?').run(accountId, itemId).changes > 0;
 }
 
 function ownsItem(accountId, itemId) {
@@ -460,12 +531,17 @@ module.exports = {
   ensureWallet,
   wallet,
   applyLedger,
+  adminLedger,
+  ledgerSearch,
+  economyTotals,
+  allWallets,
   setStreak,
   ledgerFor,
   ledgerHas,
   ledgerCountSince,
   // inventory
   grantItem,
+  revokeItem,
   ownsItem,
   inventory,
   equipped,

@@ -16,9 +16,30 @@ const db = require('../db/database');
 const platformDb = require('../db/platform');
 const recorder = require('../platform/recorder');
 const bans = require('../platform/bans');
+const modeConfig = require('../platform/modeConfig');
+const roomPolicy = require('../platform/roomPolicy');
+const testing = require('../platform/testing');
 
 const ROOM_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const ROOM_MAX_AGE_MS = 1000 * 60 * 60 * 24 * 3;
+
+const MODE_OF = {
+  mafia: () => 'mafia.classic',
+  citadels: () => 'citadels.classic',
+  bunker: () => 'bunker.classic',
+  catan: () => 'catan.classic',
+  cosmic: () => 'cosmic.classic',
+  throne: () => 'throne.classic',
+  chpok: () => 'chpok.party',
+  memehype: () => 'memehype.party',
+  monopoly: (mgr) => `monopoly.${mgr.state.modeId}`,
+};
+
+// The Creator's per-mode limits sit in front of every room (see
+// platform/roomPolicy.js).
+function withPolicy(room, gameType) {
+  return roomPolicy.apply(room, MODE_OF[gameType]);
+}
 
 class RoomManager {
   constructor() {
@@ -44,23 +65,23 @@ class RoomManager {
     rows.forEach(({ roomCode, hostId, state }) => {
       try {
         if (state && state.gameType === 'mafia') {
-          this.mafiaRooms.set(roomCode, MafiaGame.fromJSON(state));
+          this.mafiaRooms.set(roomCode, withPolicy(MafiaGame.fromJSON(state), 'mafia'));
         } else if (state && state.gameType === 'citadels') {
-          this.citadelsRooms.set(roomCode, CitadelsGame.fromJSON(state));
+          this.citadelsRooms.set(roomCode, withPolicy(CitadelsGame.fromJSON(state), 'citadels'));
         } else if (state && state.gameType === 'bunker') {
-          this.bunkerRooms.set(roomCode, BunkerGame.fromJSON(state));
+          this.bunkerRooms.set(roomCode, withPolicy(BunkerGame.fromJSON(state), 'bunker'));
         } else if (state && state.gameType === 'catan') {
-          this.catanRooms.set(roomCode, CatanGame.fromJSON(state));
+          this.catanRooms.set(roomCode, withPolicy(CatanGame.fromJSON(state), 'catan'));
         } else if (state && state.gameType === 'cosmic') {
-          this.cosmicRooms.set(roomCode, CosmicGame.fromJSON(state));
+          this.cosmicRooms.set(roomCode, withPolicy(CosmicGame.fromJSON(state), 'cosmic'));
         } else if (state && state.gameType === 'throne') {
-          this.throneRooms.set(roomCode, ThroneGame.fromJSON(state));
+          this.throneRooms.set(roomCode, withPolicy(ThroneGame.fromJSON(state), 'throne'));
         } else if (state && state.gameType === 'chpok') {
-          this.chpokRooms.set(roomCode, ChpokGame.fromJSON(state));
+          this.chpokRooms.set(roomCode, withPolicy(ChpokGame.fromJSON(state), 'chpok'));
         } else if (state && state.gameType === 'memehype') {
-          this.memeHypeRooms.set(roomCode, MemeHypeGame.fromJSON(state));
+          this.memeHypeRooms.set(roomCode, withPolicy(MemeHypeGame.fromJSON(state), 'memehype'));
         } else {
-          this.rooms.set(roomCode, GameManager.fromPersisted(state, hostId));
+          this.rooms.set(roomCode, withPolicy(GameManager.fromPersisted(state, hostId), 'monopoly'));
         }
       } catch (err) {
         // eslint-disable-next-line no-console
@@ -87,6 +108,8 @@ class RoomManager {
   }
 
   _logCreated(roomCode, gameType, modeId, meta) {
+    // A Creator's test match leaves no trace in the history.
+    if (testing.claim(roomCode, modeId, meta?.accountId || null)) return;
     platformDb.logRoomCreated({
       roomCode,
       gameType,
@@ -98,6 +121,10 @@ class RoomManager {
 
   _gone(roomCode, reason) {
     bans.forget(roomCode);
+    if (testing.isTestRoom(roomCode)) {
+      testing.forget(roomCode);
+      return;
+    }
     recorder.roomGone(roomCode, reason);
   }
 
@@ -105,7 +132,7 @@ class RoomManager {
 
   createMafiaRoom(hostId, settings, meta = null) {
     const code = this.generateRoomCode();
-    const game = new MafiaGame(code, hostId, settings);
+    const game = withPolicy(new MafiaGame(code, hostId, modeConfig.settingsForNewRoom('mafia.classic', settings)), 'mafia');
     this.mafiaRooms.set(code, game);
     this.persistMafia(code);
     this._logCreated(code, 'mafia', 'mafia.classic', meta);
@@ -134,7 +161,7 @@ class RoomManager {
 
   createCitadelsRoom(hostId, settings, meta = null) {
     const code = this.generateRoomCode();
-    const game = new CitadelsGame(code, hostId, settings);
+    const game = withPolicy(new CitadelsGame(code, hostId, modeConfig.settingsForNewRoom('citadels.classic', settings)), 'citadels');
     this.citadelsRooms.set(code, game);
     this.persistCitadels(code);
     this._logCreated(code, 'citadels', 'citadels.classic', meta);
@@ -163,7 +190,7 @@ class RoomManager {
 
   createBunkerRoom(hostId, settings, meta = null) {
     const code = this.generateRoomCode();
-    const game = new BunkerGame(code, hostId, settings);
+    const game = withPolicy(new BunkerGame(code, hostId, modeConfig.settingsForNewRoom('bunker.classic', settings)), 'bunker');
     this.bunkerRooms.set(code, game);
     this.persistBunker(code);
     this._logCreated(code, 'bunker', 'bunker.classic', meta);
@@ -192,7 +219,7 @@ class RoomManager {
 
   createCatanRoom(hostId, settings, meta = null) {
     const code = this.generateRoomCode();
-    const game = new CatanGame(code, hostId, settings);
+    const game = withPolicy(new CatanGame(code, hostId, modeConfig.settingsForNewRoom('catan.classic', settings)), 'catan');
     this.catanRooms.set(code, game);
     this.persistCatan(code);
     this._logCreated(code, 'catan', 'catan.classic', meta);
@@ -221,7 +248,7 @@ class RoomManager {
 
   createCosmicRoom(hostId, settings, meta = null) {
     const code = this.generateRoomCode();
-    const game = new CosmicGame(code, hostId, settings);
+    const game = withPolicy(new CosmicGame(code, hostId, modeConfig.settingsForNewRoom('cosmic.classic', settings)), 'cosmic');
     this.cosmicRooms.set(code, game);
     this.persistCosmic(code);
     this._logCreated(code, 'cosmic', 'cosmic.classic', meta);
@@ -250,7 +277,7 @@ class RoomManager {
 
   createThroneRoom(hostId, settings, meta = null) {
     const code = this.generateRoomCode();
-    const game = new ThroneGame(code, hostId, settings);
+    const game = withPolicy(new ThroneGame(code, hostId, modeConfig.settingsForNewRoom('throne.classic', settings)), 'throne');
     this.throneRooms.set(code, game);
     this.persistThrone(code);
     this._logCreated(code, 'throne', 'throne.classic', meta);
@@ -279,7 +306,7 @@ class RoomManager {
 
   createChpokRoom(hostId, settings, meta = null) {
     const code = this.generateRoomCode();
-    const game = new ChpokGame(code, hostId, settings);
+    const game = withPolicy(new ChpokGame(code, hostId, modeConfig.settingsForNewRoom('chpok.party', settings)), 'chpok');
     this.chpokRooms.set(code, game);
     this.persistChpok(code);
     this._logCreated(code, 'chpok', 'chpok.party', meta);
@@ -308,7 +335,7 @@ class RoomManager {
 
   createMemeHypeRoom(hostId, settings, meta = null) {
     const code = this.generateRoomCode();
-    const game = new MemeHypeGame(code, hostId, settings);
+    const game = withPolicy(new MemeHypeGame(code, hostId, modeConfig.settingsForNewRoom('memehype.party', settings)), 'memehype');
     this.memeHypeRooms.set(code, game);
     this.persistMemeHype(code);
     this._logCreated(code, 'memehype', 'memehype.party', meta);
@@ -354,7 +381,7 @@ class RoomManager {
 
   createRoom(hostId, modeId, meta = null) {
     const code = this.generateRoomCode();
-    const mgr = new GameManager(code, hostId, modeId);
+    const mgr = withPolicy(new GameManager(code, hostId, modeId, modeConfig.monopolyOptions(modeId)), 'monopoly');
     this.rooms.set(code, mgr);
     this.persist(code);
     this._logCreated(code, 'monopoly', `monopoly.${mgr.state.modeId}`, meta);

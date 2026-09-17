@@ -30,6 +30,13 @@ const ADMIN_ACCOUNT_IDS = parseAdminIds(process.env.ADMIN_ACCOUNT_ID);
 // Kept for older callers: the first configured admin, or null.
 const ADMIN_ACCOUNT_ID = ADMIN_ACCOUNT_IDS[0] || null;
 
+// The Creator: the owner of the whole platform, above the administrators.
+// Same format as ADMIN_ACCOUNT_ID. Accounts listed here are creators
+// whatever the database says; more can be appointed from the panel or with
+// `npm run make-creator`. While no creator exists at all, the configured
+// administrators act as creators, so upgrading never locks the owner out.
+const CREATOR_ACCOUNT_IDS = parseAdminIds(process.env.CREATOR_ACCOUNT_ID);
+
 module.exports = {
-  DATA_DIR, ADMIN_ACCOUNT_ID, ADMIN_ACCOUNT_IDS, parseAdminIds,
+  DATA_DIR, ADMIN_ACCOUNT_ID, ADMIN_ACCOUNT_IDS, CREATOR_ACCOUNT_IDS, parseAdminIds,
 };

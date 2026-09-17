@@ -12,6 +12,7 @@ import Icon from './icons';
 import SocialBar from './social/SocialBar';
 import { DashIcon } from './ui/dash';
 import { navigate } from '../lib/router';
+import { isTestArmed } from '../lib/testMatch';
 import { BunkerArt } from './bunker/bunkerText';
 import { ChpokArt, Chpok2Art } from './tabletop/chpokArt';
 import { ThroneArt } from './tabletop/throne/throneArt';
@@ -172,7 +173,9 @@ const GAME_EMOJI = {
 export function GameCard({ game, onPlay, onConfigure, isGuest }) {
   const { t } = useTranslation();
   const Art = GAME_ART[game.id] || MonopolyArt;
-  const unavailable = game.available === false;
+  // A Creator's armed test match opens a switched-off game for them.
+  const testArmed = isTestArmed(game.id);
+  const unavailable = game.available === false && !testArmed;
 
   return (
     <article className={`group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-felt-700/70 shadow-glass backdrop-blur-xl transition-all duration-300 ${
@@ -190,6 +193,11 @@ export function GameCard({ game, onPlay, onConfigure, isGuest }) {
         {unavailable && (
           <span className="absolute right-3 top-3 rounded-full bg-rent/80 px-2.5 py-1 text-[11px] font-bold text-white">
             {t('menu.unavailable')}
+          </span>
+        )}
+        {testArmed && (
+          <span className="absolute right-3 top-3 rounded-full bg-violet-500/85 px-2.5 py-1 text-[11px] font-bold text-white">
+            {t('creator.test.badge')}
           </span>
         )}
       </div>

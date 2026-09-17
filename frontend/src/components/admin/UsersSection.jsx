@@ -1,6 +1,7 @@
 // UsersSection.jsx
 // Every registered account with its statistics, search and filters, and
-// the account drawer where the admin blocks or unblocks a player.
+// the account drawer where the admin blocks or unblocks a player. The
+// Creator also sees crowns, changes roles, balances and items here.
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from '../../i18n/LanguageContext';
@@ -15,6 +16,15 @@ import {
 } from '../ui/labels';
 import SectionHeader from './SectionHeader';
 import useAdminData, { adminAction } from './useAdminData';
+import { CrownsPanel, ItemsPanel, RolePanel } from './creator/UserCreatorTools';
+import { Tabs, useCreator } from './kit';
+
+function RoleBadge({ role }) {
+  const { t } = useTranslation();
+  if (role === 'creator') return <Badge tone="violet">{t('creator.role.creator')}</Badge>;
+  if (role === 'admin') return <Badge tone="amber">{t('admin.roleAdmin')}</Badge>;
+  return null;
+}
 
 function favourite(t, fav) {
   return fav ? `${gameName(t, fav.gameType)} · ${modeName(t, fav.modeId)}` : '—';
@@ -89,6 +99,9 @@ function UserDrawer({
   } = useAdminData(`/api/admin/users/${encodeURIComponent(id)}`, token);
   const [dialog, setDialog] = useState(null); // 'block' | 'unblock'
   const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState('profile');
+  const creator = useCreator();
+  const isCreator = creator?.me?.role === 'creator';
 
   const done = () => {
     setDialog(null);
@@ -117,7 +130,7 @@ function UserDrawer({
       onClose={onClose}
       footer={user && (
         <>
-          {user.role === 'admin' ? (
+          {user.role === 'creator' || (user.role === 'admin' && !isCreator) ? (
             <p className="text-[12px] text-zinc-500">{t('admin.user.cannotBlockAdmin')}</p>
           ) : user.status === 'blocked' ? (
             <Button tone="success" icon="check" onClick={() => setDialog('unblock')}>{t('admin.user.unblock')}</Button>
@@ -130,13 +143,30 @@ function UserDrawer({
       )}
     >
       {!data && (error ? <ErrorState error={error} onRetry={reload} retryLabel={t('common.retry')} /> : <Spinner block />)}
-      {user && (
+      {user && isCreator && (
+        <div className="mb-4">
+          <Tabs
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              { value: 'profile', label: t('creator.user.tab.profile'), icon: 'user' },
+              { value: 'crowns', label: t('creator.user.tab.crowns'), icon: 'coin' },
+              { value: 'items', label: t('creator.user.tab.items'), icon: 'gift' },
+              { value: 'role', label: t('creator.user.tab.role'), icon: 'lock' },
+            ]}
+          />
+        </div>
+      )}
+      {user && isCreator && tab === 'crowns' && <CrownsPanel user={user} />}
+      {user && isCreator && tab === 'items' && <ItemsPanel user={user} />}
+      {user && isCreator && tab === 'role' && <RolePanel user={user} onChanged={() => { reload(); onChanged(); }} />}
+      {user && tab === 'profile' && (
         <div className="flex flex-col gap-4">
           <div className="grid grid-cols-2 gap-4 rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
             <Field label={t('admin.col.user')}>
               <span className="flex flex-wrap items-center gap-1.5">
                 {user.nickname}
-                {user.role === 'admin' && <Badge tone="amber">{t('admin.roleAdmin')}</Badge>}
+                <RoleBadge role={user.role} />
               </span>
             </Field>
             <Field label={t('admin.user.id')}>
@@ -231,6 +261,7 @@ export default function UsersSection({ token }) {
   const [debounced, setDebounced] = useState('');
   const [status, setStatus] = useState('all');
   const [activity, setActivity] = useState('all');
+  const [role, setRole] = useState('all');
   const [openId, setOpenId] = useState(null);
 
   useEffect(() => {
@@ -238,7 +269,7 @@ export default function UsersSection({ token }) {
     return () => clearTimeout(id);
   }, [query]);
 
-  const path = `/api/admin/users?q=${encodeURIComponent(debounced)}&status=${status}&activity=${activity}`;
+  const path = `/api/admin/users?q=${encodeURIComponent(debounced)}&status=${status}&activity=${activity}&role=${role}`;
   const {
     data, error, loading, reload, updatedAt,
   } = useAdminData(path, token, 20000);
@@ -273,6 +304,11 @@ export default function UsersSection({ token }) {
             <option key={v} value={v}>{t(`admin.users.activity.${v}`)}</option>
           ))}
         </select>
+        <Segmented
+          value={role}
+          onChange={setRole}
+          options={['all', 'user', 'admin', 'creator'].map((v) => ({ value: v, label: v === 'all' ? t('creator.role.any') : t(`creator.role.${v}`) }))}
+        />
       </div>
 
       {!data ? (
@@ -297,7 +333,7 @@ export default function UsersSection({ token }) {
                     <span className="flex flex-col">
                       <span className="flex items-center gap-1.5 text-zinc-100">
                         {u.nickname}
-                        {u.role === 'admin' && <Badge tone="amber">{t('admin.roleAdmin')}</Badge>}
+                        <RoleBadge role={u.role} />
                       </span>
                       <span className="font-mono text-[10.5px] text-zinc-600">{u.id.slice(0, 13)}…</span>
                     </span>
@@ -308,6 +344,9 @@ export default function UsersSection({ token }) {
               { key: 'lastLogin', label: t('admin.col.lastLogin'), render: (u) => (u.lastLoginAt ? formatDate(u.lastLoginAt, language) : t('common.never')) },
               { key: 'status', label: t('admin.col.accountStatus'), render: (u) => <Badge tone={u.status === 'blocked' ? 'red' : 'green'}>{t(`admin.status.${u.status}`)}</Badge> },
               { key: 'online', label: t('admin.col.online'), render: (u) => <Badge tone={u.online ? 'green' : 'zinc'} dot>{u.online ? t('admin.online') : t('admin.offline')}</Badge> },
+              ...(data.users.some((u) => u.balance !== undefined)
+                ? [{ key: 'balance', label: t('creator.col.crowns'), align: 'right', render: (u) => <span className="font-semibold text-brass-light">{(u.balance || 0).toLocaleString()}</span> }]
+                : []),
               { key: 'created', label: t('admin.col.gamesCreated'), align: 'right' },
               { key: 'played', label: t('admin.col.played'), align: 'right' },
               { key: 'wins', label: t('admin.col.wins'), align: 'right' },

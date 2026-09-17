@@ -59,7 +59,7 @@ export default function PlatformShell({
           </nav>
           <div className="ml-auto flex items-center gap-2 md:ml-0">
             <SocialBar compact />
-            {auth.isAdmin && <Button icon="shield" onClick={() => navigate('/admin')} className="hidden sm:inline-flex">{t('admin.open')}</Button>}
+            {auth.isAdmin && <Button icon="shield" onClick={() => navigate('/admin')} className="hidden sm:inline-flex">{auth.isCreator ? t('creator.open') : t('admin.open')}</Button>}
             <LanguageSwitcher variant="dark" />
           </div>
         </div>
