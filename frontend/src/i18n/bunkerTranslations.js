@@ -1,8 +1,12 @@
 // bunkerTranslations.js
 // Strings for the Bunker. Merged over the other dictionaries in
-// translations.js.
+// translations.js. The strings for the scenarios, action cards, baggage
+// detail, events and the settings panel live in bunkerExtraTranslations.js
+// and are merged in at the bottom of this file.
 
-export const bunkerEn = {
+import { bunkerExtraEn, bunkerExtraRu } from './bunkerExtraTranslations';
+
+const baseEn = {
   'menu.bunker.title': 'Bunker',
   'menu.bunker.badge': 'Survival & debate',
   'menu.bunker.description': 'A catastrophe, a shelter with too few places. Reveal your secret traits one by one, argue your worth and vote on who stays outside.',
@@ -42,8 +46,8 @@ export const bunkerEn = {
   'bunker.settings.discussSec': 'Discussion',
   'bunker.settings.voteSec': 'Voting',
   'bunker.rulesTitle': 'How it works',
-  'bunker.rules.1': 'Everyone gets seven secret traits. Nobody sees yours until you reveal them.',
-  'bunker.rules.2': 'Each round the players take turns revealing one trait. In round 1 everyone reveals their profession.',
+  'bunker.rules.1': 'Everyone gets {chars} secret traits. Nobody sees yours until you reveal them.',
+  'bunker.rules.2': 'Each round the players take turns revealing {reveals} trait(s). In round 1 everyone reveals their profession.',
   'bunker.rules.3': 'From round {round}, the reveals are followed by a discussion and a vote: the player with the most votes is left outside.',
   'bunker.rules.4': 'A tie goes to a runoff between the tied players; if it ties again nobody leaves this round (with every card revealed, lots decide).',
   'bunker.rules.5': 'When no more people remain than places in the bunker, the door closes - they are the survivors.',
@@ -151,7 +155,7 @@ export const bunkerEn = {
   'bunker.system.PLAYER_RECONNECTED': '{name} is back.',
 };
 
-export const bunkerRu = {
+const baseRu = {
   'menu.bunker.title': 'Бункер',
   'menu.bunker.badge': 'Выживание и споры',
   'menu.bunker.description': 'Катастрофа, а мест в убежище меньше, чем людей. Раскрывайте свои тайные характеристики, доказывайте свою пользу и голосуйте, кто останется снаружи.',
@@ -191,8 +195,8 @@ export const bunkerRu = {
   'bunker.settings.discussSec': 'Обсуждение',
   'bunker.settings.voteSec': 'Голосование',
   'bunker.rulesTitle': 'Как играть',
-  'bunker.rules.1': 'Каждый получает семь тайных характеристик. Ваши карты никто не видит, пока вы их не откроете.',
-  'bunker.rules.2': 'В каждом раунде игроки по очереди раскрывают по одной характеристике. В первом раунде все открывают профессию.',
+  'bunker.rules.1': 'Каждый получает {chars} тайных характеристик. Ваши карты никто не видит, пока вы их не откроете.',
+  'bunker.rules.2': 'В каждом раунде игроки по очереди раскрывают по {reveals} характеристике. В первом раунде все открывают профессию.',
   'bunker.rules.3': 'Начиная с раунда {round}, после раскрытия идут обсуждение и голосование: игрок с наибольшим числом голосов остаётся снаружи.',
   'bunker.rules.4': 'При ничьей — переголосование между лидерами; если снова ничья, в этом раунде никто не выбывает (когда все карты открыты — решает жребий).',
   'bunker.rules.5': 'Когда людей становится не больше, чем мест в бункере, дверь закрывается — оставшиеся выжили.',
@@ -299,3 +303,6 @@ export const bunkerRu = {
   'bunker.system.PLAYER_JOINED': '{name} присоединился(ась).',
   'bunker.system.PLAYER_RECONNECTED': '{name} вернулся(ась).',
 };
+
+export const bunkerEn = { ...baseEn, ...bunkerExtraEn };
+export const bunkerRu = { ...baseRu, ...bunkerExtraRu };

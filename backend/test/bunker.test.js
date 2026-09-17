@@ -217,7 +217,9 @@ function main() {
 
   test('a deadlock with every card revealed is settled by lot', () => {
     const game = started(4);
-    game.players.forEach((p) => { p.revealed = [...CATEGORY_KEYS]; });
+    // Every card on the table - which is now however many this table deals,
+    // not a fixed seven.
+    game.players.forEach((p) => { p.revealed = [...game.categoriesInPlay()]; });
     game.phase = PHASES.DISCUSSION;
     game.skipPhase('p1');
     game.vote('p1', 'p2');
@@ -377,7 +379,18 @@ async function wire() {
     const games = await fetch(`${URL}/api/games`).then((r) => r.json());
     assert(games.games.some((g) => g.id === 'bunker' && g.available), 'the Bunker is in the game catalogue');
     const config = await fetch(`${URL}/api/bunker/config`).then((r) => r.json());
-    assert(config.categories.length === 7 && config.cards.profession.length > 16 && !JSON.stringify(config).includes('"s":'), 'config has names, not scores');
+    // The catalogue now lists every characteristic a table CAN play with
+    // (a game still deals only the subset its settings name), and it still
+    // carries names, never the scores that decide the final verdict.
+    assert(config.categories.length >= 7, 'the catalogue lists the characteristics');
+    ['profession', 'biology', 'health', 'hobby', 'baggage', 'trait', 'extra'].forEach(
+      (k) => assert(config.categories.includes(k), `the original ${k} is still in the catalogue`),
+    );
+    assert(config.cards.profession.length > 16, 'the profession deck travels');
+    assert(config.cards.baggage.some((i) => i.glyph && i.rarity), 'items carry a picture and a rarity');
+    assert(config.schema.actionCards.length > 0 && config.schema.scenarios.length > 0, 'the action cards and scenarios travel');
+    assert(!JSON.stringify(config).includes('"s":'), 'config has names, not scores');
+    assert(!JSON.stringify(config).includes('"hidden":"'), 'an item never says WHICH property it is hiding');
 
     const guests = [];
     for (let i = 1; i <= 3; i += 1) {

@@ -18,8 +18,11 @@ import FramedAvatar from '../../cosmetics/FramedAvatar';
 import { StyledName } from '../../cosmetics/Cosmetics';
 import { useOutcomeEffects, useTurnSound } from '../../cosmetics/useGameCosmetics';
 import {
-  CHAR_ORDER, CharIcon, cardText, catastropheOf, formatBunkerLog, monthsText, roomName, votesText,
+  charOrder, CharIcon, cardText, cardDetail, catastropheOf, formatBunkerLog, monthsText, roomName, votesText, RARITY_TONE,
 } from './bunkerText';
+import {
+  HandPanel, CardHistory, PrivateFeed, EventBanner,
+} from './BunkerCards';
 
 function useCountdown(endsAt) {
   const [left, setLeft] = useState(() => (endsAt ? Math.max(0, endsAt - Date.now()) : 0));
@@ -51,11 +54,14 @@ function TopBar({
   state, onLeave, t, actions, spectating,
 }) {
   return (
-    <header className="bunker-plate flex flex-wrap items-center gap-3 px-4 py-3 4xl:px-6 4xl:py-4">
-      <span className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-black/40 text-[22px] 4xl:h-14 4xl:w-14 4xl:text-[28px]" aria-hidden="true">☢️</span>
-      <div key={`${state.phase}-${state.round}`} className="bunker-anim bunker-round min-w-0 flex-1">
-        <p className="section-label">{t('menu.bunker.title')} · {t('bunker.roundN', { n: Math.max(1, state.round) })}</p>
-        <h1 className="font-display text-[20px] font-black leading-tight text-parch 4xl:text-[28px]">{t(`bunker.phase.${state.phase}`)}</h1>
+    // On a phone the title takes its own row: squeezed into the same line
+    // as the clock it collapsed into a two-character column and the two
+    // overlapped.
+    <header className="bunker-plate flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 4xl:px-6 4xl:py-4">
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/40 text-[22px] 4xl:h-14 4xl:w-14 4xl:text-[28px]" aria-hidden="true">☢️</span>
+      <div key={`${state.phase}-${state.round}`} className="bunker-anim bunker-round min-w-0 flex-1 basis-[calc(100%-3.5rem)] sm:basis-auto">
+        <p className="section-label truncate">{t('menu.bunker.title')} · {t('bunker.roundN', { n: Math.max(1, state.round) })}</p>
+        <h1 className="font-display text-[18px] font-black leading-tight text-parch sm:text-[20px] 4xl:text-[28px]">{t(`bunker.phase.${state.phase}`)}</h1>
       </div>
       <Timer endsAt={state.phaseEndsAt} t={t} />
       <SocialBar compact />
@@ -118,7 +124,7 @@ function BunkerInfo({
 }
 
 function CharRow({
-  name, card, isOwn, isPublic, fresh, config, language, t,
+  name, card, isOwn, isPublic, fresh, blind, config, language, t,
 }) {
   const label = t(`bunker.char.${name}`);
   if (!card) {
@@ -128,11 +134,15 @@ function CharRow({
         <span className="w-[6.5rem] shrink-0 text-parch/40 4xl:w-[8rem]">{label}</span>
         <span className="flex items-center gap-1.5 text-parch/30">
           <Icon.lock className="h-3.5 w-3.5" />
-          {t('bunker.hidden')}
+          {/* A card this table dealt face down to its own owner is a
+              different kind of unknown from everyone else's secret. */}
+          {blind ? t('bunker.blind') : t('bunker.hidden')}
         </span>
       </li>
     );
   }
+  const detail = cardDetail(config, name, card, language);
+  const isItem = name.startsWith('baggage');
   return (
     <li
       key={`${name}-${isPublic}`}
@@ -140,16 +150,62 @@ function CharRow({
         isPublic ? 'border-white/[0.08] bg-white/[0.04]' : 'border-dashed border-white/[0.1] bg-black/25'
       } ${fresh ? 'bunker-anim bunker-reveal' : ''}`}
     >
-      <CharIcon name={name} className={`mt-px h-4 w-4 shrink-0 ${isPublic ? 'text-parch/60' : 'text-parch/30'}`} />
+      {detail?.glyph && isItem
+        ? <span className="mt-px shrink-0 text-[15px] leading-none" aria-hidden="true">{detail.glyph}</span>
+        : <CharIcon name={name} className={`mt-px h-4 w-4 shrink-0 ${isPublic ? 'text-parch/60' : 'text-parch/30'}`} />}
       <span className="w-[6.5rem] shrink-0 text-parch/45 4xl:w-[8rem]">{label}</span>
-      <span className={`min-w-0 flex-1 break-words font-semibold ${isPublic ? 'text-parch' : 'text-parch/65'}`}>{cardText(config, name, card, language, t)}</span>
+      <span className="min-w-0 flex-1">
+        <span className={`block break-words font-semibold ${isPublic ? 'text-parch' : 'text-parch/65'}`}>
+          {cardText(config, name, card, language, t)}
+        </span>
+        {/* An item says what it is and how rare it is; a sealed property
+            is advertised as sealed, and shown once something opens it. */}
+        {isItem && detail && (
+          <span className="mt-0.5 flex flex-wrap items-center gap-1">
+            <span className={`rounded border px-1 py-px text-[9.5px] font-bold uppercase tracking-wide ${RARITY_TONE[detail.rarity]}`}>
+              {t(`bunker.rarity.${detail.rarity}`)}
+            </span>
+            {detail.property
+              ? <span className="rounded bg-orange-500/15 px-1 py-px text-[10px] text-orange-200">⚠ {detail.property}</span>
+              : detail.hasHidden && <span className="rounded bg-white/[0.06] px-1 py-px text-[10px] text-parch/35">🔒 {t('bunker.sealed')}</span>}
+          </span>
+        )}
+        {isItem && detail?.description && (
+          <span className="mt-0.5 block text-[11px] leading-snug text-parch/35">{detail.description}</span>
+        )}
+      </span>
       {isOwn && !isPublic && <Icon.eye className="mt-px h-3.5 w-3.5 shrink-0 text-parch/30" title={t('bunker.onlyYou')} />}
     </li>
   );
 }
 
+// The badges that say what a card or an event has done to a seat: who is
+// protected, who is holding a double vote, who has been silenced, who is
+// ill. These are public on purpose - a protection nobody can see would
+// change nothing about how the table argues.
+const EFFECT_TONE = {
+  protected: 'bg-sky-400/20 text-sky-200',
+  doubleVote: 'bg-brass/25 text-brass-light',
+  blockReveal: 'bg-rent/20 text-rent-light',
+  ill: 'bg-orange-500/20 text-orange-200',
+};
+
+function EffectPills({ effects, t }) {
+  const shown = [...new Set(effects || [])].filter((e) => EFFECT_TONE[e]);
+  if (!shown.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {shown.map((e) => (
+        <span key={e} className={`pill ${EFFECT_TONE[e]}`} title={t(`bunker.effect.${e}.text`)}>
+          {t(`bunker.effect.${e}.name`)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 const PlayerCard = memo(({
-  player, state, config, language, t, canVote, onVote,
+  player, state, config, language, t, canVote, onVote, sheet,
 }) => {
   const out = player.status === 'excluded';
   const inVote = state.phase === 'VOTE';
@@ -173,14 +229,24 @@ const PlayerCard = memo(({
           <p className="flex min-w-0 items-center gap-1 text-[14px] font-semibold text-parch 4xl:text-[16px]">
             <StyledName nickname={player.nickname} cosmetics={player.cosmetics} />
             {player.isYou && <span className="shrink-0 text-[11px] font-normal text-parch/45">({t('waiting.you')})</span>}
+            {player.isBot && <span className="shrink-0 rounded bg-white/[0.08] px-1 text-[9.5px] font-bold uppercase text-parch/45">{t('bunker.bot')}</span>}
           </p>
           <p className="flex flex-wrap items-center gap-x-2 text-[11.5px]">
             {status}
             {!player.connected && !player.left && <span className="text-parch/35">{t('waiting.offline')}</span>}
           </p>
         </div>
+        {/* How many action cards a player is still holding is public; which
+            ones they are never is. */}
+        {player.cardsInHand > 0 && !out && (
+          <span className="shrink-0 rounded-lg border border-violet-400/25 bg-violet-400/[0.08] px-1.5 py-0.5 text-[11px] font-bold text-violet-200 tnum" title={t('bunker.cards.inHand', { n: player.cardsInHand })}>
+            🃏{player.cardsInHand}
+          </span>
+        )}
         {player.isHost && <Icon.crown className="h-4 w-4 shrink-0 text-brass/80" title={t('waiting.host')} />}
       </header>
+
+      <EffectPills effects={player.effects} t={t} />
 
       {out && (
         <div className="flex items-center justify-between gap-2 rounded-lg border border-orange-500/30 bg-orange-500/[0.07] px-2.5 py-1.5">
@@ -190,7 +256,7 @@ const PlayerCard = memo(({
       )}
 
       <ul className="flex flex-col gap-1">
-        {CHAR_ORDER.map((name) => (
+        {sheet.map((name) => (
           <CharRow
             key={name}
             name={name}
@@ -198,6 +264,7 @@ const PlayerCard = memo(({
             isOwn={player.isYou}
             isPublic={player.revealed.includes(name)}
             fresh={player.revealedThisRound === name || out}
+            blind={player.isYou && (state.you?.blind || []).includes(name)}
             config={config}
             language={language}
             t={t}
@@ -210,7 +277,7 @@ const PlayerCard = memo(({
           {t('bunker.voteAgainst', { number: player.number })}
         </button>
       )}
-      {state.you?.myVote === player.id && (
+      {(state.you?.myVotes || []).includes(player.id) && (
         <p className="bunker-anim bunker-round mt-1 text-center text-[12px] font-semibold text-orange-300">✓ {t('bunker.yourVoteHere')}</p>
       )}
     </article>
@@ -218,11 +285,20 @@ const PlayerCard = memo(({
 });
 
 function RevealPanel({
-  state, me, config, language, t, actions,
+  state, me, config, language, t, actions, sheet,
 }) {
   const [pick, setPick] = useState(null);
   useEffect(() => { setPick(null); }, [state.turn?.playerId, state.round]);
   const turnPlayer = state.players.find((p) => p.id === state.turn?.playerId);
+
+  if (state.you?.blockedFromRevealing && state.turn?.playerId === state.you?.id) {
+    return (
+      <section className="bunker-plate flex items-center gap-3 border-rent/30 bg-rent/[0.07] p-4">
+        <span className="text-[22px]" aria-hidden="true">🤐</span>
+        <p className="min-w-0 flex-1 text-[13.5px] text-rent-light">{t('bunker.blockedFromRevealing')}</p>
+      </section>
+    );
+  }
 
   if (state.you?.canReveal && me) {
     const required = state.you.requiredKey;
@@ -230,8 +306,8 @@ function RevealPanel({
       <section className="bunker-plate p-4 ring-1 ring-brass-light/45 4xl:p-5">
         <p className="section-label text-brass-light">{t('bunker.yourTurn')}</p>
         <h2 className="mt-0.5 text-[16px] font-bold text-parch 4xl:text-[20px]">{required ? t('bunker.revealProfession') : t('bunker.revealChoose')}</h2>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
-          {CHAR_ORDER.map((name) => {
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-7">
+          {sheet.map((name) => {
             const done = me.revealed.includes(name);
             const allowed = !done && (!required || required === name);
             return (
@@ -248,6 +324,8 @@ function RevealPanel({
                 <CharIcon name={name} className="h-5 w-5" />
                 {t(`bunker.char.${name}`)}
                 {done && <span className="text-[10.5px] font-normal text-parch/45">{t('bunker.alreadyOpen')}</span>}
+                {!done && (state.you?.blind || []).includes(name)
+                  && <span className="text-[10.5px] font-normal text-orange-300/80">{t('bunker.blindShort')}</span>}
               </button>
             );
           })}
@@ -257,7 +335,9 @@ function RevealPanel({
             <p className="min-w-0 flex-1 text-[13.5px] text-parch/75">
               {t('bunker.confirmReveal', { key: t(`bunker.char.${pick}`) })}
               {' '}
-              <b className="text-parch">{cardText(config, pick, me.cards[pick], language, t)}</b>
+              <b className="text-parch">
+                {me.cards[pick] ? cardText(config, pick, me.cards[pick], language, t) : t('bunker.blindValue')}
+              </b>
             </p>
             <button type="button" onClick={() => { actions.reveal(pick); setPick(null); }} className="btn-primary px-5 py-2.5">
               <Icon.eye className="h-4 w-4" />
@@ -271,8 +351,8 @@ function RevealPanel({
   }
   return (
     <section className="bunker-plate flex flex-wrap items-center gap-3 p-4 4xl:p-5">
-      <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-brass-light" />
-      <p className="min-w-0 flex-1 text-[14px] text-parch/80 4xl:text-[17px]">
+      <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-brass-light" />
+      <p className="min-w-0 flex-1 basis-[calc(100%-4.5rem)] text-[14px] text-parch/80 sm:basis-auto 4xl:text-[17px]">
         {turnPlayer ? t('bunker.turnOf', { number: turnPlayer.number, name: turnPlayer.nickname }) : t('bunker.waiting')}
         {state.round === 1 && <span className="ml-1 text-parch/45">· {t('bunker.roundOneHint')}</span>}
       </p>
@@ -284,13 +364,13 @@ function RevealPanel({
 function DiscussionPanel({ state, t, actions }) {
   return (
     <section className="bunker-plate flex flex-wrap items-center gap-3 p-4 4xl:p-5">
-      <Icon.chat className="h-6 w-6 text-parch/45" />
-      <div className="min-w-0 flex-1">
+      <Icon.chat className="h-6 w-6 shrink-0 text-parch/45" />
+      <div className="min-w-0 flex-1 basis-[calc(100%-2.25rem)] sm:basis-auto">
         <h2 className="text-[16px] font-bold text-parch 4xl:text-[20px]">{t('bunker.discussTitle')}</h2>
         <p className="text-[13px] text-parch/55">{t('bunker.discussText', { n: state.aliveCount - state.seats })}</p>
       </div>
       {state.you?.isHost && (
-        <button type="button" onClick={actions.skip} className="btn-ghost px-4 py-2.5">
+        <button type="button" onClick={actions.skip} className="btn-ghost w-full justify-center px-4 py-2.5 sm:w-auto">
           {t('bunker.toVote')}
           <Icon.chevronRight className="h-4 w-4" />
         </button>
@@ -301,17 +381,32 @@ function DiscussionPanel({ state, t, actions }) {
 
 function VotePanel({ state, t, actions }) {
   const candidates = state.players.filter((p) => state.vote.candidates.includes(p.id));
-  const myVote = state.players.find((p) => p.id === state.you?.myVote);
+  const mine = state.you?.myVotes || [];
+  const myVote = state.players.find((p) => p.id === mine[0]);
   const progress = state.vote.voterCount ? (state.vote.votedCount / state.vote.voterCount) * 100 : 0;
+  const multi = state.vote.mode === 'multi';
+  const live = state.vote.live || [];
+  const votesFor = (id) => live.find((r) => r.playerId === id)?.votes || 0;
+
   let headline = t('bunker.waitVotes');
-  if (state.you?.canVote) headline = t('bunker.voteHint');
+  if (state.you?.canVote) {
+    headline = multi ? t('bunker.voteHintMulti', { n: state.you.votesLeft }) : t('bunker.voteHint');
+  } else if (multi && mine.length) headline = t('bunker.votedForMany', { n: mine.length });
   else if (myVote) headline = t('bunker.votedFor', { number: myVote.number, name: myVote.nickname });
   else if (state.you?.status === 'excluded') headline = t('bunker.spectatorVote');
 
   return (
-    <section className={`bunker-plate p-4 4xl:p-5 ${state.vote.revote ? 'bunker-warn' : ''}`}>
-      <p className={`section-label ${state.vote.revote ? 'text-orange-300' : ''}`}>{state.vote.revote ? t('bunker.revoteTitle') : t('bunker.voteTitle')}</p>
+    <section className={`bunker-plate p-4 4xl:p-5 ${state.vote.revote || state.finalVote ? 'bunker-warn' : ''}`}>
+      <p className={`section-label ${state.vote.revote || state.finalVote ? 'text-orange-300' : ''}`}>
+        {state.finalVote ? t('bunker.finalVoteTitle') : state.vote.revote ? t('bunker.revoteTitle') : t('bunker.voteTitle')}
+      </p>
       <h2 className="mt-0.5 text-[16px] font-bold text-parch 4xl:text-[20px]">{headline}</h2>
+      {state.finalVote && <p className="mt-1 text-[12.5px] text-orange-200/80">{t('bunker.finalVoteText', { n: Math.max(0, state.aliveCount - state.seats) })}</p>}
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {state.vote.secret && <span className="pill bg-white/[0.07] text-parch/60">🕶️ {t('bunker.secretVoteBadge')}</span>}
+        {multi && <span className="pill bg-white/[0.07] text-parch/60">{t('bunker.multiVoteBadge', { n: state.vote.votesPerPlayer })}</span>}
+        {state.settings.voting.allowChange && <span className="pill bg-white/[0.07] text-parch/60">{t('bunker.changeVoteBadge')}</span>}
+      </div>
       <div className="mt-3 flex items-center gap-3">
         <div className="h-2 flex-1 overflow-hidden rounded-full bg-black/40">
           <div className="h-full rounded-full bg-parch/60 transition-all duration-300" style={{ width: `${progress}%` }} />
@@ -321,19 +416,32 @@ function VotePanel({ state, t, actions }) {
       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 4xl:grid-cols-4">
         {candidates.map((p) => {
           const self = p.id === state.you?.id;
+          const chosen = mine.includes(p.id);
+          const shielded = (p.effects || []).includes('protected');
+          // With vote-changing on, tapping a chosen player takes the
+          // ballot back rather than doing nothing.
+          const clickable = (state.you?.canVote || (chosen && state.settings.voting.allowChange)) && !self;
           return (
             <button
               key={p.id}
               type="button"
-              disabled={!state.you?.canVote || self}
+              disabled={!clickable}
               onClick={() => actions.vote(p.id)}
               className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed 4xl:py-3 ${
-                state.you?.myVote === p.id ? 'border-orange-400/60 bg-orange-500/10' : 'border-white/10 bg-black/25 enabled:hover:border-orange-400/40 enabled:hover:bg-orange-500/[0.06] disabled:opacity-50'
+                chosen ? 'border-orange-400/60 bg-orange-500/10' : 'border-white/10 bg-black/25 enabled:hover:border-orange-400/40 enabled:hover:bg-orange-500/[0.06] disabled:opacity-50'
               }`}
             >
               <span className="font-mono text-[13px] font-bold text-parch/60 tnum">№{p.number}</span>
               <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-parch 4xl:text-[15.5px]">{p.nickname}</span>
-              {self ? <span className="text-[11px] text-parch/40">{t('sidebar.you')}</span> : state.you?.canVote && <span className="text-[12px] font-semibold text-orange-300">{t('bunker.vote')}</span>}
+              {shielded && <span title={t('bunker.effect.protected.text')} aria-hidden="true">🛡️</span>}
+              {!state.vote.secret && votesFor(p.id) > 0 && (
+                <span className="rounded bg-orange-500/20 px-1.5 text-[11.5px] font-bold text-orange-200 tnum">{votesFor(p.id)}</span>
+              )}
+              {self
+                ? <span className="text-[11px] text-parch/40">{t('sidebar.you')}</span>
+                : chosen
+                  ? <span className="text-[12px] font-semibold text-orange-300">✓</span>
+                  : state.you?.canVote && <span className="text-[12px] font-semibold text-orange-300">{t('bunker.vote')}</span>}
             </button>
           );
         })}
@@ -389,11 +497,11 @@ function ResultPanel({
       <h2 className={`mt-0.5 font-display text-[20px] font-black leading-tight 4xl:text-[26px] ${out ? 'text-orange-300' : 'text-parch'}`}>{headline}</h2>
       {vote.tally.length > 0 && <div className="mt-3"><Tally vote={vote} players={state.players} t={t} language={language} /></div>}
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <p className="flex-1 text-[12.5px] text-parch/45">
+        <p className="min-w-0 flex-1 basis-full text-[12.5px] text-parch/45 sm:basis-auto">
           {state.aliveCount <= state.seats ? t('bunker.lastResult') : t('bunker.nextRoundSoon')}
         </p>
         {state.you?.isHost && (
-          <button type="button" onClick={actions.skip} className="btn-ghost px-4 py-2">
+          <button type="button" onClick={actions.skip} className="btn-ghost w-full justify-center px-4 py-2 sm:w-auto">
             {t('bunker.continue')}
             <Icon.chevronRight className="h-4 w-4" />
           </button>
@@ -430,7 +538,7 @@ function History({
 }
 
 function GameOver({
-  state, config, language, t, actions, onLeave,
+  state, config, language, t, actions, onLeave, sheet,
 }) {
   const { results } = state;
   const me = state.players.find((p) => p.isYou);
@@ -454,6 +562,16 @@ function GameOver({
             {t(`bunker.verdict.${results.verdict}.text`)}
           </p>
           <p className="mt-1 text-[12px] text-parch/40">{t('bunker.summary', { rounds: results.rounds, seats: results.seats, score: results.colonyScore })}</p>
+          <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+            <span className="pill bg-brass/20 text-brass-light">{t(`bunker.scenario.${results.scenario || state.scenario}`)}</span>
+            {results.cardsPlayed > 0 && <span className="pill bg-violet-400/20 text-violet-200">{t('bunker.endCards', { n: results.cardsPlayed })}</span>}
+            {(results.events || []).length > 0 && <span className="pill bg-orange-400/20 text-orange-200">{t('bunker.endEvents', { n: results.events.length })}</span>}
+            {(results.mutedCategories || []).length > 0 && (
+              <span className="pill bg-white/[0.07] text-parch/55">
+                {t('bunker.endMuted', { list: results.mutedCategories.map((k) => t(`bunker.char.${k}`)).join(', ') })}
+              </span>
+            )}
+          </div>
         </div>
 
         <h3 className="mb-2 mt-5 text-[13px] font-bold uppercase tracking-wide text-go-light">{t('bunker.survivors', { n: survivors.length })}</h3>
@@ -465,9 +583,11 @@ function GameOver({
                 <StyledName nickname={p.nickname} cosmetics={p.cosmetics} />
               </p>
               <ul className="space-y-0.5 text-[12px]">
-                {CHAR_ORDER.map((name) => (
+                {sheet.map((name) => (
                   <li key={name} className="flex gap-2">
-                    <span className="w-[6rem] shrink-0 text-parch/40">{t(`bunker.char.${name}`)}</span>
+                    <span className={`w-[6rem] shrink-0 ${results.mutedCategories?.includes(name) ? 'text-parch/25 line-through' : 'text-parch/40'}`}>
+                      {t(`bunker.char.${name}`)}
+                    </span>
                     <span className="min-w-0 break-words text-parch/85">{cardText(config, name, p.cards[name], language, t)}</span>
                   </li>
                 ))}
@@ -517,6 +637,8 @@ export default function BunkerGame({
   const config = useBunkerConfig();
   const me = state.players.find((p) => p.isYou);
   const [lastTally, setLastTally] = useState(null);
+  // The characteristics THIS table deals - not a fixed seven.
+  const sheet = useMemo(() => charOrder(state), [state.categories]);
 
   useTurnSound(!!state.you?.canReveal || !!state.you?.canVote);
 
@@ -550,8 +672,19 @@ export default function BunkerGame({
           <Stat label={t('bunker.seatsLabel')} value={state.seats} hint={t('bunker.seatsHint')} />
           <Stat label={t('bunker.aliveLabel')} value={state.aliveCount} hint={t('bunker.aliveHint', { n: Math.max(0, state.aliveCount - state.seats) })} tone={state.aliveCount - state.seats <= 1 ? 'text-orange-300' : 'text-parch'} />
           <Stat label={t('bunker.excludedLabel')} value={excludedCount} />
-          <Stat label={t('bunker.roundLabel')} value={Math.max(1, state.round)} hint={state.round < state.firstVoteRound ? t('bunker.noVoteYet') : t('bunker.voteEachRound')} />
+          <Stat
+            label={t('bunker.roundLabel')}
+            value={state.totalRounds > 0 ? `${Math.max(1, state.round)}/${state.totalRounds}` : Math.max(1, state.round)}
+            hint={state.round < state.firstVoteRound ? t('bunker.noVoteYet') : t('bunker.voteEachRound')}
+          />
         </div>
+
+        {/* What the table is being asked to do right now, in one line. */}
+        <p className="bunker-plate px-4 py-2 text-[12.5px] text-parch/60">
+          {t(`bunker.goal.${state.phase}`, { n: Math.max(0, state.aliveCount - state.seats) })}
+        </p>
+
+        <EventBanner state={state} t={t} />
 
         {me?.status === 'excluded' && state.phase !== 'GAME_OVER' && (
           <p className="bunker-plate border-orange-500/30 px-4 py-2.5 text-[13px] text-orange-200/90">⚠ {t('bunker.spectatorBanner')}</p>
@@ -559,10 +692,15 @@ export default function BunkerGame({
 
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),22rem] 3xl:grid-cols-[minmax(0,1fr),26rem] 4xl:grid-cols-[minmax(0,1fr),36rem] 4xl:gap-5">
           <div className="flex min-w-0 flex-col gap-3 4xl:gap-4">
-            {state.phase === 'REVEAL' && <RevealPanel state={state} me={me} config={config} language={language} t={t} actions={actions} />}
+            {state.phase === 'REVEAL' && <RevealPanel state={state} me={me} config={config} language={language} t={t} actions={actions} sheet={sheet} />}
             {state.phase === 'DISCUSSION' && <DiscussionPanel state={state} t={t} actions={actions} />}
             {voting && <VotePanel state={state} t={t} actions={actions} />}
             {state.phase === 'RESULT' && <ResultPanel state={state} t={t} language={language} actions={actions} />}
+
+            {/* The hand sits directly under whatever the table is doing,
+                because a card is almost always played in reaction to it. */}
+            <HandPanel state={state} config={config} language={language} t={t} onPlay={actions.playCard} spectating={spectating} />
+            <PrivateFeed state={state} config={config} language={language} t={t} />
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 4xl:gap-4 5xl:grid-cols-5">
               {state.players.map((p) => (
@@ -573,6 +711,7 @@ export default function BunkerGame({
                   config={config}
                   language={language}
                   t={t}
+                  sheet={sheet}
                   canVote={voting && !!state.you?.canVote}
                   onVote={actions.vote}
                 />
@@ -588,6 +727,7 @@ export default function BunkerGame({
                 <Tally vote={lastTally} players={state.players} t={t} language={language} />
               </section>
             )}
+            <CardHistory state={state} t={t} />
             <History log={state.log} config={config} language={language} t={t} />
             <section className="bunker-plate flex h-[20rem] flex-col overflow-hidden 4xl:h-[30rem]">
               <RoomChat
@@ -606,7 +746,7 @@ export default function BunkerGame({
       </div>
 
       {state.phase === 'GAME_OVER' && state.results && (
-        <GameOver state={state} config={config} language={language} t={t} actions={actions} onLeave={onLeave} />
+        <GameOver state={state} config={config} language={language} t={t} actions={actions} onLeave={onLeave} sheet={sheet} />
       )}
     </div>
   );

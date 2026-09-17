@@ -12,6 +12,8 @@ const { ROLES: CITADELS_ROLES, ROLE_ORDER } = require('../citadels/roles');
 const { DISTRICTS, TYPE_LIST } = require('../citadels/districts');
 const bunker = require('../bunker/BunkerGame');
 const bunkerCards = require('../bunker/cards');
+const bunkerContent = require('../bunker/content');
+const bunkerSettings = require('../bunker/settings');
 const catan = require('../catan/CatanGame');
 const cosmic = require('../cosmic/CosmicGame');
 const throne = require('../throne/ThroneGame');
@@ -107,16 +109,30 @@ router.get('/games', (req, res) => {
   });
 });
 
-// Bunker reference data: card, catastrophe and bunker-room names. Which
-// cards a player holds is never part of this - only of their own payload.
+// Bunker reference data: the names of every characteristic, item, action
+// card, event and scenario, plus the shape of a settings object, so the
+// lobby and the table can be drawn without hard-coding any content. Which
+// cards a player holds is never part of this - only of their own payload,
+// and neither are the scores, which stay on the server.
 router.get('/bunker/config', (req, res) => {
   res.set('Cache-Control', 'public, max-age=300');
+  const legacy = bunkerCards.publicConfig();
   res.json({
     minPlayers: bunker.MIN_PLAYERS,
     maxPlayers: bunker.MAX_PLAYERS,
     firstVoteRound: bunker.FIRST_VOTE_ROUND,
     defaults: bunker.DEFAULT_SETTINGS,
-    ...bunkerCards.publicConfig(),
+    ...legacy,
+    // The full catalogue, which extends the original decks rather than
+    // replacing them: `cards` still answers to every id it used to.
+    categories: bunkerContent.ALL_CATEGORY_KEYS,
+    categoryDefs: bunkerContent.CATEGORIES,
+    baggageKeys: bunkerContent.BAGGAGE_KEYS,
+    secretKeys: bunkerContent.SECRET_KEYS,
+    cards: { ...legacy.cards, ...bunkerContent.publicDecks() },
+    hiddenProperties: bunkerContent.publicHiddenProperties(),
+    rarities: bunkerContent.RARITIES,
+    schema: bunkerSettings.schema(),
   });
 });
 

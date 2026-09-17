@@ -36,7 +36,13 @@ export function useMafia(authToken, { enabled }) {
   // Set by "Change settings" on the game-over screen, so the lobby the
   // room returns to opens with the rules already on screen.
   const [settingsRequested, setSettingsRequested] = useState(false);
-  const playerId = getPlayerId();
+  // The id this browser proposes. It is only ever used for a GUEST seat:
+  // a signed-in player is seated under their account id instead, and the
+  // server says so in the create/join reply. Everything that asks "which
+  // seat am I?" must use the id the server came back with, not this one -
+  // getting that wrong is what hid the host's start button.
+  const localId = getPlayerId();
+  const [playerId, setPlayerId] = useState(localId);
 
   const clearRoom = useCallback(() => {
     forgetRoom(ROOM_KEY);
@@ -44,7 +50,8 @@ export function useMafia(authToken, { enabled }) {
     setState(null);
     setChat([]);
     setSpectating(false);
-  }, []);
+    setPlayerId(localId);
+  }, [localId]);
 
   useEffect(() => {
     if (!enabled) return undefined;
@@ -79,13 +86,14 @@ export function useMafia(authToken, { enabled }) {
       spectateEvent: 'mafia:spectate',
       roomKey: ROOM_KEY,
       nicknameKey: NICKNAME_KEY,
-      playerId,
+      playerId: localId,
       getToken: () => authTokenRef.current,
       getGuestKey,
       onJoined: (res) => {
         setRoomCode(res.roomCode);
         setState(res.state);
         setSpectating(false);
+        if (res.playerId) setPlayerId(res.playerId);
       },
       onWatching: (res) => {
         setRoomCode(res.roomCode);
@@ -120,6 +128,9 @@ export function useMafia(authToken, { enabled }) {
         setRoomCode(res.roomCode);
         setState(res.state);
         setSpectating(watching || !!res.spectator);
+        // The seat the server actually gave us - an account id for a
+        // signed-in player, the proposed id for a guest.
+        if (res.playerId) setPlayerId(res.playerId);
         resolve(res);
       } else {
         const err = new Error(res?.error || fallback);
@@ -132,29 +143,29 @@ export function useMafia(authToken, { enabled }) {
   const createRoom = useCallback((nickname, presetId) => {
     if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
     return request('mafia:create', {
-      nickname, playerId, presetId, token: authTokenRef.current, guestKey: getGuestKey(),
+      nickname, playerId: localId, presetId, token: authTokenRef.current, guestKey: getGuestKey(),
     }, 'Could not create the room.');
-  }, [playerId, request]);
+  }, [localId, request]);
 
   const joinRoom = useCallback((code, nickname) => {
     if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
     return request('mafia:join', {
-      roomCode: code, nickname, playerId, token: authTokenRef.current, guestKey: getGuestKey(),
+      roomCode: code, nickname, playerId: localId, token: authTokenRef.current, guestKey: getGuestKey(),
     }, 'Could not join the room.').catch((err) => {
       // A room that will not seat us is still a room we may watch.
       if (err.code !== 'SEAT_GONE') throw err;
       return request('mafia:spectate', {
-        roomCode: code, nickname, playerId, token: authTokenRef.current, guestKey: getGuestKey(),
+        roomCode: code, nickname, playerId: localId, token: authTokenRef.current, guestKey: getGuestKey(),
       }, 'Could not watch the room.', true);
     });
-  }, [playerId, request]);
+  }, [localId, request]);
 
   const spectateRoom = useCallback((code, nickname) => {
     if (nickname) localStorage.setItem(NICKNAME_KEY, nickname);
     return request('mafia:spectate', {
-      roomCode: code, nickname, playerId, token: authTokenRef.current, guestKey: getGuestKey(),
+      roomCode: code, nickname, playerId: localId, token: authTokenRef.current, guestKey: getGuestKey(),
     }, 'Could not watch the room.', true);
-  }, [playerId, request]);
+  }, [localId, request]);
 
   const leaveRoom = useCallback(() => {
     socketRef.current?.emit(spectating ? 'mafia:unspectate' : 'mafia:leave');

@@ -200,9 +200,21 @@ export function useBunker(authToken) {
         setSettingsRequested(!startNow);
         emit('bunker:restart', { startNow });
       },
+      openSettings: () => setSettingsRequested(true),
       reveal: (key) => emit('bunker:reveal', { key }),
       vote: (targetId) => emit('bunker:vote', { targetId }),
       skip: () => emit('bunker:skip'),
+      // An action card names itself and what it is pointed at; the server
+      // decides whether that is legal and what it does. The acknowledgement
+      // is awaited so the card panel can tell the player it was refused.
+      playCard: (card) => new Promise((resolve) => {
+        socketRef.current?.emit('bunker:playCard', {
+          cardId: card.cardId,
+          index: card.index ?? null,
+          targetId: card.targetId ?? null,
+          key: card.key ?? null,
+        }, (res) => resolve(res || { ok: false }));
+      }),
       sendChat: (text, extra = {}) => emit('bunker:chat', { ...extra, text }),
     },
   };

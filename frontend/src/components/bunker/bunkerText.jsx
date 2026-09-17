@@ -3,7 +3,27 @@
 // durations with correct plurals, the event log, and the small icons for
 // each characteristic.
 
-export const CHAR_ORDER = ['profession', 'biology', 'health', 'hobby', 'baggage', 'trait', 'extra'];
+// The order a character sheet is drawn in. A table plays with a SUBSET of
+// this - `state.categories` says which - so every screen takes the state's
+// list and sorts it by this one rather than assuming a fixed seven.
+export const CHAR_ORDER = [
+  'profession', 'biology', 'health', 'hobby', 'skill', 'trait', 'extra',
+  'baggage', 'baggage2', 'baggage3', 'baggage4', 'secret', 'secret2',
+];
+
+// The characteristics a given game is playing with, in sheet order.
+export function charOrder(state) {
+  const inPlay = state?.categories;
+  if (!Array.isArray(inPlay) || !inPlay.length) return CHAR_ORDER.slice(0, 7);
+  return CHAR_ORDER.filter((k) => inPlay.includes(k));
+}
+
+export const RARITY_TONE = {
+  common: 'text-parch/55 border-white/10 bg-white/[0.04]',
+  uncommon: 'text-sky-200 border-sky-400/25 bg-sky-400/[0.07]',
+  rare: 'text-violet-200 border-violet-400/30 bg-violet-400/[0.08]',
+  legendary: 'text-amber-200 border-amber-400/35 bg-amber-400/[0.09]',
+};
 
 function ruPlural(n, one, few, many) {
   const mod10 = n % 10;
@@ -28,11 +48,46 @@ export function votesText(n, language) {
   return `${n} ${n === 1 ? 'vote' : 'votes'}`;
 }
 
+// A characteristic key and the deck it is dealt from are not the same
+// thing: all four baggage slots share one deck, and both secrets share
+// another.
+export function deckOf(key) {
+  if (key.startsWith('baggage')) return 'baggage';
+  if (key.startsWith('secret')) return 'secret';
+  return key;
+}
+
+export function cardEntry(config, key, card) {
+  if (!card || !card.id) return null;
+  return config?.cards?.[deckOf(key)]?.find((c) => c.id === card.id) || null;
+}
+
 export function cardText(config, key, card, language, t) {
   if (!card) return '';
   if (key === 'biology') return `${t(`bunker.gender.${card.gender}`)}, ${yearsText(card.age, language)}`;
-  const entry = config?.cards?.[key]?.find((c) => c.id === card.id);
+  const entry = cardEntry(config, key, card);
   return entry ? entry.name[language] || entry.name.en : card.id;
+}
+
+// Everything a card carries beyond its name: the picture, the description,
+// how rare it is, and the property that has been opened on it (if any).
+export function cardDetail(config, key, card, language) {
+  const entry = cardEntry(config, key, card);
+  if (!entry) return null;
+  const prop = card?.property ? config?.hiddenProperties?.[card.property] : null;
+  return {
+    glyph: entry.glyph || null,
+    rarity: entry.rarity || 'common',
+    description: entry.description ? entry.description[language] || entry.description.en : null,
+    hasHidden: !!entry.hasHidden,
+    // Present only once the property has actually been turned face up -
+    // the server strips it from the payload until then.
+    property: prop ? prop.name[language] || prop.name.en : null,
+  };
+}
+
+export function scenarioName(t, id) {
+  return t(`bunker.scenario.${id}`);
 }
 
 export function catastropheOf(config, id, language) {
@@ -68,6 +123,25 @@ export function formatBunkerLog(entry, { t, config, language }) {
       return t(`bunker.log.NO_EXCLUSION.${p.reason}`);
     case 'GAME_OVER':
       return t('bunker.log.GAME_OVER', { names: (p.names || []).join(', ') });
+    case 'FORCED_REVEAL':
+      return t('bunker.log.FORCED_REVEAL', {
+        number: p.number, name: p.name, key: t(`bunker.char.${p.key}`), value: cardText(config, p.key, p.card, language, t),
+      });
+    case 'HIDDEN_AGAIN':
+      return t('bunker.log.HIDDEN_AGAIN', { number: p.number, name: p.name, key: t(`bunker.char.${p.key}`) });
+    case 'PROPERTY_REVEALED':
+      return t('bunker.log.PROPERTY_REVEALED', {
+        number: p.number,
+        name: p.name,
+        key: t(`bunker.char.${p.key}`),
+        property: config?.hiddenProperties?.[p.property]
+          ? (config.hiddenProperties[p.property].name[language] || config.hiddenProperties[p.property].name.en)
+          : p.property,
+      });
+    case 'CARD_PLAYED':
+      return t('bunker.log.CARD_PLAYED', { number: p.number, name: p.name, card: t(`bunker.card.${p.cardId}.name`) });
+    case 'EVENT':
+      return t('bunker.log.EVENT', { event: t(`bunker.event.${p.event}.name`) });
     default:
       return t(`bunker.log.${entry.type}`, p);
   }
@@ -81,7 +155,14 @@ const ICON_PATHS = {
   baggage: <><rect x="5" y="8" width="14" height="12" rx="2.5" /><path d="M9 8V6a3 3 0 016 0v2M5 13h14" /></>,
   trait: <><path d="M4 7.5C4 5.6 7.6 4 12 4s8 1.6 8 3.5V12c0 4.4-3.6 8-8 8s-8-3.6-8-8z" /><path d="M8.5 10.5h.01M15.5 10.5h.01M9 15c1.8 1.2 4.2 1.2 6 0" /></>,
   extra: <><path d="M12 3.5l2.4 5.2 5.6.6-4.2 3.8 1.2 5.6L12 15.9l-5 2.8 1.2-5.6L4 9.3l5.6-.6z" /></>,
+  // Knowledge and skills: a hand holding a tool.
+  skill: <><path d="M14.5 6.5a3.5 3.5 0 014.9 4.3l-8.6 8.6a2 2 0 01-2.8-2.8l7.6-7.6" /><path d="M4.5 12.5l4 4" /></>,
+  // A secret: a sealed envelope.
+  secret: <><rect x="3.5" y="6" width="17" height="12" rx="2" /><path d="M4 7.5l8 6 8-6" /></>,
 };
+// The extra slots reuse their group's icon.
+['baggage2', 'baggage3', 'baggage4'].forEach((k) => { ICON_PATHS[k] = ICON_PATHS.baggage; });
+ICON_PATHS.secret2 = ICON_PATHS.secret;
 
 export function CharIcon({ name, className = 'h-4 w-4' }) {
   return (

@@ -10,7 +10,6 @@ const roomManager = require('../game/RoomManager');
 const {
   BunkerError, PHASES,
 } = require('../bunker/BunkerGame');
-const { CATEGORY_KEYS } = require('../bunker/cards');
 const access = require('../platform/access');
 const modes = require('../platform/modes');
 const registry = require('../platform/registry');
@@ -147,9 +146,15 @@ registry.register({
         isGuest: !p.accountId,
         connected: !!p.connected,
         isHost: p.id === game.hostId,
-        status: p.left ? 'left' : `#${p.number} · ${p.status} · ${p.revealed.length}/${CATEGORY_KEYS.length}`,
+        status: p.left ? 'left' : `#${p.number} · ${p.status} · ${p.revealed.length}/${game.categoriesInPlay().length}`,
       })),
-      details: { round: game.round, seats: game.seats },
+      details: {
+        round: game.round,
+        seats: game.seats,
+        scenario: game.settings.scenario,
+        bots: game.players.filter((p) => p.isBot).length,
+        cardsPlayed: game.cardHistory.length,
+      },
     };
   },
   // A team result: everyone who ends the game inside the bunker has won.
@@ -314,6 +319,16 @@ function registerBunkerHandlers(io) {
     }));
 
     socket.on('bunker:reveal', act((game, playerId, p) => game.reveal(playerId, idString(p.key, 20))));
+
+    // Action cards are ordinary intentions like any other: the client names
+    // a card and what it is pointed at, and the engine decides whether that
+    // is legal and what it does.
+    socket.on('bunker:playCard', act((game, playerId, p) => game.playCard(playerId, {
+      cardId: idString(p.cardId, 40),
+      index: Number.isInteger(p.index) ? p.index : null,
+      targetId: idString(p.targetId),
+      key: idString(p.key, 20),
+    })));
     socket.on('bunker:vote', act((game, playerId, p) => game.vote(playerId, idString(p.targetId))));
     socket.on('bunker:skip', act((game, playerId) => game.skipPhase(playerId)));
 
@@ -350,6 +365,11 @@ function registerBunkerHandlers(io) {
         }
         const own = game.getPlayer(identity.playerId);
         if (own && !own.left) throw new BunkerError('You are playing in this room.');
+        // A table can close its gallery; a player who gave up their own
+        // seat may always stay and watch their own room.
+        if (!game.settings.players.allowSpectators && !own) {
+          throw new BunkerError('This room is not open to spectators.');
+        }
         const viewer = liveRoom.watch(socket, game.roomCode, 'bunker', identity);
         if (!viewer) throw new BunkerError('This room has too many spectators already.');
         cb?.({ ok: true, roomCode: game.roomCode, spectator: true, state: spectatorState(game) });

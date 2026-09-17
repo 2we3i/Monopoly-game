@@ -25,7 +25,7 @@ function SummaryPill({ children, tone = 'default' }) {
 }
 
 export default function MafiaLobby({
-  state, playerId, actions, onLeave, openSettings = false, onSettingsOpened, minPlayers = 4,
+  state, playerId, actions, onLeave, openSettings = false, onSettingsOpened,
 }) {
   const { t } = useTranslation();
   const [settingsOpen, setSettingsOpen] = useState(openSettings);
@@ -38,8 +38,19 @@ export default function MafiaLobby({
     }
   }, [openSettings, onSettingsOpened]);
 
-  const me = state.players.find((p) => p.id === playerId);
+  // Who "I" am is decided by the SERVER, not by this browser. A signed-in
+  // player's seat is keyed by their account id, which is not the local
+  // `landmark_player_id` at all - matching on that id found nobody, so the
+  // host never saw the start button and the game could not be started.
+  // `isYou` is stamped on the payload built for this viewer, exactly as
+  // every other mode's lobby reads it; the local id stays as a fallback
+  // for a state that predates the flag.
+  const me = state.players.find((p) => p.isYou) || state.players.find((p) => p.id === playerId);
   const isHost = !!me?.isHost;
+  // The seat limits come from the engine so the lobby cannot drift out of
+  // step with the rules.
+  const minPlayers = state.minPlayers || 4;
+  const maxPlayers = state.maxPlayers || 15;
   const enough = state.players.length >= minPlayers;
   const settings = state.settings;
   const fun = settings.fun || {};
@@ -58,11 +69,13 @@ export default function MafiaLobby({
   return (
     <div className="table-night min-h-screen">
       <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-6 3xl:max-w-5xl 4xl:max-w-[1600px] 4xl:gap-6 4xl:py-10">
-        <header className="flex flex-wrap items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-rent to-rent-deep text-white shadow-lift">
+        {/* The title takes its own row on a phone rather than being
+            squeezed into a narrow column beside the toolbar. */}
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rent to-rent-deep text-white shadow-lift">
             🔪
           </span>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-[calc(100%-3rem)] sm:basis-auto">
             <h1 className="font-display text-[20px] font-black leading-tight text-parch">{t('menu.mafia.title')}</h1>
             <p className="text-[12px] text-parch/45">{t('mafia.lobbySubtitle')}</p>
           </div>
@@ -94,7 +107,7 @@ export default function MafiaLobby({
             <div className="mb-3 flex items-center gap-2">
               <Icon.users className="h-4 w-4 text-parch/40" />
               <h2 className="flex-1 text-[13px] font-bold uppercase tracking-wide text-parch/60">
-                {t('waiting.players')} · {state.players.length}/15
+                {t('waiting.players')} · {state.players.length}/{maxPlayers}
               </h2>
               {!enough && (
                 <span className="pill bg-rent/20 text-rent-light">
@@ -107,23 +120,27 @@ export default function MafiaLobby({
               {state.players.map((p) => (
                 <li
                   key={p.id}
-                  className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 transition-colors ${
+                  // The trailing badges wrap onto their own line rather
+                  // than squeezing the nickname away on a phone.
+                  className={`flex flex-wrap items-center gap-x-2.5 gap-y-1.5 rounded-xl border px-3 py-2 transition-colors ${
                     p.ready ? 'border-go/40 bg-go/[0.08]' : 'border-white/[0.07] bg-white/[0.025]'
                   }`}
                 >
                   <FramedAvatar cosmetics={p.cosmetics} join>
                     <PlayerAvatar player={{ ...p, color: p.isHost ? '#c9982f' : '#4b5fa8' }} sizeClassName="h-8 w-8 4xl:h-10 4xl:w-10" ringClassName="ring-2 ring-white/15" />
                   </FramedAvatar>
-                  <span className="flex min-w-0 flex-1 items-center truncate text-[13.5px] font-semibold text-parch 4xl:text-[16px]">
+                  <span className="flex min-w-0 flex-1 basis-[6rem] items-center truncate text-[13.5px] font-semibold text-parch 4xl:text-[16px]">
                     <StyledName nickname={p.nickname} cosmetics={p.cosmetics} showTitle titleSize="xs" />
-                    {p.id === playerId && <span className="ml-1.5 text-[11px] font-normal text-parch/40">{t('sidebar.you')}</span>}
+                    {(p.isYou || p.id === me?.id) && <span className="ml-1.5 text-[11px] font-normal text-parch/40">{t('sidebar.you')}</span>}
                     {p.isGuest && <span className="ml-1.5 text-[11px] font-normal text-parch/35">· {t('common.guest')}</span>}
                   </span>
-                  {p.isHost && <Icon.crown className="h-4 w-4 shrink-0 text-brass" title={t('waiting.host')} />}
-                  <PlayerStatus player={p} compact />
-                  {p.ready
-                    ? <span className="pill bg-go/25 text-go-light"><Icon.check className="h-3 w-3" />{t('waiting.ready')}</span>
-                    : <span className="pill bg-white/[0.07] text-parch/35">{t('mafia.notReady')}</span>}
+                  <span className="flex shrink-0 items-center gap-2">
+                    {p.isHost && <Icon.crown className="h-4 w-4 shrink-0 text-brass" title={t('waiting.host')} />}
+                    <PlayerStatus player={p} compact />
+                    {p.ready
+                      ? <span className="pill bg-go/25 text-go-light"><Icon.check className="h-3 w-3" />{t('waiting.ready')}</span>
+                      : <span className="pill bg-white/[0.07] text-parch/35">{t('mafia.notReady')}</span>}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -203,7 +220,10 @@ export default function MafiaLobby({
 
         {/* Actions -------------------------------------------------- */}
         <div className="panel flex flex-wrap items-center gap-2 p-3">
-          {!isHost && (
+          {!me && (
+            <p className="w-full text-center text-[12.5px] text-parch/45">{t('mafia.watchingLobby')}</p>
+          )}
+          {!!me && !isHost && (
             <button
               type="button"
               onClick={() => actions.setReady(!me?.ready)}

@@ -843,6 +843,11 @@ class MafiaGame {
       dayNumber: this.dayNumber,
       phaseEndsAt: this.phaseEndsAt,
       settings: this.settings,
+      // The seat limits travel with the state so the lobby never has to
+      // keep a second copy of them (it used to hardcode 4 and 15).
+      minPlayers: MIN_PLAYERS,
+      maxPlayers: MAX_PLAYERS,
+      canStart: this.players.length >= MIN_PLAYERS,
       roleSummary: this.roleSummary(),
       players,
       you: viewer
