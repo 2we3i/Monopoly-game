@@ -21,15 +21,8 @@ const S = 64; // hex corner radius in design pixels
 const UX = (S * Math.sqrt(3)) / 2;
 const UY = S / 2;
 const MARGIN = 26;
-const W = 14 * UX + MARGIN * 2;
-const H = 22 * UY + MARGIN * 2;
-const OX = W / 2;
-const OY = H / 2;
 const PAD = 16;
 const MAX_SCALE_ABS = 2.6;
-
-const px = (x) => OX + x * UX;
-const py = (y) => OY + y * UY;
 
 function hexPoints(cx, cy, r) {
   return Array.from({ length: 6 }, (_, i) => {
@@ -38,20 +31,52 @@ function hexPoints(cx, cy, r) {
   }).join(' ');
 }
 
-const SEA_HEXES = (() => {
-  const out = [];
-  for (let q = -3; q <= 3; q += 1) {
-    for (let r = -3; r <= 3; r += 1) {
-      if (Math.max(Math.abs(q), Math.abs(r), Math.abs(q + r)) === 3) out.push({ x: 2 * q + r, y: 3 * r });
+// Everything that depends on how big the island is, worked out from the
+// board the server sent. A hex is always S across, so the big islands make
+// a bigger picture rather than smaller hexes, and the viewport below
+// scales whatever comes out to fit.
+//
+// The sea is every hex position within one ring of the island that the
+// island itself does not use, which also fills the notches an island
+// leaves where it drops a corner hex.
+function metricsFor(board) {
+  const ring = board.hexes.reduce(
+    (max, h) => Math.max(max, Math.abs(h.q), Math.abs(h.r), Math.abs(h.q + h.r)),
+    0,
+  );
+  const land = new Set(board.hexes.map((h) => `${h.q},${h.r}`));
+  const R = ring + 1;
+  const sea = [];
+  for (let q = -R; q <= R; q += 1) {
+    for (let r = -R; r <= R; r += 1) {
+      if (Math.abs(q + r) <= R && !land.has(`${q},${r}`)) sea.push({ x: 2 * q + r, y: 3 * r });
     }
   }
-  return out;
-})();
+  // A hex corner reaches one X unit and two Y units from its centre, so
+  // the picture is the outermost sea tile plus that, plus the margin.
+  const spanX = sea.reduce((max, h) => Math.max(max, Math.abs(h.x)), 0) + 1;
+  const spanY = sea.reduce((max, h) => Math.max(max, Math.abs(h.y)), 0) + 2;
+  const W = 2 * spanX * UX + MARGIN * 2;
+  const H = 2 * spanY * UY + MARGIN * 2;
+  const OX = W / 2;
+  const OY = H / 2;
+  return {
+    W,
+    H,
+    OX,
+    OY,
+    sea,
+    // The circle of open water behind everything, in hex radii.
+    water: R * 2 + 1.6,
+    px: (x) => OX + x * UX,
+    py: (y) => OY + y * UY,
+  };
+}
 
 // --- the static island (terrain, numbers, harbours) ----------------------
 
 const Island = memo(function Island({
-  board, rolled, t,
+  board, m, rolled, t,
 }) {
   const vertexById = useMemo(() => Object.fromEntries(board.vertices.map((v) => [v.id, v])), [board]);
   const edgeById = useMemo(() => Object.fromEntries(board.edges.map((e) => [e.id, e])), [board]);
@@ -64,12 +89,12 @@ const Island = memo(function Island({
           <stop offset="100%" stopColor="#1d5a86" />
         </radialGradient>
       </defs>
-      <polygon points={hexPoints(OX, OY, 7.6 * S)} transform={`rotate(30 ${OX} ${OY})`} fill="url(#catan-sea-grad)" opacity="0.55" />
-      {SEA_HEXES.map((h) => (
+      <polygon points={hexPoints(m.OX, m.OY, m.water * S)} transform={`rotate(30 ${m.OX} ${m.OY})`} fill="url(#catan-sea-grad)" opacity="0.55" />
+      {m.sea.map((h) => (
         <g key={`sea${h.x},${h.y}`}>
-          <polygon points={hexPoints(px(h.x), py(h.y), S)} fill="url(#catan-sea-grad)" stroke="#5aa6d4" strokeOpacity="0.35" strokeWidth="1.5" />
+          <polygon points={hexPoints(m.px(h.x), m.py(h.y), S)} fill="url(#catan-sea-grad)" stroke="#5aa6d4" strokeOpacity="0.35" strokeWidth="1.5" />
           <path
-            d={`M${px(h.x) - 16} ${py(h.y) + 6}q4-4 8 0t8 0t8 0`}
+            d={`M${m.px(h.x) - 16} ${m.py(h.y) + 6}q4-4 8 0t8 0t8 0`}
             fill="none"
             stroke="#b7e0f5"
             strokeOpacity="0.35"
@@ -81,13 +106,13 @@ const Island = memo(function Island({
 
       {/* A soft shadow under the island lifts it off the water. */}
       {board.hexes.map((h) => (
-        <polygon key={`sh${h.id}`} points={hexPoints(px(h.x), py(h.y) + 5, S)} fill="#0b2a40" opacity="0.45" />
+        <polygon key={`sh${h.id}`} points={hexPoints(m.px(h.x), m.py(h.y) + 5, S)} fill="#0b2a40" opacity="0.45" />
       ))}
 
       {board.hexes.map((h) => {
         const style = TERRAIN_STYLE[h.terrain];
-        const cx = px(h.x);
-        const cy = py(h.y);
+        const cx = m.px(h.x);
+        const cy = m.py(h.y);
         return (
           <g key={`hex${h.id}`}>
             <polygon points={hexPoints(cx, cy, S - 1)} fill={style.fill} stroke="#f3e6c2" strokeWidth="3" strokeLinejoin="round" />
@@ -104,10 +129,10 @@ const Island = memo(function Island({
         const edge = edgeById[port.edgeId];
         const a = vertexById[edge.a];
         const b = vertexById[edge.b];
-        const mx = (px(a.x) + px(b.x)) / 2;
-        const my = (py(a.y) + py(b.y)) / 2;
-        const dx = mx - OX;
-        const dy = my - OY;
+        const mx = (m.px(a.x) + m.px(b.x)) / 2;
+        const my = (m.py(a.y) + m.py(b.y)) / 2;
+        const dx = mx - m.OX;
+        const dy = my - m.OY;
         const len = Math.hypot(dx, dy) || 1;
         const bx = mx + (dx / len) * 34;
         const by = my + (dy / len) * 34;
@@ -118,7 +143,7 @@ const Island = memo(function Island({
           <g key={`port${port.edgeId}`}>
             <title>{label}</title>
             {[a, b].map((v) => (
-              <line key={v.id} x1={px(v.x)} y1={py(v.y)} x2={bx} y2={by} stroke="#8a5a2b" strokeWidth="5" strokeLinecap="round" />
+              <line key={v.id} x1={m.px(v.x)} y1={m.py(v.y)} x2={bx} y2={by} stroke="#8a5a2b" strokeWidth="5" strokeLinecap="round" />
             ))}
             <circle cx={bx} cy={by} r="19" fill="#f6edd6" stroke="#8a5a2b" strokeWidth="2.5" />
             {port.type === 'any' ? (
@@ -135,8 +160,8 @@ const Island = memo(function Island({
 
       {/* Number tokens, with the resource each hex produces above them. */}
       {board.hexes.map((h) => {
-        const cx = px(h.x);
-        const cy = py(h.y);
+        const cx = m.px(h.x);
+        const cy = m.py(h.y);
         const resource = TERRAIN_STYLE[h.terrain].resource;
         const hot = h.number === rolled;
         const red = h.number === 6 || h.number === 8;
@@ -239,6 +264,13 @@ export default function CatanBoard({
   state, mode, onVertex, onEdge, onHex, t,
 }) {
   const { board } = state;
+  // The island's size: the same for every board of a given island, so it
+  // is worked out again only when the game moves to a different one.
+  const m = useMemo(
+    () => metricsFor(board),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [board.island, board.hexes.length],
+  );
   const viewportRef = useRef(null);
   const stageRef = useRef(null);
   const view = useRef({ s: 1, x: 0, y: 0 });
@@ -257,9 +289,9 @@ export default function CatanBoard({
   const limits = useCallback(() => {
     const el = viewportRef.current;
     if (!el) return { fit: 1, min: 0.3, max: MAX_SCALE_ABS };
-    const fit = Math.min((el.clientWidth - PAD * 2) / W, (el.clientHeight - PAD * 2) / H);
+    const fit = Math.min((el.clientWidth - PAD * 2) / m.W, (el.clientHeight - PAD * 2) / m.H);
     return { fit, min: fit * 0.8, max: Math.max(MAX_SCALE_ABS, fit * 3) };
-  }, []);
+  }, [m]);
 
   const clamp = useCallback((s, x, y) => {
     const el = viewportRef.current;
@@ -268,8 +300,8 @@ export default function CatanBoard({
     if (!el) return { s: ns, x, y };
     const vw = el.clientWidth;
     const vh = el.clientHeight;
-    const cw = W * ns;
-    const ch = H * ns;
+    const cw = m.W * ns;
+    const ch = m.H * ns;
     const nx = cw + PAD * 2 <= vw ? (vw - cw) / 2 : Math.min(PAD, Math.max(vw - cw - PAD, x));
     const ny = ch + PAD * 2 <= vh ? (vh - ch) / 2 : Math.min(PAD, Math.max(vh - ch - PAD, y));
     return { s: ns, x: nx, y: ny };
@@ -313,7 +345,7 @@ export default function CatanBoard({
     const el = viewportRef.current;
     if (!el) return;
     const { fit: s } = limits();
-    setTarget(s, (el.clientWidth - W * s) / 2, (el.clientHeight - H * s) / 2, immediate);
+    setTarget(s, (el.clientWidth - m.W * s) / 2, (el.clientHeight - m.H * s) / 2, immediate);
   }, [limits, setTarget]);
 
   // Zoom around a fixed viewport point. Built on the TARGET view, so a
@@ -328,10 +360,14 @@ export default function CatanBoard({
     setTarget(ns, ax - wx * ns, ay - wy * ns, immediate);
   }, [limits, setTarget]);
 
+  // Fit on the first paint, and again if the game moves to a board of a
+  // different size - a zoom chosen for the small island means nothing on
+  // the big one.
   useLayoutEffect(() => {
+    touchedRef.current = false;
     fit(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [m]);
 
   useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
 
@@ -459,7 +495,7 @@ export default function CatanBoard({
   // --- derived drawing data ----------------------------------------------
 
   const layoutKey = useMemo(
-    () => board.hexes.map((h) => `${h.terrain[0]}${h.number || 0}`).join('') + board.ports.map((p) => `${p.edgeId}${p.type}`).join(''),
+    () => `${board.island || 'classic'}:${board.hexes.map((h) => `${h.terrain[0]}${h.number || 0}`).join('')}${board.ports.map((p) => `${p.edgeId}${p.type}`).join('')}`,
     [board],
   );
   const vertexById = useMemo(() => Object.fromEntries(board.vertices.map((v) => [v.id, v])), [board]);
@@ -500,9 +536,9 @@ export default function CatanBoard({
         onPointerLeave={() => setHover(null)}
         className={`no-drag absolute inset-0 overflow-hidden ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
       >
-        <div ref={stageRef} className="absolute left-0 top-0 origin-top-left will-change-transform" style={{ width: W, height: H }}>
-          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block select-none" aria-label={t('catan.boardLabel')}>
-            <Island board={board} layoutKey={layoutKey} rolled={rolledThisTurn} t={t} />
+        <div ref={stageRef} className="absolute left-0 top-0 origin-top-left will-change-transform" style={{ width: m.W, height: m.H }}>
+          <svg width={m.W} height={m.H} viewBox={`0 0 ${m.W} ${m.H}`} className="block select-none" aria-label={t('catan.boardLabel')}>
+            <Island board={board} m={m} layoutKey={layoutKey} rolled={rolledThisTurn} t={t} />
 
             {/* Hex hit areas: hover explains the hex; in robber mode a click moves the robber. */}
             {board.hexes.map((h) => {
@@ -510,7 +546,7 @@ export default function CatanBoard({
               return (
                 <polygon
                   key={`hit${h.id}`}
-                  points={hexPoints(px(h.x), py(h.y), S - 2)}
+                  points={hexPoints(m.px(h.x), m.py(h.y), S - 2)}
                   fill={target2 ? 'rgba(255,255,255,0.12)' : 'transparent'}
                   stroke={target2 ? '#fff6c9' : 'none'}
                   strokeWidth={target2 ? 3 : 0}
@@ -529,10 +565,10 @@ export default function CatanBoard({
               const a = vertexById[e.a];
               const b = vertexById[e.b];
               const c = playerColor(colorOf[r.playerId]);
-              const x1 = px(a.x) + (px(b.x) - px(a.x)) * 0.16;
-              const y1 = py(a.y) + (py(b.y) - py(a.y)) * 0.16;
-              const x2 = px(b.x) + (px(a.x) - px(b.x)) * 0.16;
-              const y2 = py(b.y) + (py(a.y) - py(b.y)) * 0.16;
+              const x1 = m.px(a.x) + (m.px(b.x) - m.px(a.x)) * 0.16;
+              const y1 = m.py(a.y) + (m.py(b.y) - m.py(a.y)) * 0.16;
+              const x2 = m.px(b.x) + (m.px(a.x) - m.px(b.x)) * 0.16;
+              const y2 = m.py(b.y) + (m.py(a.y) - m.py(b.y)) * 0.16;
               return (
                 <g key={`road${r.edgeId}`} pointerEvents="none">
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={c.edge} strokeWidth="11" strokeLinecap="round" />
@@ -556,12 +592,12 @@ export default function CatanBoard({
                   onPointerEnter={() => setHoverSpot(`e${id}`)}
                   onPointerLeave={() => setHoverSpot(null)}
                 >
-                  <line x1={px(a.x)} y1={py(a.y)} x2={px(b.x)} y2={py(b.y)} stroke="transparent" strokeWidth="22" />
+                  <line x1={m.px(a.x)} y1={m.py(a.y)} x2={m.px(b.x)} y2={m.py(b.y)} stroke="transparent" strokeWidth="22" />
                   <line
-                    x1={px(a.x) + (px(b.x) - px(a.x)) * 0.2}
-                    y1={py(a.y) + (py(b.y) - py(a.y)) * 0.2}
-                    x2={px(b.x) + (px(a.x) - px(b.x)) * 0.2}
-                    y2={py(b.y) + (py(a.y) - py(b.y)) * 0.2}
+                    x1={m.px(a.x) + (m.px(b.x) - m.px(a.x)) * 0.2}
+                    y1={m.py(a.y) + (m.py(b.y) - m.py(a.y)) * 0.2}
+                    x2={m.px(b.x) + (m.px(a.x) - m.px(b.x)) * 0.2}
+                    y2={m.py(b.y) + (m.py(a.y) - m.py(b.y)) * 0.2}
                     stroke={hot ? c.fill : '#fffbe8'}
                     strokeOpacity={hot ? 1 : 0.85}
                     strokeWidth={hot ? 9 : 6}
@@ -578,7 +614,7 @@ export default function CatanBoard({
               const v = vertexById[b.vertexId];
               const hot = spots.cities.includes(b.vertexId);
               return (
-                <g key={`b${b.vertexId}`} transform={`translate(${px(v.x)} ${py(v.y)})`} pointerEvents={hot ? undefined : 'none'}>
+                <g key={`b${b.vertexId}`} transform={`translate(${m.px(v.x)} ${m.py(v.y)})`} pointerEvents={hot ? undefined : 'none'}>
                   {b.vertexId === setupVertex && <circle r="17" fill="none" stroke="#fff6c9" strokeWidth="2.5" opacity="0.9" />}
                   {b.type === 'city' ? <CityShape color={colorOf[b.playerId]} scale={1.05} /> : <SettlementShape color={colorOf[b.playerId]} scale={1.1} />}
                 </g>
@@ -592,7 +628,7 @@ export default function CatanBoard({
               return (
                 <g
                   key={`lc${id}`}
-                  transform={`translate(${px(v.x)} ${py(v.y)})`}
+                  transform={`translate(${m.px(v.x)} ${m.py(v.y)})`}
                   className="cursor-pointer"
                   onClick={() => onVertex(id)}
                   onPointerEnter={() => setHoverSpot(`c${id}`)}
@@ -612,7 +648,7 @@ export default function CatanBoard({
               return (
                 <g
                   key={`ls${id}`}
-                  transform={`translate(${px(v.x)} ${py(v.y)})`}
+                  transform={`translate(${m.px(v.x)} ${m.py(v.y)})`}
                   className="cursor-pointer"
                   onClick={() => onVertex(id)}
                   onPointerEnter={() => setHoverSpot(`v${id}`)}
@@ -630,7 +666,7 @@ export default function CatanBoard({
 
             {/* The robber */}
             {robber && (
-              <g transform={`translate(${px(robber.x) + 30} ${py(robber.y) + 4})`} pointerEvents="none" className="transition-transform duration-300">
+              <g transform={`translate(${m.px(robber.x) + 30} ${m.py(robber.y) + 4})`} pointerEvents="none" className="transition-transform duration-300">
                 <RobberShape scale={1.25} />
               </g>
             )}

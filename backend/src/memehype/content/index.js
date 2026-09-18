@@ -57,10 +57,13 @@ function loadCustom() {
 const CUSTOM = loadCustom();
 const customUrl = (file) => `${CUSTOM_URL}/${encodeURIComponent(file)}`;
 
-// A pack file's `image`: a URL as it is, a bare name from custom/.
+// A pack file's `image`: a URL as it is, a bare name from custom/. The
+// test has to be a named constant - written inline, the `//` of the
+// protocol closes the regex and comments out the rest of the line.
+const ABSOLUTE_IMAGE = /^(https?:)?\/\//;
 function packImage(image) {
   if (!image) return null;
-  return /^(https?:)?///.test(image) || image.startsWith('/') ? image : customUrl(image);
+  return ABSOLUTE_IMAGE.test(image) || image.startsWith('/') ? image : customUrl(image);
 }
 function loadImages() {
   try {
@@ -323,9 +326,15 @@ function credits() {
     }));
 }
 
-// Files in custom/ that match no meme - usually a typo in the name.
+// Files in custom/ that match no meme - usually a typo in the name. A file
+// a pack file asks for by name is spoken for even though it is not named
+// after a card id: the trending pack names its pictures after the meme, so
+// one file serves the card on both shelves.
 function unmatchedCustom() {
-  return Object.keys(CUSTOM).filter((id) => !MEMES_BY_ID.has(id)).map((id) => CUSTOM[id]);
+  const asked = new Set([...MEMES_BY_ID.values()].map((m) => m.image).filter(Boolean));
+  return Object.keys(CUSTOM)
+    .filter((id) => !MEMES_BY_ID.has(id) && !asked.has(customUrl(CUSTOM[id])))
+    .map((id) => CUSTOM[id]);
 }
 
 module.exports = {

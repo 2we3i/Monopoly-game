@@ -25,6 +25,9 @@ function pictureCount(art = '') {
 // One picture fills the card; two or three share it.
 const ART_SIZE = { 1: 40, 2: 30, 3: 22 };
 
+// Letters and digits only, for comparing a card's name with its captions.
+const plain = (text) => String(text || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+
 export default function MemeCard({
   meme, size = 'md', className = '', label = null, style, meta = false,
 }) {
@@ -73,8 +76,10 @@ export default function MemeCard({
           captions: these are memes people know BY name, and reading it is
           what tells a player they are holding the one they think they
           are. Cards without a name (the older, drawn packs) show nothing
-          extra and look exactly as they always did. */}
-      {meta && meme.title && (
+          extra and look exactly as they always did - and neither does a
+          card whose captions already ARE its name, which is how the pack
+          built from the meme sheet writes them. */}
+      {meta && meme.title && plain(meme.title) !== plain(`${meme.top}${meme.bottom}`) && (
         <p className="relative z-10 mt-1 truncate rounded-md bg-black/45 px-1.5 py-0.5 text-center text-[10px] font-semibold tracking-wide text-white/80">
           {meme.title}
         </p>

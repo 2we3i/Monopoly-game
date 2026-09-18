@@ -16,7 +16,7 @@
 // point cards count for their owner alone until the game is over.
 
 const {
-  RESOURCES, TERRAIN_RESOURCE, GEOMETRY, ISLAND_IDS, DEFAULT_ISLAND,
+  RESOURCES, TERRAIN_RESOURCE, GEOMETRY, ISLANDS, ISLAND_IDS, DEFAULT_ISLAND,
   islandSpec, islandForPlayers, geometryFor, generateLayout, shuffle,
 } = require('./board');
 const { CatanError } = require('./errors');
@@ -87,6 +87,21 @@ const DEV_TYPES = ['knight', 'victoryPoint', 'roadBuilding', 'yearOfPlenty', 'mo
 const DEFAULT_SETTINGS = { victoryPoints: 10, turnSec: 120, island: 'auto' };
 const ISLAND_OPTIONS = ['auto', ...ISLAND_IDS];
 const TURN_SEC_OPTIONS = [0, 60, 90, 120, 180, 300];
+
+// Each island as a lobby has to describe it: the table it is built for and
+// how much of everything is on it. Measured from the island itself, so the
+// choice on screen can never drift from the board people end up playing.
+const ISLAND_INFO = ISLANDS.map((spec) => {
+  const geo = geometryFor(spec.id);
+  return {
+    id: spec.id,
+    minPlayers: spec.minPlayers,
+    maxPlayers: spec.maxPlayers,
+    hexes: geo.hexes.length,
+    ports: geo.portEdges.length,
+    bank: spec.bank,
+  };
+});
 
 function clampInt(value, min, max, fallback) {
   const n = Math.round(Number(value));
@@ -1260,6 +1275,10 @@ class CatanGame {
       createdAt: this.createdAt,
       minPlayers: MIN_PLAYERS,
       maxPlayers: MAX_PLAYERS,
+      // The islands a host can pin, and the one this table is on - or, in
+      // the lobby, the one it would get if the game started now.
+      islands: ISLAND_INFO,
+      island: this.island || this.plannedIsland(),
       turnNumber: this.turnNumber,
       costs: COSTS,
       players,

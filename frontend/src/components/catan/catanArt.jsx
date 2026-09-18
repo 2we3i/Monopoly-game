@@ -25,14 +25,26 @@ export const TERRAIN_STYLE = {
 
 export const TERRAINS = ['forest', 'hills', 'pasture', 'fields', 'mountains', 'desert'];
 
-// Player colours: the four classic piece colours, each with an outline
-// that keeps it visible on every terrain (white pieces get a dark edge).
+// Player colours: the four classic piece colours first, then the four the
+// big islands need, in the order the server hands out seats. Each has an
+// outline that keeps it visible on every terrain (white pieces get a dark
+// edge) and a lighter shade for a name on a dark panel. Eight pieces have
+// to be told apart at a glance on a crowded board, so no two of them sit
+// near each other in hue.
 export const PLAYER_COLORS = {
   red: { fill: '#d9412f', edge: '#5e140c', text: '#ff8a7a' },
   blue: { fill: '#2f6fd6', edge: '#0d2a5c', text: '#8db8ff' },
   orange: { fill: '#f08c1c', edge: '#6b3504', text: '#ffba6b' },
   white: { fill: '#f4f1e8', edge: '#2b2822', text: '#f4f1e8' },
+  green: { fill: '#2e9e52', edge: '#0d3d1e', text: '#7fe0a0' },
+  purple: { fill: '#8a4fd0', edge: '#31135c', text: '#c9a4ff' },
+  teal: { fill: '#17a2a2', edge: '#05393c', text: '#79e3e3' },
+  pink: { fill: '#e2569c', edge: '#65123c', text: '#ffa5cd' },
 };
+
+// The seats in the order the server fills them, so a lobby can show a
+// player's colour before the game has dealt one.
+export const SEAT_ORDER = ['red', 'blue', 'orange', 'white', 'green', 'purple', 'teal', 'pink'];
 
 export function playerColor(color) {
   return PLAYER_COLORS[color] || { fill: '#9aa0a6', edge: '#2b2822', text: '#cfd3d6' };

@@ -37,6 +37,21 @@ function assert(cond, msg) {
   const plain = content.memesFor('16', content.PACK_IDS).find((m) => !m.image);
   assert(!plain || (plain.imageSource === null && plain.image === null), 'a meme without any picture keeps its emoji art');
 
+  // A picture named by the pack file itself, which is how the trending
+  // pack carries one picture per meme rather than one per card: the same
+  // row is dealt on both shelves and both show the same face.
+  const trending = content.memesFor('18', ['trending']).filter((m) => m.image);
+  assert(trending.length > 0, 'the trending pack ships pictures of the memes it names');
+  assert(
+    trending.every((m) => typeof m.image === 'string' && m.image.startsWith(`${content.CUSTOM_URL}/trending-`)),
+    'a pack file\'s own image resolves to a file in custom/',
+  );
+  const onBoth = content.memesFor('16', ['trending']).filter((m) => m.image);
+  assert(
+    onBoth.length > 0 && onBoth.every((m) => trending.some((other) => other.image === m.image)),
+    'the 16+ shelf shows the same pictures as the 18+ one',
+  );
+
   const app = express();
   app.use(content.CUSTOM_URL, express.static(content.CUSTOM_DIR));
   const server = app.listen(0);

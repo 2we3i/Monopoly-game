@@ -11,7 +11,8 @@
       "art": "🔥",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-mozhno-a-zachem.jpg"
     },
     {
       "slug": "da-poebat-mne-rayan-gosling",
@@ -21,7 +22,8 @@
       "art": "😎",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-da-poebat-mne-rayan-gosling.jpg"
     },
     {
       "slug": "a-lovko-ty-eto-pridumal",
@@ -31,7 +33,8 @@
       "art": "🤡",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-a-lovko-ty-eto-pridumal.jpg"
     },
     {
       "slug": "okak",
@@ -41,7 +44,8 @@
       "art": "🫠",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-okak.png"
     },
     {
       "slug": "sam-reshu",
@@ -51,7 +55,8 @@
       "art": "🤔",
       "bg": "gold",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-sam-reshu.jpg"
     },
     {
       "slug": "znayu-no-ne-mogu-dokazat-doaks",
@@ -61,7 +66,8 @@
       "art": "🤔",
       "bg": "ink",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-znayu-no-ne-mogu-dokazat-doaks.jpg"
     },
     {
       "slug": "homyak-s-pistoletom",
@@ -71,7 +77,8 @@
       "art": "🐹",
       "bg": "candy",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-homyak-s-pistoletom.jpg"
     },
     {
       "slug": "belka-v-tornado",
@@ -81,7 +88,8 @@
       "art": "🐿️",
       "bg": "steel",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-belka-v-tornado.jpg"
     },
     {
       "slug": "shaltay-boltay-smotrit-i-ulybaetsya",
@@ -91,7 +99,8 @@
       "art": "😂",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-shaltay-boltay-smotrit-i-ulybaetsya.png"
     },
     {
       "slug": "grustnyy-homyak-s-bolshimi-glazami",
@@ -101,7 +110,8 @@
       "art": "🐹",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-grustnyy-homyak-s-bolshimi-glazami.jpg"
     },
     {
       "slug": "chilovyy-paren",
@@ -111,7 +121,8 @@
       "art": "🔥",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-chilovyy-paren.png"
     },
     {
       "slug": "absolute-cinema",
@@ -121,7 +132,8 @@
       "art": "🎬",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-absolute-cinema.jpg"
     },
     {
       "slug": "nikto-konechno-zhe-nichego-ne",
@@ -131,7 +143,8 @@
       "art": "🤡",
       "bg": "gold",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-nikto-konechno-zhe-nichego-ne.jpg"
     },
     {
       "slug": "tvar-poka-ne-gotova-k-vzaimodeystviyu",
@@ -141,7 +154,8 @@
       "art": "🫠",
       "bg": "ink",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-tvar-poka-ne-gotova-k-vzaimodeystviyu.jpg"
     },
     {
       "slug": "panicheskaya-ataka-dzhoela",
@@ -151,7 +165,8 @@
       "art": "😐",
       "bg": "candy",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-panicheskaya-ataka-dzhoela.jpg"
     },
     {
       "slug": "koshka-s-vypuchennymi-glazami",
@@ -161,7 +176,8 @@
       "art": "🐱",
       "bg": "steel",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-koshka-s-vypuchennymi-glazami.jpg"
     },
     {
       "slug": "denzel-vashington-bet-po-stolu",
@@ -171,7 +187,8 @@
       "art": "😡",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-denzel-vashington-bet-po-stolu.png"
     },
     {
       "slug": "pingvin-nigilist",
@@ -181,7 +198,8 @@
       "art": "🐧",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-pingvin-nigilist.gif"
     },
     {
       "slug": "tureckiy-strelok",
@@ -191,7 +209,8 @@
       "art": "😤",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-tureckiy-strelok.jpg"
     },
     {
       "slug": "kevin-dzheyms-uhmylyaetsya",
@@ -201,7 +220,8 @@
       "art": "🤨",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-kevin-dzheyms-uhmylyaetsya.jpg"
     },
     {
       "slug": "natasha-vstavay-my-tam-vse-uronili",
@@ -211,7 +231,8 @@
       "art": "🔥",
       "bg": "gold",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-natasha-vstavay-my-tam-vse-uronili.jpg"
     },
     {
       "slug": "kachok-doge-i-chims",
@@ -221,7 +242,8 @@
       "art": "💪",
       "bg": "ink",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-kachok-doge-i-chims.jpg"
     },
     {
       "slug": "di-kaprio-smeetsya",
@@ -231,7 +253,8 @@
       "art": "😂",
       "bg": "candy",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-di-kaprio-smeetsya.jpg"
     },
     {
       "slug": "vezi-menya-mraz",
@@ -241,7 +264,8 @@
       "art": "🫠",
       "bg": "steel",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-vezi-menya-mraz.jpg"
     },
     {
       "slug": "lya-ty-krysa",
@@ -251,7 +275,8 @@
       "art": "😐",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-lya-ty-krysa.png"
     },
     {
       "slug": "beda-s-bashkoy",
@@ -261,7 +286,8 @@
       "art": "🍕",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-beda-s-bashkoy.jpg"
     },
     {
       "slug": "parni-s-mashinoy-vremeni",
@@ -271,7 +297,8 @@
       "art": "🚗",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-parni-s-mashinoy-vremeni.jpg"
     },
     {
       "slug": "oni-ne-znayut-chto-ya",
@@ -281,7 +308,8 @@
       "art": "🥴",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-oni-ne-znayut-chto-ya.jpg"
     },
     {
       "slug": "privet-ya-podsyadu",
@@ -291,7 +319,8 @@
       "art": "😤",
       "bg": "gold",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-privet-ya-podsyadu.jpg"
     },
     {
       "slug": "ty-chevo-nadelal",
@@ -301,7 +330,8 @@
       "art": "🤨",
       "bg": "ink",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-ty-chevo-nadelal.jpg"
     },
     {
       "slug": "nu-nichego-strashnogo-tyau-tyau-tyau",
@@ -311,7 +341,8 @@
       "art": "🔥",
       "bg": "candy",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-nu-nichego-strashnogo-tyau-tyau-tyau.jpg"
     },
     {
       "slug": "igor-bogdanov-s-telefonom",
@@ -321,7 +352,8 @@
       "art": "📱",
       "bg": "steel",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-igor-bogdanov-s-telefonom.jpg"
     },
     {
       "slug": "tancuyuschie-grobovschiki",
@@ -331,7 +363,8 @@
       "art": "⚰️",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-tancuyuschie-grobovschiki.jpg"
     },
     {
       "slug": "prosto-zdravstvuy-prosto-kak-dela",
@@ -341,7 +374,8 @@
       "art": "🫠",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-prosto-zdravstvuy-prosto-kak-dela.png"
     },
     {
       "slug": "vot-eto-pa-pa-povorot",
@@ -351,7 +385,8 @@
       "art": "😐",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-vot-eto-pa-pa-povorot.png"
     },
     {
       "slug": "yes-chad",
@@ -361,7 +396,8 @@
       "art": "🗿",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-yes-chad.jpg"
     },
     {
       "slug": "moi-roditeli-v-25-ya-v-25",
@@ -371,7 +407,8 @@
       "art": "👨‍👩‍👦",
       "bg": "gold",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-moi-roditeli-v-25-ya-v-25.jpg"
     },
     {
       "slug": "habi-leym",
@@ -381,7 +418,8 @@
       "art": "🥴",
       "bg": "ink",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-habi-leym.jpg"
     },
     {
       "slug": "vy-prodaete-rybov",
@@ -391,7 +429,8 @@
       "art": "🐟",
       "bg": "candy",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-vy-prodaete-rybov.jpg"
     },
     {
       "slug": "kot-bender",
@@ -401,7 +440,8 @@
       "art": "🐱",
       "bg": "steel",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-kot-bender.jpg"
     },
     {
       "slug": "kot-stepan",
@@ -411,7 +451,8 @@
       "art": "🐱",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-kot-stepan.jpg"
     },
     {
       "slug": "na-chile-na-rasslabone",
@@ -421,7 +462,8 @@
       "art": "😎",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-na-chile-na-rasslabone.jpg"
     },
     {
       "slug": "skeletor-vernetsya-pozzhe",
@@ -431,7 +473,8 @@
       "art": "💀",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-skeletor-vernetsya-pozzhe.jpg"
     },
     {
       "slug": "povezlo-povezlo",
@@ -441,7 +484,8 @@
       "art": "😡",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-povezlo-povezlo.png"
     },
     {
       "slug": "veselyy-i-grustnyy-din-norris",
@@ -451,7 +495,8 @@
       "art": "😢",
       "bg": "gold",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-veselyy-i-grustnyy-din-norris.jpg"
     },
     {
       "slug": "mister-isklyuchitelnyy-veselyy-zhutkiy",
@@ -461,7 +506,8 @@
       "art": "🙃",
       "bg": "ink",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-mister-isklyuchitelnyy-veselyy-zhutkiy.jpg"
     },
     {
       "slug": "ryzhiy-stanovitsya-kachkom",
@@ -471,7 +517,8 @@
       "art": "💪",
       "bg": "candy",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-ryzhiy-stanovitsya-kachkom.jpg"
     },
     {
       "slug": "k-luchshemu-verno",
@@ -481,7 +528,8 @@
       "art": "🥴",
       "bg": "steel",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-k-luchshemu-verno.jpg"
     },
     {
       "slug": "net-nichego-silnee-semi",
@@ -491,7 +539,8 @@
       "art": "👨‍👩‍👦",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-net-nichego-silnee-semi.jpg"
     },
     {
       "slug": "suetu-navesti-ohota",
@@ -501,7 +550,8 @@
       "art": "🤨",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-suetu-navesti-ohota.jpg"
     },
     {
       "slug": "nu-tipa-gordon-hodorkovskiy",
@@ -511,7 +561,8 @@
       "art": "🔥",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-nu-tipa-gordon-hodorkovskiy.jpg"
     },
     {
       "slug": "kotenok-hvataetsya-za-golovu-i-krichit",
@@ -521,7 +572,8 @@
       "art": "🐱",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-kotenok-hvataetsya-za-golovu-i-krichit.jpg"
     },
     {
       "slug": "kotenok-chmonya",
@@ -531,7 +583,8 @@
       "art": "🐱",
       "bg": "gold",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-kotenok-chmonya.jpg"
     },
     {
       "slug": "uillem-defo-s-apelsinami",
@@ -541,7 +594,8 @@
       "art": "🍕",
       "bg": "ink",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-uillem-defo-s-apelsinami.jpg"
     },
     {
       "slug": "krutye-skelety",
@@ -551,7 +605,8 @@
       "art": "💀",
       "bg": "candy",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-krutye-skelety.png"
     },
     {
       "slug": "uill-smit-bet-krisa-roka",
@@ -561,7 +616,8 @@
       "art": "😡",
       "bg": "steel",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-uill-smit-bet-krisa-roka.jpg"
     },
     {
       "slug": "nedovolnyy-princ-lui",
@@ -571,7 +627,8 @@
       "art": "💀",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-nedovolnyy-princ-lui.jpg"
     },
     {
       "slug": "doktor-livsi-idet",
@@ -581,7 +638,8 @@
       "art": "🩺",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-doktor-livsi-idet.jpg"
     },
     {
       "slug": "mudroe-tainstvennoe-derevo",
@@ -591,7 +649,8 @@
       "art": "🌳",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-mudroe-tainstvennoe-derevo.jpg"
     },
     {
       "slug": "houmlender-nervno-vydyhaet",
@@ -601,7 +660,8 @@
       "art": "🤨",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-houmlender-nervno-vydyhaet.jpg"
     },
     {
       "slug": "uensdey-tancuet",
@@ -611,7 +671,8 @@
       "art": "🕺",
       "bg": "gold",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-uensdey-tancuet.jpg"
     },
     {
       "slug": "patrik-beytman-v-naushnikah",
@@ -621,7 +682,8 @@
       "art": "😎",
       "bg": "ink",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-patrik-beytman-v-naushnikah.png"
     },
     {
       "slug": "smeyuschiysya-endryu-garfild",
@@ -631,7 +693,8 @@
       "art": "🤡",
       "bg": "candy",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-smeyuschiysya-endryu-garfild.jpg"
     },
     {
       "slug": "tolstyak-est-piccu-i-bet-alligatora",
@@ -641,7 +704,8 @@
       "art": "😡",
       "bg": "steel",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-tolstyak-est-piccu-i-bet-alligatora.jpg"
     },
     {
       "slug": "gigachad",
@@ -651,7 +715,8 @@
       "art": "🗿",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-gigachad.jpg"
     },
     {
       "slug": "tinkov-ocenivaet",
@@ -661,7 +726,8 @@
       "art": "🙃",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-tinkov-ocenivaet.jpg"
     },
     {
       "slug": "nikolas-keydzh-i-pedro-paskal-v-mashine",
@@ -671,7 +737,8 @@
       "art": "🚗",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-nikolas-keydzh-i-pedro-paskal-v-mashine.jpg"
     },
     {
       "slug": "pedro-paskal-est-sendvich",
@@ -681,7 +748,8 @@
       "art": "🍕",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-pedro-paskal-est-sendvich.jpg"
     },
     {
       "slug": "smagdzhek",
@@ -691,7 +759,8 @@
       "art": "😤",
       "bg": "gold",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-smagdzhek.jpg"
     },
     {
       "slug": "surprise-surprise",
@@ -701,7 +770,8 @@
       "art": "🤨",
       "bg": "ink",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-surprise-surprise.jpg"
     },
     {
       "slug": "samouverennyy-sharikov",
@@ -711,7 +781,8 @@
       "art": "🔥",
       "bg": "candy",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-samouverennyy-sharikov.jpg"
     },
     {
       "slug": "krichaschiy-daman",
@@ -721,7 +792,8 @@
       "art": "🦫",
       "bg": "steel",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-krichaschiy-daman.jpg"
     },
     {
       "slug": "advokat-i-devushka-v-sude",
@@ -731,7 +803,8 @@
       "art": "⚖️",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-advokat-i-devushka-v-sude.jpg"
     },
     {
       "slug": "pedro-pedro-tancuyuschiy-enot",
@@ -741,7 +814,8 @@
       "art": "🦝",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-pedro-pedro-tancuyuschiy-enot.png"
     },
     {
       "slug": "molchat-seychas-govorit",
@@ -751,7 +825,8 @@
       "art": "😐",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-molchat-seychas-govorit.jpg"
     },
     {
       "slug": "o-bozhe-novaya-emociya",
@@ -761,7 +836,8 @@
       "art": "🙃",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-o-bozhe-novaya-emociya.jpg"
     },
     {
       "slug": "bu-ispugalsya-ne-boysya-ya-drug",
@@ -771,7 +847,8 @@
       "art": "😰",
       "bg": "gold",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-bu-ispugalsya-ne-boysya-ya-drug.jpg"
     },
     {
       "slug": "nikolay-vasilenko",
@@ -781,7 +858,8 @@
       "art": "🥴",
       "bg": "ink",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-nikolay-vasilenko.jpg"
     },
     {
       "slug": "substanciya-luchshaya-versiya-sebya",
@@ -791,7 +869,8 @@
       "art": "🕺",
       "bg": "candy",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-substanciya-luchshaya-versiya-sebya.jpg"
     },
     {
       "slug": "karas-dureet-s-etoy-prikormki",
@@ -801,7 +880,8 @@
       "art": "🎣",
       "bg": "steel",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-karas-dureet-s-etoy-prikormki.jpg"
     },
     {
       "slug": "a-nu-pokazhi",
@@ -811,7 +891,8 @@
       "art": "🔥",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-a-nu-pokazhi.jpg"
     },
     {
       "slug": "zhenschina-mechetsya",
@@ -821,7 +902,8 @@
       "art": "😎",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-zhenschina-mechetsya.jpg"
     },
     {
       "slug": "lisan-al-gaib-kak-bylo-predskazano",
@@ -831,7 +913,8 @@
       "art": "🤡",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-lisan-al-gaib-kak-bylo-predskazano.jpg"
     },
     {
       "slug": "gigachad-filtr-myuing",
@@ -841,7 +924,8 @@
       "art": "🗿",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-gigachad-filtr-myuing.jpg"
     },
     {
       "slug": "maga-siyay",
@@ -851,7 +935,8 @@
       "art": "😐",
       "bg": "gold",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-maga-siyay.jpg"
     },
     {
       "slug": "umnyy-chelovek-v-ochkah-skachat-oboi",
@@ -861,7 +946,8 @@
       "art": "🤓",
       "bg": "ink",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-umnyy-chelovek-v-ochkah-skachat-oboi.jpg"
     },
     {
       "slug": "mama-vyzyvay-taksi",
@@ -871,7 +957,8 @@
       "art": "🚗",
       "bg": "candy",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-mama-vyzyvay-taksi.jpg"
     },
     {
       "slug": "a-niche-tot-fakt-chto",
@@ -881,7 +968,8 @@
       "art": "🥴",
       "bg": "steel",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-a-niche-tot-fakt-chto.jpg"
     },
     {
       "slug": "yura-borisov-za-stolom",
@@ -891,7 +979,8 @@
       "art": "😤",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-yura-borisov-za-stolom.jpg"
     },
     {
       "slug": "tancuyuschiy-dzhon-hemm",
@@ -901,7 +990,8 @@
       "art": "🕺",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-tancuyuschiy-dzhon-hemm.jpg"
     },
     {
       "slug": "belyy-kot-govorit-sami-posudite",
@@ -911,7 +1001,8 @@
       "art": "🐱",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-belyy-kot-govorit-sami-posudite.png"
     },
     {
       "slug": "ya-nichego-ne-hochu-ya-nehochun",
@@ -921,7 +1012,8 @@
       "art": "😎",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-ya-nichego-ne-hochu-ya-nehochun.jpg"
     },
     {
       "slug": "staryy-roker-s-vypuchennymi-glazami",
@@ -931,7 +1023,8 @@
       "art": "🎸",
       "bg": "gold",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-staryy-roker-s-vypuchennymi-glazami.jpg"
     },
     {
       "slug": "nadmennaya-sidni-suinni",
@@ -941,7 +1034,8 @@
       "art": "🫠",
       "bg": "ink",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-nadmennaya-sidni-suinni.jpg"
     },
     {
       "slug": "obezyanka-panch",
@@ -951,7 +1045,8 @@
       "art": "🐒",
       "bg": "candy",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-obezyanka-panch.jpg"
     },
     {
       "slug": "darya-zarykovskaya-toksichnaya-nachalnica",
@@ -961,7 +1056,8 @@
       "art": "💼",
       "bg": "steel",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-darya-zarykovskaya-toksichnaya-nachalnica.jpg"
     },
     {
       "slug": "muzhchina-na-yahte",
@@ -971,7 +1067,8 @@
       "art": "🚗",
       "bg": "flame",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-muzhchina-na-yahte.jpg"
     },
     {
       "slug": "razocharovannyy-usatyy-muzhchina-redzhinald-skulinski",
@@ -981,7 +1078,8 @@
       "art": "🥴",
       "bg": "acid",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-razocharovannyy-usatyy-muzhchina-redzhinald-skulinski.jpg"
     },
     {
       "slug": "odissey-krichit",
@@ -991,7 +1089,8 @@
       "art": "😱",
       "bg": "violet",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-odissey-krichit.png"
     },
     {
       "slug": "vot-takaya-vot-huynya-sobachka",
@@ -1001,7 +1100,8 @@
       "art": "🤨",
       "bg": "ocean",
       "addedAt": "2026-09-17",
-      "missingSince": null
+      "missingSince": null,
+      "image": "trending-vot-takaya-vot-huynya-sobachka.jpg"
     }
   ]
 }

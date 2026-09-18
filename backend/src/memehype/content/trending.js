@@ -67,6 +67,13 @@ function memesFor(rating) {
         // picture. It is a reference for the people editing the pack, not
         // a caption - the card face never shows a URL.
         source: row.link || null,
+        // The meme's own picture, taken from that page by
+        // scripts/find-trending-images.js and kept with the row. It lives
+        // on the row rather than under the card's id because one row is
+        // dealt as two cards - the same meme on the 16+ and the 18+ shelf -
+        // and both want the same picture. A Creator edit still overrides
+        // it, as it does for every other card.
+        image: row.image || null,
       }];
     });
 }

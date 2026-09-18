@@ -123,7 +123,12 @@ function main() {
     assert(CATEGORY_KEYS.every((k) => other.cards[k] === null), 'another player\'s cards are hidden');
     assert(CATEGORY_KEYS.every((k) => self.cards[k] !== null), 'own cards are visible');
     const secret = game.getPlayer('p3').cards.health.id;
-    const raw = JSON.stringify(viewer);
+    // Everything but the room's settings: the settings list the action
+    // deck by name, and a card of that deck can share a name with a
+    // characteristic card ("immunity" is both). A public list of what the
+    // room is playing with is not a leak of who was dealt what.
+    const { settings, ...secretly } = viewer;
+    const raw = JSON.stringify(secretly);
     assert(!raw.includes(`"${secret}"`) || Object.values(game.getPlayer('p2').cards).some((card) => card.id === secret), 'a hidden card id is not in the payload');
     const first = game.getPlayer(game.currentTurnId());
     game.reveal(first.id, 'profession');

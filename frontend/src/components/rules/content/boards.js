@@ -105,6 +105,7 @@ export const catan = {
   special: [
     { title: L('The distance rule', 'Правило расстояния'), text: L('No two settlements may sit on neighbouring corners.', 'Два поселения не могут стоять на соседних узлах.') },
     { title: L('Longest road and largest army', 'Длинная дорога и большая армия'), text: L('Two points each, and they move to whoever overtakes you.', 'По два очка каждая, и они переходят к тому, кто вас обгонит.') },
+    { title: L('Three islands', 'Три острова'), text: L('Up to four players settle the classic 19-hex island, five or six a 31-hex one, seven or eight the grand 37-hex island. The bank, the development deck and the harbours grow with it; the host can also pin an island by hand.', 'До четырёх игроков заселяют классический остров из 19 гексов, пятеро-шестеро — из 31, семеро-восьмеро — огромный из 37. Вместе с островом растут банк, колода развития и число портов; хозяин комнаты может выбрать остров и вручную.') },
   ],
 
   end: [

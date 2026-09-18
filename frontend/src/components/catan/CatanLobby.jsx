@@ -12,9 +12,11 @@ import FramedAvatar from '../../cosmetics/FramedAvatar';
 import { StyledName } from '../../cosmetics/Cosmetics';
 import { Segmented } from '../mafia/MafiaSettings';
 import { PieceIcon, CostChips } from './CatanParts';
-import { playerColor } from './catanArt';
+import { playerColor, SEAT_ORDER } from './catanArt';
 
-export const SEAT_COLORS = ['red', 'blue', 'orange', 'white'];
+// The colours in the order the server hands out seats, so the lobby can
+// show a player their colour before the game has dealt one.
+export const SEAT_COLORS = SEAT_ORDER;
 
 const COSTS = {
   road: { wood: 1, brick: 1 },
@@ -38,6 +40,12 @@ export default function CatanLobby({
   const enough = state.players.length >= state.minPlayers;
   const s = state.settings;
   const costs = state.costs || COSTS;
+  const myColor = me?.color || SEAT_COLORS[Math.max(0, state.players.indexOf(me)) % SEAT_COLORS.length];
+  // The islands the host can pin, and the one this table would get right
+  // now - both come from the server, so the lobby never has to know how
+  // big a board is or who it is meant for.
+  const islands = state.islands || [];
+  const planned = islands.find((i) => i.id === state.island) || null;
 
   const copy = async (kind, text) => {
     try {
@@ -52,6 +60,16 @@ export default function CatanLobby({
       disabled={!isHost}
       value={s[key]}
       onChange={(v) => actions.updateSettings({ [key]: Number(v) })}
+      options={values.map((v) => ({ value: v, label: format(v) }))}
+    />
+  );
+
+  // The same control for a setting whose value is a name, not a number.
+  const choice = (key, values, format) => (
+    <Segmented
+      disabled={!isHost}
+      value={s[key]}
+      onChange={(v) => actions.updateSettings({ [key]: v })}
       options={values.map((v) => ({ value: v, label: format(v) }))}
     />
   );
@@ -95,7 +113,10 @@ export default function CatanLobby({
             </div>
             <ul className="flex flex-col gap-1.5">
               {state.players.map((p, i) => {
-                const color = SEAT_COLORS[i % SEAT_COLORS.length];
+                // In a game already under way the colour is the server's;
+                // in the lobby it is the seat, which is what the server
+                // will deal.
+                const color = p.color || SEAT_COLORS[i % SEAT_COLORS.length];
                 return (
                   <li key={p.id} className={`flex items-center gap-2.5 rounded-xl border px-3 py-2 ${p.ready || p.isHost ? 'border-go/35 bg-go/[0.07]' : 'border-white/[0.07] bg-white/[0.025]'}`}>
                     <FramedAvatar cosmetics={p.cosmetics} join>
@@ -133,6 +154,32 @@ export default function CatanLobby({
               <h2 className="flex-1 text-[13px] font-bold uppercase tracking-wide text-parch/60">{t('catan.settings.title')}</h2>
               {!isHost && <span className="text-[11px] text-parch/35">{t('catan.settings.hostOnly')}</span>}
             </div>
+            {islands.length > 1 && (
+              <div className="flex flex-col gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[13px] font-semibold text-parch">{t('catan.settings.island')}</p>
+                    <p className="text-[11.5px] text-parch/40">{t('catan.settings.islandHint')}</p>
+                  </div>
+                  {/* The buttons say how much land, which is the whole of
+                      the difference and fits; the line underneath names
+                      the island the table would actually get. */}
+                  {choice('island', ['auto', ...islands.map((i) => i.id)], (v) => {
+                    const spec = islands.find((i) => i.id === v);
+                    return spec ? `⬢ ${spec.hexes}` : t('catan.island.auto');
+                  })}
+                </div>
+                {planned && (
+                  <p className="text-[11.5px] text-parch/55">
+                    <span className="font-semibold text-parch/75">{t(`catan.island.${planned.id}`)}</span>
+                    {' · '}
+                    {t('catan.settings.islandSize', {
+                      hexes: planned.hexes, ports: planned.ports, min: planned.minPlayers, max: planned.maxPlayers,
+                    })}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
               <div>
                 <p className="text-[13px] font-semibold text-parch">{t('catan.settings.victoryPoints')}</p>
@@ -158,7 +205,7 @@ export default function CatanLobby({
           <div className="grid gap-2 sm:grid-cols-2">
             {['road', 'settlement', 'city', 'dev'].map((kind) => (
               <div key={kind} className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2">
-                <PieceIcon kind={kind} color={SEAT_COLORS[Math.max(0, state.players.findIndex((p) => p.isYou)) % 4]} />
+                <PieceIcon kind={kind} color={myColor} />
                 <div className="min-w-0 flex-1">
                   <p className="text-[13px] font-semibold text-parch">{t(`catan.build.${kind}`)}</p>
                   <p className="text-[11.5px] text-parch/45">{t(`catan.build.${kind}Gives`)}</p>

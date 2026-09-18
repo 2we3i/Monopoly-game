@@ -250,7 +250,7 @@ export default function MainMenu({
     { id: 'mafia', minPlayers: 4, maxPlayers: 15 },
     { id: 'citadels', minPlayers: 2, maxPlayers: 7 },
     { id: 'bunker', minPlayers: 4, maxPlayers: 16 },
-    { id: 'catan', minPlayers: 2, maxPlayers: 4 },
+    { id: 'catan', minPlayers: 2, maxPlayers: 8 },
     { id: 'cosmic', minPlayers: 3, maxPlayers: 5 },
     { id: 'throne', minPlayers: 2, maxPlayers: 6 },
   ]);
