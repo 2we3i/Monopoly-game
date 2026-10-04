@@ -66,7 +66,6 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/economy', economyRoutes);
 app.use('/api/social', socialRoutes);
-app.use('/api', require('./routes/dashboardStats'));
 app.use('/api', apiRoutes);
 // Uploaded avatars served as static files under /avatars - the path
 // stored on an account is already the exact URL a client requests. This
