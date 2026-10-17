@@ -295,6 +295,11 @@ function registerCosmicHandlers(io) {
           throw new CosmicError('Nickname is required.');
         }
         const player = game.addPlayer({ ...identity, socketId: socket.id });
+        // Back inside the grace period: nothing happened at all. A phone
+        // that locked its screen or switched apps for a moment comes back
+        // through here, and must not be dropped twenty seconds later.
+        liveRoom.disarmDrop(game.roomCode, player.id);
+        liveRoom.unwatch(socket);
         socket.join(game.roomCode);
         socket.data.cosmicRoom = game.roomCode;
         socket.data.cosmicPlayerId = player.id;

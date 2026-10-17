@@ -23,6 +23,9 @@ const { io: ioClient } = require('socket.io-client');
 const { registerMafiaHandlers } = require('../src/socket/mafiaHandler');
 const { registerThroneHandlers } = require('../src/socket/throneHandler');
 const { registerBunkerHandlers } = require('../src/socket/bunkerHandler');
+const { registerCitadelsHandlers } = require('../src/socket/citadelsHandler');
+const { registerCatanHandlers } = require('../src/socket/catanHandler');
+const { registerCosmicHandlers } = require('../src/socket/cosmicHandler');
 const roomManager = require('../src/game/RoomManager');
 const drops = require('../src/platform/dropTimers');
 const spectators = require('../src/platform/spectators');
@@ -33,6 +36,9 @@ const io = new Server(server, { cors: { origin: '*' } });
 registerMafiaHandlers(io);
 registerThroneHandlers(io);
 registerBunkerHandlers(io);
+registerCitadelsHandlers(io);
+registerCatanHandlers(io);
+registerCosmicHandlers(io);
 
 let passed = 0;
 function assert(cond, msg) {
@@ -234,38 +240,40 @@ async function throneScenarios() {
 }
 
 // A phone that locks its screen or switches apps drops its socket and
-// comes back through bunker:join a moment later. The seat must be safe
+// comes back through <game>:join a moment later. The seat must be safe
 // from then on - not emptied when the twenty seconds it was given run out.
-async function bunkerScenarios() {
+// Every game that seats players through its own join event runs this.
+async function reconnectScenario(game, title, hostName) {
   // eslint-disable-next-line no-console
-  console.log('\nBunker rooms');
-  const host = new Client('bunker:state', 'bunker:join');
-  const phone = new Client('bunker:state', 'bunker:join');
+  console.log(`\n${title} rooms`);
+  const host = new Client(`${game}:state`, `${game}:join`);
+  const phone = new Client(`${game}:state`, `${game}:join`);
   await Promise.all([host, phone].map((c) => c.ready()));
 
-  const account = registerAccount('Bea');
-  const created = await emit(host.socket, 'bunker:create', { token: account.token });
-  assert(created.ok === true, 'a Bunker room is created');
+  const account = registerAccount(hostName);
+  const created = await emit(host.socket, `${game}:create`, { token: account.token });
+  assert(created.ok === true, `${title}: a room is created`);
   const { roomCode } = created;
   host.rejoin = { roomCode, token: account.token };
   phone.rejoin = {
-    roomCode, nickname: 'Phone', playerId: 'phone-1', guestKey: 'p'.repeat(40),
+    roomCode, nickname: 'Phone', playerId: `${game}-phone`, guestKey: 'p'.repeat(40),
   };
-  await emit(phone.socket, 'bunker:join', phone.rejoin);
-  await host.waitFor((s) => s.players.length === 2, 'the phone has a seat');
+  await emit(phone.socket, `${game}:join`, phone.rejoin);
+  const id = `${game}-phone`;
+  await host.waitFor((s) => !!seatOf(s, id), `${title}: the phone has a seat`);
 
   phone.socket.io.engine.close();
-  await host.waitFor((s) => seatOf(s, 'phone-1') && !seatOf(s, 'phone-1').connected, 'the table sees the phone drop');
-  assert(typeof seatOf(host.state, 'phone-1').dropsAt === 'number', 'the countdown starts');
+  await host.waitFor((s) => seatOf(s, id) && !seatOf(s, id).connected, `${title}: the table sees the phone drop`);
+  assert(typeof seatOf(host.state, id).dropsAt === 'number', `${title}: the countdown starts`);
 
   await new Promise((r) => phone.socket.once('connect', r));
-  await host.waitFor((s) => seatOf(s, 'phone-1')?.connected, 'the phone is back');
-  assert(seatOf(host.state, 'phone-1').dropsAt === null, 'coming back in time clears the countdown');
-  assert(drops.deadlineOf(roomCode, 'phone-1') === null, 'the timer is disarmed');
+  await host.waitFor((s) => seatOf(s, id)?.connected, `${title}: the phone is back`);
+  assert(seatOf(host.state, id).dropsAt === null, `${title}: coming back in time clears the countdown`);
+  assert(drops.deadlineOf(roomCode, id) === null, `${title}: the timer is disarmed`);
 
   await wait(1000);
-  const seat = seatOf(host.state, 'phone-1');
-  assert(!!seat && !seat.left && !seat.exitReason, 'the seat is still there after the grace period has passed');
+  const seat = seatOf(host.state, id);
+  assert(!!seat && !seat.left && !seat.exitReason, `${title}: the seat is still there after the grace period has passed`);
 
   [host, phone].forEach((c) => c.close());
 }
@@ -274,7 +282,10 @@ async function run() {
   await new Promise((resolve) => server.listen(PORT, resolve));
   await mafiaScenarios();
   await throneScenarios();
-  await bunkerScenarios();
+  await reconnectScenario('bunker', 'Bunker', 'Bea');
+  await reconnectScenario('citadels', 'Citadels', 'Cid');
+  await reconnectScenario('catan', 'Catan', 'Cat');
+  await reconnectScenario('cosmic', 'Cosmic Encounter', 'Cos');
   await wait(100);
   // eslint-disable-next-line no-console
   console.log(`\n=== LIVE ROOM TESTS PASSED (${passed} checks) ===`);
