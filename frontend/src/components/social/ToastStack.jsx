@@ -27,7 +27,7 @@ export default function ToastStack() {
   const social = useSocial();
   if (!social.toasts.length) return null;
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[85] flex w-[min(92vw,360px)] flex-col gap-2 4xl:w-[440px]" role="status" aria-live="polite">
+    <div className="toast-stack pointer-events-none fixed bottom-4 right-4 z-[85] flex w-[min(92vw,360px)] flex-col gap-2 4xl:w-[440px]" role="status" aria-live="polite">
       {social.toasts.map((toast) => (
         <Toast
           key={toast.key}

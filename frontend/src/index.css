@@ -372,6 +372,19 @@
 .motion-off .bunker-anim { animation: none !important; }
 .motion-off .bunker-out { filter: grayscale(0.85) brightness(0.72); }
 
+/* The Bunker's phone layout is one screen tall - header, tabs, tab bar -
+   and scrolls inside. dvh follows the browser's own toolbars; vh is the
+   fallback for browsers that do not know it. Toasts drop in from the top
+   edge there, so they never cover the buttons along the bottom. */
+.bunker-phone {
+  height: 100vh;
+  height: 100dvh;
+}
+body:has(.bunker-phone) .toast-stack {
+  top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
+  bottom: auto;
+}
+
 /* ---------------------------------------------------------------------
    ЧПОК: black theme cards and white letter cards on a dark table with a
    low red-violet glow.

@@ -6,6 +6,7 @@
 
 import { bunkerExtraEn, bunkerExtraRu } from './bunkerExtraTranslations';
 import { bunkerNewEn, bunkerNewRu } from './bunkerNewTranslations';
+import { bunkerMobileEn, bunkerMobileRu } from './bunkerMobileTranslations';
 
 const baseEn = {
   'menu.bunker.title': 'Bunker',
@@ -305,5 +306,9 @@ const baseRu = {
   'bunker.system.PLAYER_RECONNECTED': '{name} вернулся(ась).',
 };
 
-export const bunkerEn = { ...baseEn, ...bunkerExtraEn, ...bunkerNewEn };
-export const bunkerRu = { ...baseRu, ...bunkerExtraRu, ...bunkerNewRu };
+export const bunkerEn = {
+  ...baseEn, ...bunkerExtraEn, ...bunkerNewEn, ...bunkerMobileEn,
+};
+export const bunkerRu = {
+  ...baseRu, ...bunkerExtraRu, ...bunkerNewRu, ...bunkerMobileRu,
+};

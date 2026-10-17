@@ -17,6 +17,7 @@ import { useSocket } from './hooks/useSocket';
 import { useMafia } from './hooks/useMafia';
 import { useCitadels } from './hooks/useCitadels';
 import { useBunker } from './hooks/useBunker';
+import { usePhoneLayout } from './hooks/usePhoneLayout';
 import { useCatan } from './hooks/useCatan';
 import { useCosmic } from './hooks/useCosmic';
 import { useThrone } from './hooks/useThrone';
@@ -45,6 +46,9 @@ const CitadelsLobby = lazy(() => import('./components/citadels/CitadelsLobby'));
 const CitadelsGame = lazy(() => import('./components/citadels/CitadelsGame'));
 const BunkerLobby = lazy(() => import('./components/bunker/BunkerLobby'));
 const BunkerGame = lazy(() => import('./components/bunker/BunkerGame'));
+// The Bunker's own phone layout: tabs, a pinned action bar, big buttons.
+const BunkerMobileLobby = lazy(() => import('./components/bunker/BunkerMobileLobby'));
+const BunkerMobile = lazy(() => import('./components/bunker/BunkerMobile'));
 const CatanLobby = lazy(() => import('./components/catan/CatanLobby'));
 const CatanGame = lazy(() => import('./components/catan/CatanGame'));
 const CosmicLobby = lazy(() => import('./components/cosmic/CosmicLobby'));
@@ -201,6 +205,7 @@ function AppShell({
   const mafia = useMafia(auth.token, { enabled: true });
   const citadels = useCitadels(auth.token);
   const bunker = useBunker(auth.token);
+  const phone = usePhoneLayout();
   const catan = useCatan(auth.token);
   const cosmic = useCosmic(auth.token);
   const throne = useThrone(auth.token);
@@ -491,13 +496,15 @@ function AppShell({
   // --- Bunker --------------------------------------------------------
   if (bunker.state && bunker.roomCode) {
     const leave = () => { bunker.leaveRoom(); setHub(null); };
+    const BunkerRoom = phone ? BunkerMobileLobby : BunkerLobby;
+    const BunkerTable = phone ? BunkerMobile : BunkerGame;
     return (
       <>
         <ConnectionBanner connected={bunker.connected} connectionError={null} />
         <ErrorBanner message={bunker.error} />
         {bunker.state.phase === 'LOBBY'
           ? (
-            <BunkerLobby
+            <BunkerRoom
               state={bunker.state}
               actions={bunker.actions}
               openSettings={bunker.settingsRequested}
@@ -506,7 +513,7 @@ function AppShell({
             />
           )
           : (
-            <BunkerGame
+            <BunkerTable
               state={bunker.state}
               chat={bunker.chat}
               actions={bunker.actions}

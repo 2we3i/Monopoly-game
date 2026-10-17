@@ -101,6 +101,7 @@ const ChatLine = memo(({
       <div className={`cv-row flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
         <span className="mb-0.5 flex max-w-full items-center gap-1.5 px-1 text-[10.5px] font-semibold text-parch/40 4xl:text-[12px]">
           {msg.color && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: msg.color }} />}
+          {channelBadge?.(msg)}
           {name}
         </span>
         <span

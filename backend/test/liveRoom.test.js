@@ -22,6 +22,7 @@ const { io: ioClient } = require('socket.io-client');
 
 const { registerMafiaHandlers } = require('../src/socket/mafiaHandler');
 const { registerThroneHandlers } = require('../src/socket/throneHandler');
+const { registerBunkerHandlers } = require('../src/socket/bunkerHandler');
 const roomManager = require('../src/game/RoomManager');
 const drops = require('../src/platform/dropTimers');
 const spectators = require('../src/platform/spectators');
@@ -31,6 +32,7 @@ const server = http.createServer();
 const io = new Server(server, { cors: { origin: '*' } });
 registerMafiaHandlers(io);
 registerThroneHandlers(io);
+registerBunkerHandlers(io);
 
 let passed = 0;
 function assert(cond, msg) {
@@ -231,10 +233,48 @@ async function throneScenarios() {
   [host, lord, watcher].forEach((c) => c.close());
 }
 
+// A phone that locks its screen or switches apps drops its socket and
+// comes back through bunker:join a moment later. The seat must be safe
+// from then on - not emptied when the twenty seconds it was given run out.
+async function bunkerScenarios() {
+  // eslint-disable-next-line no-console
+  console.log('\nBunker rooms');
+  const host = new Client('bunker:state', 'bunker:join');
+  const phone = new Client('bunker:state', 'bunker:join');
+  await Promise.all([host, phone].map((c) => c.ready()));
+
+  const account = registerAccount('Bea');
+  const created = await emit(host.socket, 'bunker:create', { token: account.token });
+  assert(created.ok === true, 'a Bunker room is created');
+  const { roomCode } = created;
+  host.rejoin = { roomCode, token: account.token };
+  phone.rejoin = {
+    roomCode, nickname: 'Phone', playerId: 'phone-1', guestKey: 'p'.repeat(40),
+  };
+  await emit(phone.socket, 'bunker:join', phone.rejoin);
+  await host.waitFor((s) => s.players.length === 2, 'the phone has a seat');
+
+  phone.socket.io.engine.close();
+  await host.waitFor((s) => seatOf(s, 'phone-1') && !seatOf(s, 'phone-1').connected, 'the table sees the phone drop');
+  assert(typeof seatOf(host.state, 'phone-1').dropsAt === 'number', 'the countdown starts');
+
+  await new Promise((r) => phone.socket.once('connect', r));
+  await host.waitFor((s) => seatOf(s, 'phone-1')?.connected, 'the phone is back');
+  assert(seatOf(host.state, 'phone-1').dropsAt === null, 'coming back in time clears the countdown');
+  assert(drops.deadlineOf(roomCode, 'phone-1') === null, 'the timer is disarmed');
+
+  await wait(1000);
+  const seat = seatOf(host.state, 'phone-1');
+  assert(!!seat && !seat.left && !seat.exitReason, 'the seat is still there after the grace period has passed');
+
+  [host, phone].forEach((c) => c.close());
+}
+
 async function run() {
   await new Promise((resolve) => server.listen(PORT, resolve));
   await mafiaScenarios();
   await throneScenarios();
+  await bunkerScenarios();
   await wait(100);
   // eslint-disable-next-line no-console
   console.log(`\n=== LIVE ROOM TESTS PASSED (${passed} checks) ===`);

@@ -25,7 +25,7 @@ import {
 } from './BunkerCards';
 import GameGuide from '../rules/GameGuide';
 
-function useCountdown(endsAt) {
+export function useCountdown(endsAt) {
   const [left, setLeft] = useState(() => (endsAt ? Math.max(0, endsAt - Date.now()) : 0));
   useEffect(() => {
     if (!endsAt) { setLeft(0); return undefined; }
@@ -89,7 +89,7 @@ function Stat({
   );
 }
 
-function BunkerInfo({
+export function BunkerInfo({
   state, config, language, t,
 }) {
   const cat = catastropheOf(config, state.catastrophe?.id, language);
@@ -213,7 +213,7 @@ const EFFECT_TONE = {
   ill: 'bg-orange-500/20 text-orange-200',
 };
 
-function EffectPills({ effects, t }) {
+export function EffectPills({ effects, t }) {
   const shown = [...new Set(effects || [])].filter((e) => EFFECT_TONE[e]);
   if (!shown.length) return null;
   return (
@@ -406,7 +406,7 @@ function DiscussionPanel({ state, t, actions }) {
 // Nothing is sent by a single tap: a vote against a person is confirmed
 // first, with the consequence spelled out, so a mis-tap can never put
 // somebody outside.
-function VoteConfirm({
+export function VoteConfirm({
   target, state, t, onConfirm, onCancel,
 }) {
   const multi = state.vote.mode === 'multi';
@@ -547,7 +547,7 @@ function VotePanel({ state, t, actions }) {
   );
 }
 
-function Tally({
+export function Tally({
   vote, players, t, language,
 }) {
   const max = Math.max(1, ...vote.tally.map((r) => r.votes));
@@ -580,7 +580,7 @@ function Tally({
   );
 }
 
-function ResultPanel({
+export function ResultPanel({
   state, t, language, actions,
 }) {
   const vote = state.lastVote;
