@@ -54,7 +54,7 @@ function primaryActionFor({ gameState, me, isMyTurn, actions, t }) {
 }
 
 export default function ActionDock({
-  gameState, me, isMyTurn, actions, onOpenTrade, onOpenManage, tradeCount, propertyCount, diceSlot,
+  gameState, me, isMyTurn, actions, onOpenTrade, onOpenManage, tradeCount, propertyCount, diceSlot, compact = false,
 }) {
   const { t } = useTranslation();
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
@@ -79,6 +79,71 @@ export default function ActionDock({
 
   if (!me) return null;
   const PrimaryIcon = primary?.icon;
+
+  // On a phone the dock is one row pinned under the board: whose turn it
+  // is already sits in the header, so only the buttons stay.
+  if (compact) {
+    const jailFine = gameState.rules?.jailFine ?? 50;
+    return (
+      <div className="flex flex-col gap-2 border-t border-white/[0.08] bg-black/45 px-3 py-2 backdrop-blur-xl">
+        {inDebt && (
+          <div className="flex items-center gap-2 rounded-lg border border-rent/40 bg-rent/15 px-3 py-2">
+            <Icon.warning className="h-4 w-4 shrink-0 text-rent-light" />
+            <p className="min-w-0 flex-1 text-[12.5px] font-medium leading-snug text-rent-light">{t('game.inDebt', { amount: Math.abs(me.money) })}</p>
+            <button type="button" onClick={actions.declareBankruptcy} className="btn-danger shrink-0 px-2.5 py-1.5 text-[12px]">
+              {t('game.declareBankruptcy')}
+            </button>
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          {showJail ? (
+            <div className="flex min-w-0 flex-1 gap-2">
+              <button type="button" onClick={actions.rollDice} className="btn-primary min-w-0 flex-1 px-2 py-3 text-[14px]">
+                <Icon.dice className="h-5 w-5" />
+                {t('game.tryForDoubles')}
+              </button>
+              <button type="button" onClick={actions.payJailFine} disabled={me.money < jailFine} className="btn-ghost shrink-0 px-3 py-3 text-[14px]" title={t('game.payJailFine', { amount: jailFine })}>
+                <Icon.cash className="h-4 w-4" />
+                ${jailFine}
+              </button>
+              {me.getOutOfJailFreeCards > 0 && (
+                <button type="button" onClick={actions.useJailCard} className="btn-ghost shrink-0 px-3 py-3" title={t('game.useJailCard')} aria-label={t('game.useJailCard')}>
+                  <Icon.scroll className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          ) : primary ? (
+            <button
+              type="button"
+              onClick={primary.onClick}
+              disabled={primary.disabled || !primary.onClick}
+              className={`${primary.muted ? 'btn-ghost' : primary.key === 'end' ? 'btn-success' : 'btn-primary'} min-w-0 flex-1 px-2 py-3 text-[15px]`}
+            >
+              {PrimaryIcon && <PrimaryIcon className="h-5 w-5" />}
+              <span className="truncate">{primary.label}</span>
+            </button>
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-white/[0.07] bg-white/[0.02] px-2 py-3 text-[13px] text-parch/40">
+              <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-parch/40" />
+              <span className="truncate">{t('dock.waitingFor', { name: currentPlayer?.nickname || '' })}</span>
+            </div>
+          )}
+          <button type="button" onClick={onOpenManage} className="btn-ghost shrink-0 px-3 py-3" title={t('dock.myProperties')} aria-label={t('dock.myProperties')}>
+            <Icon.bank className="h-4 w-4" />
+            <span className="rounded-md bg-white/10 px-1.5 text-[11px] font-bold tnum">{propertyCount}</span>
+          </button>
+          <button type="button" onClick={() => onOpenTrade(null)} className="btn-ghost relative shrink-0 px-3 py-3" title={t('dock.trade')} aria-label={t('dock.trade')}>
+            <Icon.trade className="h-4 w-4" />
+            {tradeCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] animate-pulse items-center justify-center rounded-full bg-brass px-1 text-[10px] font-black text-ink ring-2 ring-black">
+                {tradeCount > 9 ? '9+' : tradeCount}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="panel flex flex-col gap-2 p-2.5">

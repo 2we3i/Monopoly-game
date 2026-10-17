@@ -322,7 +322,7 @@ export default function MainMenu({
           )}
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 4xl:gap-8">
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 4xl:gap-8">
           {games.map((game) => (
             <GameCard key={game.id} game={game} onPlay={onPlay} onConfigure={onConfigure} isGuest={isGuest} />
           ))}
@@ -334,7 +334,7 @@ export default function MainMenu({
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <h2 className="font-display text-[22px] font-black leading-tight text-parch 4xl:text-[30px]">{t('tabletop.section')}</h2>
           </div>
-          <div className="grid gap-4 xl:grid-cols-2 4xl:gap-8">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 4xl:gap-8">
           <button
             type="button"
             onClick={() => navigate('/tabletop/iron-throne')}

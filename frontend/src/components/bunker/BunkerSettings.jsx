@@ -116,7 +116,7 @@ export default function BunkerSettings({
     scenario: (
       <>
         <p className="text-[12px] leading-snug text-parch/45">{t('bunker.settings.scenarioIntro')}</p>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {(schema?.scenarios || []).map((sc) => {
             const active = s.scenario === sc.id;
             return (

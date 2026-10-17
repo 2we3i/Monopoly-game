@@ -111,3 +111,19 @@ export default function ActivityLog({ log, board }) {
     </div>
   );
 }
+
+// The whole story at once, newest first: the log tab of the phone layout,
+// where there is no board corner to dock it over.
+export function ActivityList({ log, board }) {
+  const { t, language } = useTranslation();
+  const entries = log.slice(-120).reverse();
+  if (!entries.length) return <p className="px-1 py-6 text-center text-[13px] text-parch/40">{t('log.title')}</p>;
+  return (
+    <ul className="flex flex-col divide-y divide-white/[0.05] rounded-xl border border-white/[0.07] bg-black/25 px-3 py-1 [&_span]:text-[13px]">
+      {entries.map((entry, i) => (
+        // eslint-disable-next-line react/no-array-index-key
+        <LogRow key={`${entry.ts}-${i}`} entry={entry} t={t} language={language} board={board} />
+      ))}
+    </ul>
+  );
+}

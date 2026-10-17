@@ -96,7 +96,7 @@ function MemeDrawer({
         </>
       )}
     >
-      <div className="grid gap-6 lg:grid-cols-[260px,1fr] 4xl:grid-cols-[360px,1fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px,1fr] 4xl:grid-cols-[360px,1fr]">
         <div className="flex flex-col gap-3">
           <MemePreview meme={preview} />
           <div className="flex flex-wrap gap-1.5">
@@ -109,7 +109,7 @@ function MemeDrawer({
           {meme.credit && <p className="text-[11px] text-zinc-500">© {meme.credit.author} · {meme.credit.license}</p>}
         </div>
         <div className="flex flex-col gap-4">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FieldRow label={t('creator.memes.top')}><TextInput value={draft.top} onChange={(top) => set({ top })} maxLength={120} /></FieldRow>
             <FieldRow label={t('creator.memes.bottom')}><TextInput value={draft.bottom} onChange={(bottom) => set({ bottom })} maxLength={120} /></FieldRow>
             <FieldRow label={t('creator.memes.art')}><TextInput value={draft.art} onChange={(art) => set({ art })} maxLength={16} /></FieldRow>
@@ -118,7 +118,7 @@ function MemeDrawer({
             </FieldRow>
           </div>
           <ImageField label={t('creator.memes.picture')} value={draft.image} onChange={(image) => set({ image })} title={meme.id} />
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FieldRow label={t('creator.memes.title')}><TextInput value={draft.title} onChange={(title) => set({ title })} maxLength={120} /></FieldRow>
             <FieldRow label={t('creator.memes.weight')} hint={t('creator.memes.weightHint')}><NumberInput value={draft.weight} min={0.1} max={10} step={0.1} onChange={(weight) => set({ weight })} /></FieldRow>
           </div>
@@ -159,12 +159,12 @@ function CreateDialog({ packs, onClose, onCreated }) {
     >
       <div className="flex flex-col gap-3">
         <Segmented value={kind} onChange={setKind} options={[{ value: 'meme', label: t('creator.memes.kindMeme') }, { value: 'situation', label: t('creator.memes.kindSituation') }]} />
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <FieldRow label={t('creator.memes.pack')}><Select value={draft.pack} onChange={(p) => set({ pack: p, bg: '' })} options={packs.map((p) => ({ value: p.id, label: `${p.emoji} ${localizedText(p.title, language)}` }))} /></FieldRow>
           <FieldRow label={t('creator.memes.rating')}><Select value={draft.rating} onChange={(rating) => set({ rating })} options={[{ value: '16', label: '16+' }, { value: '18', label: '18+' }]} /></FieldRow>
         </div>
         {kind === 'meme' ? (
-          <div className="grid gap-4 sm:grid-cols-[160px,1fr]">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-[160px,1fr]">
             <MemePreview meme={{ ...draft, image: draft.image || null, colors }} />
             <div className="flex flex-col gap-3">
               <FieldRow label={t('creator.memes.top')}><TextInput value={draft.top} onChange={(top) => set({ top })} /></FieldRow>
@@ -270,7 +270,7 @@ export default function MemesSection({ token }) {
         <Button tone="primary" icon="plus" onClick={() => setCreating(true)}>{t('creator.memes.new')}</Button>
       </SectionHeader>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {data.packs.map((pack) => (
           <div key={pack.id} className={`flex items-center gap-3 rounded-2xl border p-3 ${packId === pack.id ? 'border-brass/50 bg-brass/[0.06]' : 'border-white/[0.07] bg-[#121418]'}`}>
             <button type="button" onClick={() => setPackId(packId === pack.id ? 'all' : pack.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left">

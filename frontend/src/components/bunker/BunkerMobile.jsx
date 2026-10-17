@@ -1,11 +1,8 @@
 // BunkerMobile.jsx
-// The Bunker on a phone. The desktop table puts everything on one long
-// page; on a small screen that turns into scrolling past sixteen character
-// sheets to find the one button that matters. Here the screen is split the
-// way a player actually uses it:
+// The Bunker on a phone, built on the frame every game's phone layout
+// shares (components/phone/PhoneGame.jsx): the round, the phase and the
+// clock always on screen, and five tabs -
 //
-//   top      the round, the phase, the clock, and one line saying what YOU
-//            have to do right now - always on screen, tap it for the rules
 //   Game     the action of the moment (reveal a card, argue, vote, the
 //            result), what was revealed this round, and your action cards
 //   Me       your own character: what the table knows, what only you know
@@ -13,29 +10,23 @@
 //   Shelter  the catastrophe, the shelter, the last vote and the history
 //   Chat     the room chat at full height
 //
-// When it becomes your turn to reveal or to vote, the screen goes to the
-// Game tab by itself - unless you are in the chat, where a strip above the
-// tab bar says so instead of pulling the keyboard away. Everything drawn
-// comes from the same per-player payload as the desktop table and the
-// same intentions are sent; the server still decides what happens.
+// Everything drawn comes from the same per-player payload as the desktop
+// table and the same intentions are sent; the server still decides what
+// happens.
 
-import {
-  useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
-} from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from '../../i18n/LanguageContext';
 import { useBunkerConfig } from '../../hooks/useBunker';
 import PlayerAvatar from '../PlayerAvatar';
 import Icon from '../icons';
 import RoomChat from '../chat/RoomChat';
-import SocialBar from '../social/SocialBar';
-import {
-  PlayerStatus, SpectatorBanner, SpectatorStrip, SurrenderButton,
-} from '../room/RoomStatus';
+import { PlayerStatus, SpectatorBanner, SpectatorStrip } from '../room/RoomStatus';
 import FramedAvatar from '../../cosmetics/FramedAvatar';
 import { StyledName } from '../../cosmetics/Cosmetics';
 import { useOutcomeEffects, useTurnSound } from '../../cosmetics/useGameCosmetics';
-import { RulesPanel } from '../rules/GameGuide';
-import { nowAction } from '../rules/nowAction';
+import PhoneGame, {
+  PhoneIcon, PhoneStack, Sheet, useUnread,
+} from '../phone/PhoneGame';
 import {
   charOrder, CharIcon, cardText, cardDetail, formatBunkerLog, RARITY_TONE,
 } from './bunkerText';
@@ -43,91 +34,10 @@ import {
   HandPanel, CardHistory, PrivateFeed, EventBanner,
 } from './BunkerCards';
 import {
-  useCountdown, BunkerInfo, EffectPills, VoteConfirm, Tally, ResultPanel,
+  BunkerInfo, EffectPills, VoteConfirm, Tally, ResultPanel,
 } from './BunkerGame';
 
-// The "what to do now" line, coloured the same way as on every other
-// screen of the platform.
-const NOW_TONE = {
-  act: { box: 'border-brass/45 bg-brass/[0.10]', dot: 'animate-pulse bg-brass-light', text: 'text-brass-light' },
-  urgent: { box: 'border-orange-400/50 bg-orange-500/[0.10]', dot: 'animate-pulse bg-orange-300', text: 'text-orange-200' },
-  wait: { box: 'border-white/[0.08] bg-white/[0.03]', dot: 'bg-parch/35', text: 'text-parch/80' },
-  info: { box: 'border-sky-400/30 bg-sky-400/[0.06]', dot: 'bg-sky-300', text: 'text-sky-200' },
-  over: { box: 'border-go/35 bg-go/[0.07]', dot: 'bg-go-light', text: 'text-go-light' },
-};
-
-// The few pictures the shared icon set does not have.
-const svg = {
-  viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': true,
-};
-const Glyph = {
-  more: (p) => <svg {...svg} {...p}><circle cx="12" cy="5.5" r="1.2" fill="currentColor" /><circle cx="12" cy="12" r="1.2" fill="currentColor" /><circle cx="12" cy="18.5" r="1.2" fill="currentColor" /></svg>,
-  hatch: (p) => <svg {...svg} {...p}><path d="M3.5 20.5h17" /><path d="M5.5 20.5V11a6.5 6.5 0 0113 0v9.5" /><circle cx="12" cy="13" r="2.6" /><path d="M12 7.5v2.9M12 15.6v2.4M6.5 13h2.9M14.6 13h2.9" /></svg>,
-  exit: (p) => <svg {...svg} {...p}><path d="M14 4.5h3.5a2 2 0 012 2v11a2 2 0 01-2 2H14" /><path d="M10 16l4-4-4-4M14 12H4.5" /></svg>,
-};
-
 // --- small parts ------------------------------------------------------
-
-function useEscape(onClose) {
-  useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-}
-
-// A sheet that slides up from the bottom edge - where a thumb already is.
-function Sheet({
-  title, onClose, children, footer, closeLabel,
-}) {
-  useEscape(onClose);
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end bg-black/65 backdrop-blur-sm"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-    >
-      <div className="flex max-h-[88vh] w-full animate-slide-up flex-col rounded-t-2xl border border-b-0 border-white/10 bg-[#1b1d20] shadow-deep">
-        <div className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-white/15" aria-hidden="true" />
-        <header className="flex shrink-0 items-center gap-2 px-4 pb-1 pt-2">
-          <h2 className="min-w-0 flex-1 truncate font-display text-[18px] font-black leading-tight text-parch">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={closeLabel}
-            className="-mr-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-parch/50 active:bg-white/10"
-          >
-            <Icon.close className="h-5 w-5" />
-          </button>
-        </header>
-        <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-1">{children}</div>
-        {footer && (
-          <footer className="shrink-0 border-t border-white/[0.07] px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">{footer}</footer>
-        )}
-        {!footer && <div className="shrink-0 pb-[env(safe-area-inset-bottom)]" />}
-      </div>
-    </div>
-  );
-}
-
-function PhoneTimer({ endsAt, t }) {
-  const seconds = useCountdown(endsAt);
-  if (!endsAt) return null;
-  const warn = seconds <= 10;
-  return (
-    <div
-      role="timer"
-      aria-label={t('bunker.timer')}
-      className={`flex h-10 shrink-0 items-center rounded-xl border px-2.5 font-mono text-[20px] font-bold tnum ${
-        warn ? 'bunker-warn border-orange-400/50 bg-orange-500/15 text-orange-200' : 'border-white/10 bg-black/40 text-parch'
-      }`}
-    >
-      {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
-    </div>
-  );
-}
 
 function SeatBadge({ number, className = '' }) {
   return (
@@ -214,159 +124,6 @@ function CardLine({
   );
 }
 
-// --- the frame: header, menu, tab bar ---------------------------------
-
-function TopBar({
-  state, t, language, onMenu, onRules,
-}) {
-  const action = useMemo(() => nowAction('bunker', state, { language }), [state, language]);
-  const tone = NOW_TONE[action?.tone] || NOW_TONE.info;
-  return (
-    <header className="z-20 shrink-0 border-b border-white/[0.07] bg-[#121315]/95 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] shadow-[0_10px_24px_-18px_rgba(0,0,0,0.95)] backdrop-blur">
-      <div className="flex items-center gap-2">
-        <div key={`${state.phase}-${state.round}`} className="bunker-anim bunker-round min-w-0 flex-1 pl-0.5">
-          <p className="truncate text-[11px] font-bold uppercase tracking-[0.12em] text-parch/45">
-            ☢️ {t('menu.bunker.title')} · {t('bunker.roundN', { n: Math.max(1, state.round) })}
-            {state.totalRounds > 0 && ` / ${state.totalRounds}`}
-          </p>
-          <h1 className="line-clamp-2 font-display text-[18px] font-black leading-tight text-parch">{t(`bunker.m.phase.${state.phase}`)}</h1>
-        </div>
-        <PhoneTimer endsAt={state.phaseEndsAt} t={t} />
-        <button
-          type="button"
-          onClick={onMenu}
-          aria-label={t('bunker.m.menu')}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-parch/80 active:bg-white/10"
-        >
-          <Glyph.more className="h-5 w-5" />
-        </button>
-      </div>
-      {/* What THIS player has to do right now. Tapping it opens the rules
-          on their "What now?" tab. */}
-      {action && (
-        <button
-          type="button"
-          onClick={onRules}
-          aria-live="polite"
-          className={`mt-2 flex w-full items-start gap-2.5 rounded-xl border px-3 py-2 text-left ${tone.box}`}
-        >
-          <span className={`mt-[7px] h-2 w-2 shrink-0 rounded-full ${tone.dot}`} />
-          <span className="min-w-0 flex-1">
-            <b className={`block text-[14px] font-semibold leading-snug ${tone.text}`}>{action.title}</b>
-            {/* A phone held sideways has no height to spare for the why. */}
-            {action.hint && <span className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-parch/50 [@media(max-height:500px)]:hidden">{action.hint}</span>}
-          </span>
-          <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/15 text-[12px] font-bold text-parch/50" aria-hidden="true">?</span>
-        </button>
-      )}
-    </header>
-  );
-}
-
-function MenuSheet({
-  state, t, actions, spectating, onClose, onRules, onLeave,
-}) {
-  const me = state.players.find((p) => p.isYou);
-  const inGame = !spectating && !!me && !me.left && me.status === 'alive' && state.phase !== 'GAME_OVER';
-  return (
-    <Sheet title={t('bunker.m.menu')} onClose={onClose} closeLabel={t('bunker.m.close')}>
-      <div className="flex flex-col gap-2.5">
-        <div className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-black/25 px-3 py-2.5">
-          <span className="min-w-0 flex-1 text-[13px] text-parch/55">{t('waiting.roomCode')}</span>
-          <span className="font-mono text-[20px] font-black tracking-[0.2em] text-parch">{state.roomCode}</span>
-        </div>
-        <SocialBar className="justify-end" />
-        <button type="button" onClick={onRules} className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-3 text-left active:bg-white/[0.08]">
-          <Icon.scroll className="h-5 w-5 shrink-0 text-brass-light" />
-          <span className="min-w-0 flex-1">
-            <span className="block text-[15px] font-semibold text-parch">{t('bunker.m.rules')}</span>
-            <span className="block text-[12px] text-parch/45">{t('bunker.m.rulesHint')}</span>
-          </span>
-          <Icon.chevronRight className="h-4 w-4 shrink-0 text-parch/35" />
-        </button>
-        {/* Giving up asks for its own confirmation and ends this
-            player's game; it is offered only to someone still inside. */}
-        {inGame && actions?.surrender && (
-          <SurrenderButton onSurrender={actions.surrender} className="btn-danger w-full py-3 text-[14px]" />
-        )}
-        <button type="button" onClick={onLeave} className="btn-ghost w-full py-3 text-[14px]">
-          <Glyph.exit className="h-4 w-4" />
-          {t('bunker.m.leave')}
-        </button>
-        {inGame && <p className="px-1 text-center text-[12px] leading-snug text-parch/40">{t('bunker.m.leaveHint')}</p>}
-      </div>
-    </Sheet>
-  );
-}
-
-const TABS = [
-  { id: 'table', icon: (c) => <Icon.target className={c} /> },
-  { id: 'me', icon: (c) => <CharIcon name="biology" className={c} /> },
-  { id: 'players', icon: (c) => <Icon.users className={c} /> },
-  { id: 'bunker', icon: (c) => <Glyph.hatch className={c} /> },
-  { id: 'chat', icon: (c) => <Icon.chat className={c} /> },
-];
-
-function TabBar({
-  tab, onTab, t, badges,
-}) {
-  return (
-    <nav className="z-20 shrink-0 border-t border-white/[0.08] bg-[#121315]/95 pb-[env(safe-area-inset-bottom)] backdrop-blur" aria-label={t('bunker.m.menu')}>
-      <ul className="grid grid-cols-5">
-        {TABS.map(({ id, icon }) => {
-          const active = tab === id;
-          const badge = badges[id];
-          return (
-            <li key={id}>
-              <button
-                type="button"
-                onClick={() => onTab(id)}
-                aria-current={active ? 'page' : undefined}
-                className={`relative flex h-14 w-full flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors ${
-                  active ? 'text-brass-light' : 'text-parch/45 active:text-parch/80'
-                }`}
-              >
-                {active && <span className="absolute inset-x-3 top-0 h-0.5 rounded-full bg-brass-light" aria-hidden="true" />}
-                {icon('h-[22px] w-[22px]')}
-                <span className="max-w-full truncate px-0.5">{t(`bunker.m.tab.${id}`)}</span>
-                {badge === 'dot' && (
-                  <span className="absolute left-[calc(50%+7px)] top-2 h-2.5 w-2.5 animate-pulse rounded-full bg-orange-400 ring-2 ring-[#121315]" aria-hidden="true" />
-                )}
-                {typeof badge === 'number' && badge > 0 && (
-                  <span className="absolute left-[calc(50%+5px)] top-1 min-w-[1.15rem] rounded-full bg-rent px-1 text-center text-[10px] font-bold leading-[1.15rem] text-white tnum">
-                    {badge > 99 ? '99+' : badge}
-                  </span>
-                )}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
-  );
-}
-
-// Shown above the tab bar when the game needs this player and they are
-// looking at something else.
-function ActionNudge({ state, t, onGo }) {
-  return (
-    <button
-      type="button"
-      onClick={onGo}
-      className="z-20 flex shrink-0 items-center gap-2.5 border-t border-orange-400/40 bg-gradient-to-r from-orange-500/25 to-brass/20 px-4 py-2.5 text-left"
-    >
-      <span className="h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-orange-300" />
-      <span className="min-w-0 flex-1 text-[14px] font-bold text-parch">
-        {state.you?.canVote ? t('bunker.m.goVote') : t('bunker.m.goReveal')}
-      </span>
-      <span className="flex shrink-0 items-center gap-0.5 text-[13px] font-semibold text-brass-light">
-        {t('bunker.m.go')}
-        <Icon.chevronRight className="h-4 w-4" />
-      </span>
-    </button>
-  );
-}
-
 // --- the Game tab -------------------------------------------------------
 
 function RevealPicker({
@@ -433,7 +190,6 @@ function RevealPicker({
         <Sheet
           title={t('bunker.m.confirmTitle')}
           onClose={() => setPick(null)}
-          closeLabel={t('bunker.m.close')}
           footer={(
             <div className="grid grid-cols-[1fr,2fr] gap-2">
               <button type="button" onClick={() => setPick(null)} className="btn-quiet py-3">{t('common.cancel')}</button>
@@ -1189,7 +945,7 @@ function PhoneGameOver({
         <button
           type="button"
           onClick={onHide}
-          aria-label={t('bunker.m.close')}
+          aria-label={t('phone.close')}
           className="flex h-10 w-10 items-center justify-center rounded-xl text-parch/50 active:bg-white/10"
         >
           <Icon.close className="h-5 w-5" />
@@ -1265,29 +1021,6 @@ function PhoneGameOver({
 }
 
 // --- the screen ----------------------------------------------------------
-
-// Messages that arrived while the chat tab was not open. Counted from the
-// last message seen rather than from the list's length, because the list
-// is capped and stops growing once it is full.
-function useUnread(chat, active, myId) {
-  const [unread, setUnread] = useState(0);
-  const lastSeen = useRef(chat[chat.length - 1] || null);
-  useEffect(() => {
-    const last = chat[chat.length - 1] || null;
-    if (active) {
-      setUnread(0);
-      lastSeen.current = last;
-      return;
-    }
-    if (last === lastSeen.current) return;
-    const from = lastSeen.current ? chat.lastIndexOf(lastSeen.current) + 1 : 0;
-    const fresh = chat.slice(from).filter((m) => !m.system && m.playerId !== myId).length;
-    if (fresh) setUnread((n) => n + fresh);
-    lastSeen.current = last;
-  }, [chat, active, myId]);
-  return unread;
-}
-
 export default function BunkerMobile({
   state, chat, actions, onLeave, spectating,
 }) {
@@ -1297,12 +1030,8 @@ export default function BunkerMobile({
   // The characteristics THIS table deals - not a fixed seven.
   const sheet = useMemo(() => charOrder(state), [state.categories]);
   const [tab, setTab] = useState('table');
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [rulesOpen, setRulesOpen] = useState(false);
   const [resultsHidden, setResultsHidden] = useState(false);
   const [lastTally, setLastTally] = useState(null);
-  const mainRef = useRef(null);
-  const scrolls = useRef({});
 
   const mustAct = !spectating && (!!state.you?.canReveal || !!state.you?.canVote);
   const unread = useUnread(chat, tab === 'chat', me?.id);
@@ -1317,126 +1046,98 @@ export default function BunkerMobile({
     if (state.phase !== 'GAME_OVER') setResultsHidden(false);
   }, [state.phase]);
 
-  // Each tab keeps its own scroll position; tapping the tab you are on
-  // goes back to its top.
-  const goTab = useCallback((next) => {
-    const el = mainRef.current;
-    if (next === tab) {
-      el?.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-    if (el) scrolls.current[tab] = el.scrollTop;
-    setTab(next);
-  }, [tab]);
-  useLayoutEffect(() => {
-    if (mainRef.current) mainRef.current.scrollTop = scrolls.current[tab] || 0;
-  }, [tab]);
-
-  // Your turn: the Game tab comes to you, scrolled to the top where the
-  // action is - unless you are typing in the chat.
-  useEffect(() => {
-    if (!mustAct) return;
-    try { navigator.vibrate?.(120); } catch { /* not every phone vibrates */ }
-    if (tab === 'chat') return;
-    scrolls.current.table = 0;
-    if (tab === 'table') {
-      mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-    if (mainRef.current) scrolls.current[tab] = mainRef.current.scrollTop;
-    setTab('table');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mustAct]);
-
-  // A new phase puts its panel at the top of the Game tab.
-  useEffect(() => {
-    scrolls.current.table = 0;
-    if (tab === 'table') mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.phase, state.round]);
-
   if (!config) {
     return (
-      <div className="table-bunker bunker-phone flex items-center justify-center">
+      <div className="table-bunker phone-frame flex items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-white/10 border-t-brass" />
       </div>
     );
   }
 
+  const inGame = !spectating && !!me && !me.left && me.status === 'alive' && state.phase !== 'GAME_OVER';
   const showResults = state.phase === 'GAME_OVER' && state.results && !resultsHidden;
 
-  return (
-    <div className="table-bunker bunker-phone flex flex-col overflow-hidden">
-      <TopBar
-        state={state}
-        t={t}
-        language={language}
-        onMenu={() => setMenuOpen(true)}
-        onRules={() => setRulesOpen(true)}
-      />
-
-      <main
-        ref={mainRef}
-        className={`relative min-h-0 flex-1 ${tab === 'chat' ? 'flex flex-col overflow-hidden' : 'overflow-y-auto overscroll-contain'}`}
-      >
-        {tab === 'chat' ? (
-          <RoomChat
-            messages={chat}
-            onSend={actions.sendChat}
-            players={state.players}
-            myPlayerId={me?.id}
-            renderSystem={(m) => t(`bunker.system.${m.type}`, m.params)}
-            nameTone={(m) => (m.excluded ? 'text-parch/40' : 'text-parch')}
-            channelBadge={(m) => (m.number ? <span className="mr-1 font-mono text-parch/40">№{m.number}</span> : null)}
-            variant="bubbles"
-            className="min-h-0 flex-1"
+  const tabs = [
+    {
+      id: 'table',
+      label: t('bunker.m.tab.table'),
+      icon: <Icon.target />,
+      content: (
+        <PhoneStack>
+          <GameTab
+            state={state}
+            me={me}
+            sheet={sheet}
+            config={config}
+            language={language}
+            t={t}
+            actions={actions}
+            spectating={spectating}
+            onTab={setTab}
+            onLeave={onLeave}
+            onShowResults={() => setResultsHidden(false)}
           />
-        ) : (
-          <div className="flex flex-col gap-3 px-3 py-3">
-            {tab === 'table' && (
-              <GameTab
-                state={state}
-                me={me}
-                sheet={sheet}
-                config={config}
-                language={language}
-                t={t}
-                actions={actions}
-                spectating={spectating}
-                onTab={goTab}
-                onLeave={onLeave}
-                onShowResults={() => setResultsHidden(false)}
-              />
-            )}
-            {tab === 'me' && <MeTab state={state} me={me} sheet={sheet} config={config} language={language} t={t} spectating={spectating} />}
-            {tab === 'players' && <PlayersTab state={state} sheet={sheet} config={config} language={language} t={t} />}
-            {tab === 'bunker' && <ShelterTab state={state} config={config} language={language} t={t} lastTally={lastTally} />}
-          </div>
-        )}
-      </main>
-
-      {mustAct && tab !== 'table' && <ActionNudge state={state} t={t} onGo={() => { scrolls.current.table = 0; goTab('table'); }} />}
-
-      <TabBar
-        tab={tab}
-        onTab={goTab}
-        t={t}
-        badges={{ table: mustAct ? 'dot' : null, chat: unread }}
-      />
-
-      {menuOpen && (
-        <MenuSheet
-          state={state}
-          t={t}
-          actions={actions}
-          spectating={spectating}
-          onClose={() => setMenuOpen(false)}
-          onRules={() => { setMenuOpen(false); setRulesOpen(true); }}
-          onLeave={() => { setMenuOpen(false); onLeave(); }}
+        </PhoneStack>
+      ),
+    },
+    {
+      id: 'me',
+      label: t('bunker.m.tab.me'),
+      icon: <CharIcon name="biology" />,
+      content: <PhoneStack><MeTab state={state} me={me} sheet={sheet} config={config} language={language} t={t} spectating={spectating} /></PhoneStack>,
+    },
+    {
+      id: 'players',
+      label: t('bunker.m.tab.players'),
+      icon: <Icon.users />,
+      content: <PhoneStack><PlayersTab state={state} sheet={sheet} config={config} language={language} t={t} /></PhoneStack>,
+    },
+    {
+      id: 'bunker',
+      label: t('bunker.m.tab.bunker'),
+      icon: <PhoneIcon.hatch />,
+      content: <PhoneStack><ShelterTab state={state} config={config} language={language} t={t} lastTally={lastTally} /></PhoneStack>,
+    },
+    {
+      id: 'chat',
+      label: t('bunker.m.tab.chat'),
+      icon: <Icon.chat />,
+      badge: unread,
+      fill: true,
+      content: (
+        <RoomChat
+          messages={chat}
+          onSend={actions.sendChat}
+          players={state.players}
+          myPlayerId={me?.id}
+          renderSystem={(m) => t(`bunker.system.${m.type}`, m.params)}
+          nameTone={(m) => (m.excluded ? 'text-parch/40' : 'text-parch')}
+          channelBadge={(m) => (m.number ? <span className="mr-1 font-mono text-parch/40">№{m.number}</span> : null)}
+          variant="bubbles"
+          className="min-h-0 flex-1"
         />
-      )}
-      {rulesOpen && <RulesPanel gameId="bunker" state={state} onClose={() => setRulesOpen(false)} />}
+      ),
+    },
+  ];
 
+  return (
+    <PhoneGame
+      gameId="bunker"
+      state={state}
+      theme="table-bunker"
+      kicker={`☢️ ${t('menu.bunker.title')} · ${t('bunker.roundN', { n: Math.max(1, state.round) })}${state.totalRounds > 0 ? ` / ${state.totalRounds}` : ''}`}
+      title={t(`bunker.m.phase.${state.phase}`)}
+      endsAt={state.phaseEndsAt}
+      tabs={tabs}
+      tab={tab}
+      onTab={setTab}
+      act={{ tab: 'table', active: mustAct, text: state.you?.canVote ? t('bunker.m.goVote') : t('bunker.m.goReveal') }}
+      resetKey={`${state.phase}-${state.round}`}
+      roomCode={state.roomCode}
+      onLeave={onLeave}
+      onSurrender={inGame ? actions.surrender : null}
+      leaveHint={inGame ? t('bunker.m.leaveHint') : null}
+    >
       {showResults && (
         <PhoneGameOver
           state={state}
@@ -1449,6 +1150,6 @@ export default function BunkerMobile({
           onHide={() => setResultsHidden(true)}
         />
       )}
-    </div>
+    </PhoneGame>
   );
 }

@@ -59,6 +59,27 @@ Every game carries the same two things, and they are the same components in all 
 
 The Iron Throne keeps its own, more detailed rules dialog: its strip opens that one instead of putting a second rules button beside the first.
 
+## On a phone
+
+Every online game switches to a phone layout on a narrow screen or a phone held sideways (`hooks/usePhoneLayout.js`). They all share one frame (`components/phone/PhoneGame.jsx`), so a player who has learned one game on a phone has learned them all:
+
+- **The header** is always on screen: the game, the phase, the clock, and the same "your action now" line as on a desktop - tap it for the rules.
+- **Tabs along the bottom edge**, where the thumb already is, show one panel at a time instead of a long page: the board or map (with the turn's buttons pinned right under it), your own cards or city, the players, the log and the chat (with an unread count). Each tab keeps its own scroll position; tapping the open tab goes back to its top.
+- **When the game needs you** - your turn, your vote, a purchase, an auction, a trade offer - the screen goes to the right tab by itself and the phone vibrates; if you are typing in the chat it leaves you there and a strip above the tab bar says what is waiting instead.
+- **The menu** (⋮) holds the room code, messages and notifications, the rules, the game's settings, giving up and leaving.
+
+| Game | Tabs |
+| --- | --- |
+| Monopoly | Board (dice, buy, auction, build) · Players · Trades · Activity · Chat |
+| Mafia | Game (your role, the action, the players) · History · Chat |
+| Citadels | Turn (role draft, your turn, your hand) · My city · Players · Log · Chat |
+| Bunker | Game · Me · Players · Shelter · Chat |
+| Catan | Island (build on the island, the turn under it) · Cards · Players · Log · Chat |
+| Cosmic Encounter | Encounter (the step, your hand) · Space (launch and regroup on the map) · Players · Log · Chat |
+| The Iron Throne | Map (tap a territory, its orders under the map) · My house · Houses · Chronicle · Chat |
+
+Every lobby on a phone puts inviting first - the phone's share sheet (or the link on the clipboard) and a QR code a friend scans off the screen (`components/phone/ShareRoom.jsx`) - and keeps Ready / Start pinned to the bottom edge. The platform pages (profile, shop, inventory, messages, leaderboard, admin panel) fit a 360 px screen without sideways scrolling. ЧПОК and Meme Hype already had their own phone pages. The desktop layouts are unchanged.
+
 ## Bunker
 
 4–16 players. A random catastrophe strikes and the shelter has fewer places than people (half the table by default, or the host's number). Everyone is dealt a whole secret character - by default fifteen cards: profession, biology, health, a condition or limitation, hobby, skills, knowledge, a special ability, character, a fear, a past, an extra fact, two pieces of baggage and a secret - drawn without duplicates within a game. A host can switch any row off in the settings, back to the original seven if they want the older, shorter sheet. Each round the players take turns revealing one of their own cards (round 1 is always the profession); from round 2 the reveals are followed by a discussion and a vote, and the player with the most votes is left outside with all their cards turned over. A tie goes to a runoff between the tied players; a second tie excludes nobody that round, and once every card is on the table a deadlock is settled by lot. The game ends when no more people remain than places: the survivors win, and the end screen shows every card, who was left outside and when, and a verdict on the colony's chances.
@@ -69,7 +90,7 @@ The Iron Throne keeps its own, more detailed rules dialog: its strip opens that 
 
 **The vote** shows who is standing, how many votes are in and how many are still missing, who has already voted, and why the candidates are who they are (a runoff, an argument, the final vote). Choosing a player opens a confirmation that spells out the consequence before any vote is cast, so a mis-tap can never put somebody outside.
 
-**On a phone** the Bunker has its own layout (`BunkerMobile.jsx`, `BunkerMobileLobby.jsx`), picked automatically on a narrow screen or a phone held sideways. The header always shows the round, the phase, the clock and one line saying what you have to do now (tap it for the rules); below it five tabs - *Game* (reveal, discussion, vote, result, your action cards and what was revealed this round), *Me* (what the table knows about you and what only you know), *Players* (one row per player with their profession, opened with a tap), *Shelter* (the catastrophe, the shelter, the last vote, the history) and *Chat*. When it becomes your turn to reveal or vote the screen switches to *Game* by itself (or, while you are typing in the chat, a strip above the tab bar says so), the phone vibrates, and every reveal and vote is confirmed in a sheet at the bottom of the screen. The lobby puts inviting first - the phone's share sheet, the code, a QR code a friend scans off the screen - and keeps Ready / Start pinned to the bottom edge.
+**On a phone** the Bunker has its own layout on the shared phone frame (`BunkerMobile.jsx`, `BunkerMobileLobby.jsx`). The header always shows the round, the phase, the clock and one line saying what you have to do now (tap it for the rules); below it five tabs - *Game* (reveal, discussion, vote, result, your action cards and what was revealed this round), *Me* (what the table knows about you and what only you know), *Players* (one row per player with their profession, opened with a tap), *Shelter* (the catastrophe, the shelter, the last vote, the history) and *Chat*. When it becomes your turn to reveal or vote the screen switches to *Game* by itself (or, while you are typing in the chat, a strip above the tab bar says so), the phone vibrates, and every reveal and vote is confirmed in a sheet at the bottom of the screen. The lobby puts inviting first - the phone's share sheet, the code, a QR code a friend scans off the screen - and keeps Ready / Start pinned to the bottom edge.
 
 The lobby sets the room size, the number of places and the reveal / discussion / vote timers. The server's clock moves the game on (a missed reveal is made automatically), the host can cut a discussion or a result screen short, and a player who leaves mid-game counts as leaving the bunker. As in the other games, each player receives their own payload: another player's hidden card is simply not in it, and every action (reveal only your own card, only on your turn, only once; vote only once, never for yourself, only for a candidate) is checked on the server. Cards are data: the original decks in `backend/src/bunker/cards.js`, everything added since in `content.js` (the new characteristic decks and the wider profession list) and `absurd.js`. The rules are `BunkerGame.js`, and they never name an individual card, item or event.
 

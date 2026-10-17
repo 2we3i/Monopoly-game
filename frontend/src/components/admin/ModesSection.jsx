@@ -316,7 +316,7 @@ export default function ModesSection({ token }) {
           options={['all', 'enabled', 'disabled', 'paused'].map((s) => ({ value: s, label: s === 'all' ? t('common.all') : t(`admin.modes.status.${s}`) }))}
         />
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 5xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 5xl:grid-cols-5">
         {list.map((mode) => <ModeCard key={mode.id} mode={mode} token={token} onChanged={reload} onOpen={(kind, m) => setOpen({ kind, mode: m })} />)}
       </div>
       <CitadelsStatsCard stats={data.citadels} config={config} title={t('citadels.stats.globalTitle')} subtitle={t('citadels.stats.globalSubtitle')} />

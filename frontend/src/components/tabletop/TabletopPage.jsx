@@ -65,7 +65,7 @@ export default function TabletopPage({
         <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-parch/55 4xl:max-w-3xl 4xl:text-[17px]">{t('tabletop.strategyText')}</p>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 4xl:gap-8">
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 4xl:gap-8">
         <GameCard game={THRONE} onPlay={() => navigate(`/tabletop/${THRONE_SLUG}`)} />
       </section>
 
@@ -77,7 +77,7 @@ export default function TabletopPage({
             <h2 className="font-display text-[clamp(1.5rem,4vw,2.2rem)] font-black leading-tight text-parch 4xl:text-[2.8rem]">{t('tabletop.partyTitle')}</h2>
             <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-parch/55 4xl:max-w-3xl 4xl:text-[17px]">{t('tabletop.partyText')}</p>
           </section>
-          <section className="grid gap-4 md:grid-cols-2 4xl:gap-8">
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 4xl:gap-8">
             <GameCard game={MEME_HYPE} onPlay={() => !creatingHype && onPlayHype()} isGuest={!auth?.isLoggedIn} />
           </section>
         </>
@@ -108,7 +108,7 @@ export default function TabletopPage({
               </button>
             </section>
           )}
-          <section className="grid gap-4 md:grid-cols-2 4xl:gap-8">
+          <section className="grid grid-cols-1 gap-4 md:grid-cols-2 4xl:gap-8">
             {SERIES.map((game) => (
               <GameCard key={game.id} game={game} onPlay={() => navigate(`/tabletop/${GAMES[game.id].slug}`)} />
             ))}

@@ -36,7 +36,7 @@ function Loadout({ auth, social, catalog, onPreview }) {
   });
   return (
     <Card title={t('inventory.loadout')} subtitle={t('inventory.loadoutHint')}>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] 4xl:gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr),minmax(0,1.4fr)] 4xl:gap-6">
         <div className="flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-black/20 p-4 4xl:p-6">
           <UserAvatar user={{ ...auth.account, cosmetics: social.loadout }} look={look} size="xl" />
           <div className="min-w-0 flex-1">

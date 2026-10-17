@@ -140,7 +140,7 @@ export default function ProfilePage({ auth }) {
           <StatCard label={t('profile.equipped')} value={equipped.length} icon="palette" accent="#f472b6" />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[1.5fr,1fr] 4xl:gap-6">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.5fr,1fr] 4xl:gap-6">
           <Card title={t('profile.victories')} subtitle={t('profile.victoriesHint')} bodyClass="p-0">
             <WinsTable rows={recentWins} />
           </Card>
@@ -171,7 +171,7 @@ export default function ProfilePage({ auth }) {
           </Card>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-[1.5fr,1fr] 4xl:gap-6">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.5fr,1fr] 4xl:gap-6">
           <Card title={t('profile.byGame')} bodyClass="p-0">
             <Table
               rowKey={(r) => r.id}
@@ -219,7 +219,7 @@ export default function ProfilePage({ auth }) {
 
         <CitadelsStatsCard stats={citadels} config={config} title={t('citadels.stats.myTitle')} subtitle={t('citadels.stats.mySubtitle')} />
 
-        <div className="grid gap-4 lg:grid-cols-[1.5fr,1fr] 4xl:gap-6">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.5fr,1fr] 4xl:gap-6">
           <Card title={t('profile.recent')} bodyClass="p-0">
             <Table
               rowKey={(r) => r.matchId}
@@ -274,7 +274,7 @@ export default function ProfilePage({ auth }) {
           </Card>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2 4xl:gap-6">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 4xl:gap-6">
           <Card title={t('profile.crownHistory')} bodyClass="p-0">
             <ul className="divide-y divide-white/[0.04]">
               {ledger.length === 0 && <li className="py-8 text-center text-[12.5px] text-zinc-500">{t('profile.crownHistoryEmpty')}</li>}

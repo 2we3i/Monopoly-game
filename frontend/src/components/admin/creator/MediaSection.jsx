@@ -99,7 +99,7 @@ function MediaDrawer({
         </>
       )}
     >
-      <div className="grid gap-6 lg:grid-cols-[1.2fr,1fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr,1fr]">
         <div className="flex flex-col gap-3">
           <div className="flex min-h-[320px] items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-[repeating-conic-gradient(#1b1d22_0%_25%,#15171b_0%_50%)] bg-[length:24px_24px] p-3 4xl:min-h-[560px]">
             <img

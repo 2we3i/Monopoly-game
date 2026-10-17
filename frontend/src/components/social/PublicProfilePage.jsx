@@ -132,10 +132,10 @@ export default function PublicProfilePage({ auth, userId }) {
             <StatCard label={t('profile.bestStreak')} value={data.streak.best} icon="flame" accent="#fb923c" hint={t('profile.streak', { n: data.streak.current })} />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[1.4fr,1fr] 4xl:gap-6">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.4fr,1fr] 4xl:gap-6">
             <Card title={t('profile.victories')} bodyClass="p-0"><WinsTable rows={data.recentWins} /></Card>
             <Card title={t('profile.achievements')}>
-              <ul className="grid gap-2 sm:grid-cols-2">
+              <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {data.achievements.map((a) => (
                   <li key={a.id} className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 ${a.unlocked ? 'border-brass/30 bg-brass/[0.06]' : 'border-white/[0.06] opacity-60'}`}>
                     <DashIcon name={a.unlocked ? 'trophy' : 'lock'} className={`h-4 w-4 shrink-0 ${a.unlocked ? 'text-brass-light' : 'text-zinc-600'}`} />

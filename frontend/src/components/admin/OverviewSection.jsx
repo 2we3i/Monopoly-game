@@ -88,7 +88,7 @@ export default function OverviewSection({ token }) {
         <StatCard label={t('admin.stat.avgDuration')} value={formatDuration(games.avgDurationMs, t)} icon="clock" accent="#a78bfa" />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.6fr,1fr]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr,1fr]">
         <Card title={t('admin.chart.perDay')} subtitle={t('admin.chart.last30')} action={<Legend />}>
           <BarChart data={perDay} colors={GAME_COLORS} emptyText={t('admin.chart.empty')} />
         </Card>
@@ -97,7 +97,7 @@ export default function OverviewSection({ token }) {
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.6fr,1fr]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.6fr,1fr]">
         <Card title={t('admin.recent.title')} bodyClass="p-0">
           <Table
             rowKey={(r) => r.id}

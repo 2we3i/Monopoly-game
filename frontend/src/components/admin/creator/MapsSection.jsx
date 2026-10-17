@@ -132,7 +132,7 @@ export default function MapsSection({ token, go }) {
         <Button tone="primary" icon="plus" onClick={() => setCreating(true)}>{t('creator.maps.new')}</Button>
       </SectionHeader>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4">
         {data.boards.map((board) => (
           <section key={board.id} className="flex flex-col gap-3 rounded-2xl border border-white/[0.07] bg-[#121418] p-4">
             <div className="flex items-start gap-3">
@@ -165,7 +165,7 @@ export default function MapsSection({ token, go }) {
       </div>
 
       <Card title={t('creator.maps.otherTitle')} subtitle={t('creator.maps.otherHint')}>
-        <ul className="grid gap-3 md:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {['catan', 'cosmic', 'throne'].map((game) => (
             <li key={game} className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
               <p className="text-[13.5px] font-semibold text-zinc-100">{t(`menu.${game}.title`)}</p>

@@ -222,14 +222,18 @@ export default function AdminPanel({ auth }) {
 
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#0a0b0d]/85 backdrop-blur">
-            <div className="flex items-center gap-3 px-4 py-3 lg:px-8 4xl:px-12">
-              <div className="min-w-0 flex-1">
+            {/* On a phone the section title takes its own row: the buttons
+                beside it used to squeeze it down to nothing. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 lg:flex-nowrap lg:px-8 4xl:px-12">
+              <div className="min-w-0 flex-1 basis-full sm:basis-auto">
                 <h1 className="truncate text-[17px] font-semibold tracking-tight text-zinc-50 4xl:text-[22px]">{t(`admin.nav.${current.id}`)}</h1>
                 <p className="hidden truncate text-[11.5px] text-zinc-500 sm:block 4xl:text-[13px]">{t(`creator.sectionHint.${current.id}`)}</p>
               </div>
-              <SocialBar compact />
+              <SocialBar compact className="max-sm:ml-auto" />
               <LanguageSwitcher variant="dark" />
-              <span className="lg:hidden"><Button tone="subtle" icon="door" onClick={() => navigate('/')}>{t('admin.backToSite')}</Button></span>
+              <span className="lg:hidden" title={t('admin.backToSite')}>
+                <Button tone="subtle" icon="door" onClick={() => navigate('/')}><span className="hidden sm:inline">{t('admin.backToSite')}</span></Button>
+              </span>
             </div>
             <nav className="scrollbar-thin flex gap-1 overflow-x-auto px-4 pb-2 lg:hidden">
               {visible.map((s) => <NavButton key={s.id} section={s} active={current.id === s.id} onClick={() => go(s.id)} compact />)}

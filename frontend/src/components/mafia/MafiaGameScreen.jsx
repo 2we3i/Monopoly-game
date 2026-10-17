@@ -13,6 +13,8 @@ import RoomChat from '../chat/RoomChat';
 import SocialBar from '../social/SocialBar';
 import { SpectatorBanner, SpectatorStrip, SurrenderButton } from '../room/RoomStatus';
 import GameGuide from '../rules/GameGuide';
+import PhoneGame, { PhoneIcon, PhoneStack, useUnread } from '../phone/PhoneGame';
+import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { StyledName } from '../../cosmetics/Cosmetics';
 import { useOutcomeEffects } from '../../cosmetics/useGameCosmetics';
 
@@ -369,14 +371,14 @@ function HistoryPanel({ history, t }) {
 }
 
 function ChatBox({
-  chat, phase, you, players, onSend, t,
+  chat, phase, you, players, onSend, t, className = 'panel flex h-[22rem] flex-col overflow-hidden lg:h-[28rem] 4xl:h-[40rem]',
 }) {
   const isNight = phase === 'NIGHT';
   const canSpeak = you?.alive && (!isNight || ['MAFIA', 'DON'].includes(you.role));
   const channelLabel = !you?.alive ? t('mafia.chat.dead') : isNight ? t('mafia.chat.mafia') : t('mafia.chat.town');
 
   return (
-    <section className="panel flex h-[22rem] flex-col overflow-hidden lg:h-[28rem] 4xl:h-[40rem]">
+    <section className={className}>
       <RoomChat
         messages={chat}
         onSend={onSend}
@@ -497,6 +499,10 @@ export default function MafiaGameScreen({
   const selectedId = phase === 'NIGHT' ? you?.myNightTarget : you?.myVote;
   const checkedId = phase === 'NIGHT' ? you?.myNightSecondary : null;
 
+  const phone = usePhoneLayout();
+  const [phoneTab, setPhoneTab] = useState('game');
+  const unread = useUnread(chat, phone && phoneTab === 'chat', you?.id);
+
   const pick = (targetId) => {
     if (checkingNow) actions.donCheck(targetId);
     else if (canPickNight) actions.nightAction(targetId);
@@ -515,6 +521,100 @@ export default function MafiaGameScreen({
     return false;
   };
 
+  const players = (
+    <section className="panel p-3">
+      <p className="section-label mb-2">
+        {phase === 'NIGHT' ? t('mafia.pickTarget') : phase === 'VOTE' ? t('mafia.pickVote') : t('mafia.playersAlive')}
+        {' · '}
+        {state.players.filter((p) => p.alive).length}/{state.players.length}
+      </p>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 3xl:grid-cols-6 4xl:grid-cols-8 4xl:gap-3">
+        {state.players.map((p) => (
+          <PlayerTile
+            key={p.id}
+            player={p}
+            phase={phase}
+            voteTally={state.voteTally}
+            onPick={pick}
+            selectable={selectable(p)}
+            selected={selectedId === p.id}
+            checked={checkedId === p.id}
+            t={t}
+          />
+        ))}
+      </div>
+    </section>
+  );
+  const gameOver = phase === 'GAME_OVER' && <GameOverScreen state={state} isHost={isHost} actions={actions} onLeave={onLeave} t={t} />;
+  const canSurrender = !spectating && you && !you.left && phase !== 'GAME_OVER';
+
+  if (phone) {
+    // Needed: a night action not yet chosen, or a vote not yet cast.
+    const needed = !spectating && ((canPickNight && !you?.myNightTarget) || (canPickVote && !you?.myVote));
+    const showHistory = state.settings.info.showHistory;
+    return (
+      <PhoneGame
+        gameId="mafia"
+        state={state}
+        theme={`transition-colors duration-700 ${phase === 'NIGHT' ? 'table-night' : 'table-dawn'}`}
+        kicker={`${phase === 'NIGHT' ? '🌙' : phase === 'VOTE' ? '⚖️' : '☀️'} ${t('menu.mafia.title')} · ${t('mafia.dayCounter', { n: Math.max(1, state.dayNumber) })}`}
+        title={t(`mafia.phase.${phase}`)}
+        endsAt={state.phaseEndsAt}
+        tabs={[
+          {
+            id: 'game',
+            label: t('phone.mafia.game'),
+            icon: <Icon.target />,
+            content: (
+              <PhoneStack>
+                {state.activeEvent && <p className="panel px-3.5 py-2.5 text-[13px] font-semibold text-brass-light">⚡ {t(`mafia.event.${state.activeEvent}`)}</p>}
+                {spectating && <SpectatorBanner onLeave={onLeave} />}
+                {you && <RoleCard you={you} t={t} />}
+                <ActionPanel state={state} onVote={actions.vote} nightMode={nightMode} setNightMode={setNightMode} t={t} />
+                {players}
+                <ResultsFeed state={state} t={t} />
+                {isHost && !['GAME_OVER', 'LOBBY'].includes(phase) && (
+                  <button type="button" onClick={actions.skipPhase} className="btn-ghost w-full py-3 text-[14px]">
+                    {t('mafia.skipPhase')}
+                    <Icon.chevronRight className="h-4 w-4" />
+                  </button>
+                )}
+              </PhoneStack>
+            ),
+          },
+          ...(showHistory ? [{
+            id: 'log',
+            label: t('phone.mafia.history'),
+            icon: <PhoneIcon.log />,
+            content: (
+              <PhoneStack>
+                <HistoryPanel history={state.history} t={t} />
+                <SpectatorStrip spectators={state.spectators} />
+              </PhoneStack>
+            ),
+          }] : []),
+          {
+            id: 'chat',
+            label: t('phone.mafia.chat'),
+            icon: <Icon.chat />,
+            badge: unread,
+            fill: true,
+            content: <ChatBox chat={chat} phase={phase} you={you} players={state.players} onSend={actions.sendChat} t={t} className="flex min-h-0 flex-1 flex-col" />,
+          },
+        ]}
+        tab={phoneTab}
+        onTab={setPhoneTab}
+        act={{ tab: 'game', active: needed, text: phase === 'VOTE' ? t('phone.mafia.goVote') : t('phone.mafia.goNight') }}
+        resetKey={`${phase}-${state.dayNumber}`}
+        roomCode={state.roomCode}
+        onLeave={onLeave}
+        onSurrender={canSurrender ? actions.surrender : null}
+      >
+        {gameOver}
+      </PhoneGame>
+    );
+  }
+
   return (
     <div className={`min-h-screen transition-colors duration-700 ${phase === 'NIGHT' ? 'table-night' : 'table-dawn'}`}>
       <div className="mx-auto flex max-w-5xl flex-col gap-3 px-3 py-4 3xl:max-w-[1500px] 4xl:max-w-[2100px] 4xl:gap-5 4xl:px-8 4xl:py-8 5xl:max-w-[2800px]">
@@ -531,32 +631,11 @@ export default function MafiaGameScreen({
             tap away - the same strip every game here uses. */}
         <GameGuide gameId="mafia" state={state} className="panel" />
 
-        <div className="grid gap-3 lg:grid-cols-[1fr,20rem] 3xl:grid-cols-[1fr,25rem] 4xl:grid-cols-[1fr,34rem] 4xl:gap-5">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr,20rem] 3xl:grid-cols-[1fr,25rem] 4xl:grid-cols-[1fr,34rem] 4xl:gap-5">
           <div className="flex flex-col gap-3">
             {you && <RoleCard you={you} t={t} />}
 
-            <section className="panel p-3">
-              <p className="section-label mb-2">
-                {phase === 'NIGHT' ? t('mafia.pickTarget') : phase === 'VOTE' ? t('mafia.pickVote') : t('mafia.playersAlive')}
-                {' · '}
-                {state.players.filter((p) => p.alive).length}/{state.players.length}
-              </p>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5 3xl:grid-cols-6 4xl:grid-cols-8 4xl:gap-3">
-                {state.players.map((p) => (
-                  <PlayerTile
-                    key={p.id}
-                    player={p}
-                    phase={phase}
-                    voteTally={state.voteTally}
-                    onPick={pick}
-                    selectable={selectable(p)}
-                    selected={selectedId === p.id}
-                    checked={checkedId === p.id}
-                    t={t}
-                  />
-                ))}
-              </div>
-            </section>
+            {players}
 
             {spectating && <SpectatorBanner onLeave={onLeave} />}
             <ActionPanel state={state} onVote={actions.vote} nightMode={nightMode} setNightMode={setNightMode} t={t} />
@@ -571,7 +650,7 @@ export default function MafiaGameScreen({
             {/* Giving up is in every mode where a player can be knocked
                 out. It asks for a confirmation and then ends this
                 player's game - the seat does not come back. */}
-            {!spectating && you && !you.left && phase !== 'GAME_OVER' && (
+            {canSurrender && (
               <SurrenderButton onSurrender={actions.surrender} className="btn-danger w-full py-2 text-[12.5px]" />
             )}
             <button type="button" onClick={onLeave} className="btn-quiet py-2 text-[12.5px]">
@@ -581,7 +660,7 @@ export default function MafiaGameScreen({
         </div>
       </div>
 
-      {phase === 'GAME_OVER' && <GameOverScreen state={state} isHost={isHost} actions={actions} onLeave={onLeave} t={t} />}
+      {gameOver}
     </div>
   );
 }

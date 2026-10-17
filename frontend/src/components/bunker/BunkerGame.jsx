@@ -672,7 +672,7 @@ function GameOver({
         </div>
 
         <h3 className="mb-2 mt-5 text-[13px] font-bold uppercase tracking-wide text-go-light">{t('bunker.survivors', { n: survivors.length })}</h3>
-        <div className="grid gap-2 sm:grid-cols-2 4xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 4xl:grid-cols-3">
           {survivors.map((p) => (
             <div key={p.id} className="rounded-xl border border-go/30 bg-go/[0.06] p-3">
               <p className="mb-1.5 flex items-center gap-2 text-[14px] font-semibold text-parch">
@@ -798,7 +798,7 @@ export default function BunkerGame({
           <p className="bunker-plate border-orange-500/30 px-4 py-2.5 text-[13px] text-orange-200/90">⚠ {t('bunker.spectatorBanner')}</p>
         )}
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr),22rem] 3xl:grid-cols-[minmax(0,1fr),26rem] 4xl:grid-cols-[minmax(0,1fr),36rem] 4xl:gap-5">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr),22rem] 3xl:grid-cols-[minmax(0,1fr),26rem] 4xl:grid-cols-[minmax(0,1fr),36rem] 4xl:gap-5">
           <div className="flex min-w-0 flex-col gap-3 4xl:gap-4">
             {state.phase === 'REVEAL' && <RevealPanel state={state} me={me} config={config} language={language} t={t} actions={actions} sheet={sheet} />}
             {state.phase === 'DISCUSSION' && <DiscussionPanel state={state} t={t} actions={actions} />}
@@ -810,7 +810,7 @@ export default function BunkerGame({
             <HandPanel state={state} config={config} language={language} t={t} onPlay={actions.playCard} spectating={spectating} />
             <PrivateFeed state={state} config={config} language={language} t={t} />
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 4xl:gap-4 5xl:grid-cols-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4 4xl:gap-4 5xl:grid-cols-5">
               {state.players.map((p) => (
                 <PlayerCard
                   key={p.id}

@@ -20,17 +20,11 @@ export const bunkerMobileEn = {
   'bunker.m.phase.VOTE': 'Vote',
   'bunker.m.phase.RESULT': 'Vote result',
   'bunker.m.phase.GAME_OVER': 'The door closes',
-  'bunker.m.menu': 'Menu',
-  'bunker.m.rules': 'How to play',
-  'bunker.m.rulesHint': 'What to do now, the rules in short and in full',
-  'bunker.m.leave': 'Leave the room',
   'bunker.m.leaveHint': 'Leaving in the middle of a game puts you outside the bunker.',
-  'bunker.m.close': 'Close',
 
   // --- the nudge when it is your move -------------------------------------
   'bunker.m.goReveal': 'Your turn to reveal a card',
   'bunker.m.goVote': 'Your vote is needed',
-  'bunker.m.go': 'Go',
 
   // --- the game tab ------------------------------------------------------
   'bunker.m.turnProgress': 'Turn {i} of {n}',
@@ -110,17 +104,11 @@ export const bunkerMobileRu = {
   'bunker.m.phase.VOTE': 'Голосование',
   'bunker.m.phase.RESULT': 'Итоги голосования',
   'bunker.m.phase.GAME_OVER': 'Дверь закрывается',
-  'bunker.m.menu': 'Меню',
-  'bunker.m.rules': 'Как играть',
-  'bunker.m.rulesHint': 'Что делать сейчас, правила кратко и полностью',
-  'bunker.m.leave': 'Выйти из комнаты',
   'bunker.m.leaveHint': 'Если выйти посреди игры, вы останетесь снаружи бункера.',
-  'bunker.m.close': 'Закрыть',
 
   // --- the nudge when it is your move -------------------------------------
   'bunker.m.goReveal': 'Ваш ход — откройте карту',
   'bunker.m.goVote': 'Нужен ваш голос',
-  'bunker.m.go': 'Перейти',
 
   // --- the game tab ------------------------------------------------------
   'bunker.m.turnProgress': 'Ход {i} из {n}',

@@ -56,7 +56,7 @@ export default function AccessSection({ token, admin }) {
       <SectionHeader title={t('creator.access.title')} subtitle={t('creator.access.subtitle')} updatedAt={updatedAt} onRefresh={reload} loading={loading} />
       {!data.creatorDesignated && <p className="rounded-xl border border-amber-400/25 bg-amber-500/[0.07] px-4 py-3 text-[12.5px] text-amber-100">{t('creator.access.bootstrap')}</p>}
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr,1fr]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr,1fr]">
         <Card title={t('creator.access.staff')} bodyClass="p-0">
           <Table
             rowKey={(u) => u.id}

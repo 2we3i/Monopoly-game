@@ -16,6 +16,7 @@ import {
 import { RarityLabel } from '../../cosmetics/Cosmetics';
 import { CrownCoin } from '../social/SocialBar';
 import ItemPreview, { ItemThumb } from './ItemPreview';
+import Icon from '../icons';
 
 const SORTS = ['featured', 'priceAsc', 'priceDesc', 'rarity', 'newest', 'name'];
 
@@ -276,6 +277,7 @@ export default function ShopPage({ auth }) {
   const [minPrice, setMinPrice] = useState('');
   const [maxPrice, setMaxPrice] = useState('');
   const [ownership, setOwnership] = useState('all');
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [purchase, setPurchase] = useState(null);
@@ -358,7 +360,7 @@ export default function ShopPage({ auth }) {
           )}
         </section>
 
-        <div className="grid gap-4 xl:grid-cols-[230px,minmax(0,1fr),340px] 3xl:grid-cols-[250px,minmax(0,1fr),400px] 4xl:grid-cols-[300px,minmax(0,1fr),540px] 4xl:gap-6">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[230px,minmax(0,1fr),340px] 3xl:grid-cols-[250px,minmax(0,1fr),400px] 4xl:grid-cols-[300px,minmax(0,1fr),540px] 4xl:gap-6">
           {/* Filters ------------------------------------------------------ */}
           <aside className="flex flex-col gap-3">
             <Card bodyClass="p-2">
@@ -377,7 +379,21 @@ export default function ShopPage({ auth }) {
                 ))}
               </ul>
             </Card>
-            <Card title={t('shop.filters')} action={filtersActive ? <button type="button" className="text-[11.5px] text-zinc-400 hover:text-zinc-100" onClick={() => { setRarities([]); setMinPrice(''); setMaxPrice(''); setOwnership('all'); setFavoritesOnly(false); setQuery(''); }}>{t('shop.reset')}</button> : null}>
+            <Card
+              title={t('shop.filters')}
+              action={(
+                <span className="flex items-center gap-3">
+                  {filtersActive ? <button type="button" className="text-[11.5px] text-zinc-400 hover:text-zinc-100" onClick={() => { setRarities([]); setMinPrice(''); setMaxPrice(''); setOwnership('all'); setFavoritesOnly(false); setQuery(''); }}>{t('shop.reset')}</button> : null}
+                  {/* Below the wide layout the filters fold away, so the
+                      items are not a whole screen of controls down. */}
+                  <button type="button" onClick={() => setFiltersOpen((v) => !v)} aria-expanded={filtersOpen} className="flex items-center gap-1 text-[12px] font-semibold text-zinc-300 xl:hidden">
+                    {filtersOpen ? t('shop.hideFilters') : t('shop.showFilters')}
+                    <Icon.chevronDown className={`h-3.5 w-3.5 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                </span>
+              )}
+              bodyClass={filtersOpen ? 'p-4' : 'hidden p-4 xl:block'}
+            >
               <p className="mb-1.5 text-[10.5px] font-medium uppercase tracking-wider text-zinc-500">{t('shop.rarity')}</p>
               <div className="flex flex-wrap gap-1">
                 {(catalog?.rarities || []).map((r) => {

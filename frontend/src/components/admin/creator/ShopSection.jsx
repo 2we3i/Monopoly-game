@@ -41,7 +41,7 @@ function TileTargetFields({
         onChange={setKind}
         options={['tile', 'group', 'type', 'any'].map((k) => ({ value: k, label: t(`creator.shop.targetKind.${k}`) }))}
       />
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <FieldRow label={t('creator.shop.board')}>
           <Select
             value={target.layout || '*'}
@@ -171,7 +171,7 @@ function ItemEditor({
         </>
       )}
     >
-      <div className="grid gap-6 lg:grid-cols-[260px,1fr] 4xl:grid-cols-[360px,1fr]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px,1fr] 4xl:grid-cols-[360px,1fr]">
         <div className="flex flex-col items-center gap-3">
           <div className="flex h-44 w-full items-center justify-center rounded-2xl border border-white/[0.07] bg-[radial-gradient(circle_at_50%_40%,rgba(255,255,255,0.07),transparent_70%)]">
             <ItemThumb item={preview} nickname="Player" />
@@ -186,7 +186,7 @@ function ItemEditor({
         </div>
         <div className="flex flex-col gap-4">
           {creating && (
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FieldRow label={t('creator.shop.id')} hint={t('creator.shop.idHint')}><TextInput value={draft.id} onChange={(id) => set({ id: id.toLowerCase() })} placeholder="tile_name_my_street" /></FieldRow>
               <FieldRow label={t('creator.shop.slot')}>
                 <Select value={draft.slot} onChange={(s) => set({ slot: s, visual: s === 'tile_name' ? draft.visual : {} })} options={Object.keys(meta.slots).map((s) => ({ value: s, label: `${t(`category.${meta.slots[s].category}`)} · ${t(`slot.${s}`)}` }))} />
@@ -195,7 +195,7 @@ function ItemEditor({
           )}
           <LocalizedInputs label={slot === 'tile_name' ? t('creator.shop.squareName') : t('creator.shop.name')} value={draft.name} onChange={(name) => set({ name })} />
           <LocalizedInputs label={t('creator.shop.description')} value={draft.description} onChange={(description) => set({ description })} multiline rows={2} />
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <FieldRow label={t('creator.shop.rarity')}>
               <Select value={draft.rarity} onChange={(rarity) => set({ rarity })} options={meta.rarities.map((r) => ({ value: r, label: t(`rarity.${r}`) }))} />
             </FieldRow>
@@ -215,7 +215,7 @@ function ItemEditor({
           {slot === 'tile_name' && (creating || item.custom) && (
             <>
               <TileTargetFields value={draft.visual.target} onChange={(target) => set({ visual: { ...draft.visual, target } })} boards={meta.boards} groups={meta.groups} />
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <FieldRow label={t('creator.shop.glyph')}><TextInput value={draft.visual.glyph} onChange={(glyph) => set({ visual: { ...draft.visual, glyph } })} maxLength={8} /></FieldRow>
                 <FieldRow label={t('creator.shop.colorFrom')}><input type="color" value={draft.visual.colors?.[0] || '#e3bb5c'} onChange={(e) => set({ visual: { ...draft.visual, colors: [e.target.value, draft.visual.colors?.[1] || '#3d2e0f'] } })} className="h-9 w-full rounded-lg border border-white/10 bg-black/30" /></FieldRow>
                 <FieldRow label={t('creator.shop.colorTo')}><input type="color" value={draft.visual.colors?.[1] || '#3d2e0f'} onChange={(e) => set({ visual: { ...draft.visual, colors: [draft.visual.colors?.[0] || '#e3bb5c', e.target.value] } })} className="h-9 w-full rounded-lg border border-white/10 bg-black/30" /></FieldRow>

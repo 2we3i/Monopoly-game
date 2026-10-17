@@ -102,9 +102,9 @@ export default function TestingSection({ token }) {
     <div className="flex flex-col gap-5">
       <SectionHeader title={t('creator.testing.title')} subtitle={t('creator.testing.subtitle')} updatedAt={updatedAt} onRefresh={reload} loading={loading} />
 
-      <div className="grid gap-4 xl:grid-cols-[1.5fr,1fr]">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.5fr,1fr]">
         <Card title={t('creator.testing.simulation')} subtitle={t('creator.test.explain')}>
-          <div className="grid gap-3 sm:grid-cols-[1.4fr,110px,110px,auto] sm:items-end">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.4fr,110px,110px,auto] sm:items-end">
             <FieldRow label={t('admin.lobby.mode')}>
               <Select
                 value={mode.id}

@@ -144,7 +144,7 @@ export function LocalizedInputs({
   return (
     <div>
       {label && <Label>{label}</Label>}
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {['ru', 'en'].map((lang) => (
           <div key={lang} className="relative">
             <span className="pointer-events-none absolute right-2 top-2 z-10 rounded bg-white/10 px-1 text-[9.5px] font-bold uppercase text-zinc-400">{lang}</span>

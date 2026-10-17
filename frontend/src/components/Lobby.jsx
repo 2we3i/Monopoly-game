@@ -9,6 +9,7 @@ import LanguageSwitcher from './LanguageSwitcher';
 import PlayerAvatar from './PlayerAvatar';
 import ProfileMenu from './ProfileMenu';
 import SocialBar from './social/SocialBar';
+import ShareRoom from './phone/ShareRoom';
 import FramedAvatar from '../cosmetics/FramedAvatar';
 import { isTestArmed } from '../lib/testMatch';
 import { StyledName, useLook } from '../cosmetics/Cosmetics';
@@ -318,7 +319,7 @@ function WaitingRoom({ gameState, playerId, onStart, onLeave, roomCode }) {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden px-6 py-12">
+    <div className="relative min-h-screen overflow-clip px-4 py-16 sm:px-6 sm:py-12">
       <div className="absolute right-4 top-4 flex items-center gap-2 sm:right-6 sm:top-6">
         <SocialBar compact />
         <LanguageSwitcher variant="dark" />
@@ -327,8 +328,8 @@ function WaitingRoom({ gameState, playerId, onStart, onLeave, roomCode }) {
       <div className="mx-auto flex max-w-2xl flex-col justify-center 3xl:max-w-3xl 4xl:max-w-5xl" style={{ minHeight: 'calc(100vh - 6rem)' }}>
         <div className="mb-7 text-center">
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-board/50">{t('waiting.roomCode')}</p>
-          <div className="flex items-center justify-center gap-3">
-            <p className="font-display text-6xl font-bold tracking-[0.15em] text-board drop-shadow-[0_2px_12px_rgba(0,0,0,0.4)]">
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <p className="font-display text-5xl font-bold tracking-[0.15em] text-board drop-shadow-[0_2px_12px_rgba(0,0,0,0.4)] sm:text-6xl">
               {roomCode}
             </p>
             <button
@@ -339,12 +340,13 @@ function WaitingRoom({ gameState, playerId, onStart, onLeave, roomCode }) {
               {copied ? t('waiting.copied') : t('waiting.copy')}
             </button>
           </div>
-          <button type="button" onClick={copyLink} className="mt-2.5 text-sm text-brass-light underline decoration-brass-light/40 underline-offset-4 transition-colors hover:decoration-brass-light">
+          <button type="button" onClick={copyLink} className="mt-2.5 text-sm max-md:hidden text-brass-light underline decoration-brass-light/40 underline-offset-4 transition-colors hover:decoration-brass-light">
             {t('waiting.copyInviteLink')}
           </button>
           {activeMode && (
             <p className="mt-2 text-xs font-medium text-board/50">{t('waiting.gameMode', { mode: modeLabel })}</p>
           )}
+          <ShareRoom code={roomCode} className="mx-auto mt-4 max-w-sm text-board" />
         </div>
 
         <div className="rounded-2xl border border-brass/20 bg-board p-6 shadow-panel sm:p-7">
@@ -369,7 +371,8 @@ function WaitingRoom({ gameState, playerId, onStart, onLeave, roomCode }) {
             </p>
           )}
 
-          <div className="mt-6 border-t border-board-line/70 pt-5">
+          {/* On a phone the start button stays under the thumb. */}
+          <div className="phone-dock -mx-6 mt-6 rounded-b-2xl border-t border-board-line/70 bg-board px-6 pb-1 pt-5 sm:-mx-7 sm:px-7">
             {isHost ? (
               <>
                 <button

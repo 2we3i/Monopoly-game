@@ -22,6 +22,8 @@ import {
 import { IronThroneBadge, SigilBadge } from './throneArt';
 import { NowBar } from '../../rules/GameGuide';
 import useThroneControls from './useThroneControls';
+import PhoneGame, { PhoneIcon, PhoneStack, useUnread } from '../../phone/PhoneGame';
+import { usePhoneLayout } from '../../../hooks/usePhoneLayout';
 
 const OTHERS_BATTLE_MS = 3500;
 
@@ -131,7 +133,7 @@ function OnlineGameOver({
         </ol>
         <div className="grid gap-2 px-4 pb-4">
           {you?.isHost ? (
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button type="button" onClick={() => actions.restart(true)} className="throne-btn throne-btn-gold py-2.5">⚔ {t('throne.online.newGame')}</button>
               <button type="button" onClick={() => actions.restart(false)} className="throne-btn py-2.5">
                 <Icon.settings className="h-4 w-4" />
@@ -141,7 +143,7 @@ function OnlineGameOver({
           ) : (
             <p className="text-center text-[12px] text-[#e9dfc8]/50">{t('throne.online.waitingHost')}</p>
           )}
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <button type="button" onClick={onHide} className="throne-btn py-2">{t('throne.online.viewMap')}</button>
             <button type="button" onClick={onLeave} className="throne-btn py-2">{t('throne.online.leave')}</button>
           </div>
@@ -162,6 +164,9 @@ export default function ThroneOnline({
   const myTurn = running && cur === myHouse && !g.proposal && !!g.houses[myHouse] && !g.houses[myHouse].out;
   const [rules, setRules] = useState(false);
   const [hideResults, setHideResults] = useState(false);
+  const phone = usePhoneLayout();
+  const [phoneTab, setPhoneTab] = useState('map');
+  const unread = useUnread(chat, phone && phoneTab === 'chat', state.players.find((p) => p.isYou)?.id);
 
   const controls = useThroneControls({
     game: g, canAct: myTurn, dispatch: actions.act, initialSeenBattle: g?.battle?.id ?? null,
@@ -223,6 +228,184 @@ export default function ThroneOnline({
     );
   }
 
+  const map = (
+    <ThroneMap
+      state={g}
+      selected={controls.selected}
+      targets={controls.targets}
+      onLand={controls.onLand}
+      onSea={controls.onSea}
+      onThrone={controls.onThrone}
+    >
+      {controls.targeting != null && myHouse && (
+        <p className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-[#c9a0f2]/40 bg-black/70 px-3 py-1 text-[12px] text-[#e3cffa]">
+          {t('throne.ui.pickTarget', { card: t(`throne.card.${g.houses[myHouse].hand[controls.targeting]}.name`) })}
+        </p>
+      )}
+      {state.phase === 'GAME_OVER' && state.results && !hideResults && (
+        <OnlineGameOver state={state} actions={actions} onLeave={onLeave} onHide={() => setHideResults(true)} />
+      )}
+      {state.phase === 'GAME_OVER' && hideResults && (
+        <div className="absolute inset-x-0 top-3 z-20 flex justify-center">
+          <button type="button" onClick={() => setHideResults(false)} className="throne-btn throne-btn-gold px-4 py-2">🏆 {t('throne.online.showResults')}</button>
+        </div>
+      )}
+    </ThroneMap>
+  );
+  const myPanels = myHouse && g.houses[myHouse] && (
+    <>
+      <HandPanel
+        s={g}
+        me={myHouse}
+        humanTurn={myTurn}
+        targeting={controls.targeting}
+        onPlay={controls.playCard}
+        onBuy={() => actions.act({ type: 'buyCard' })}
+        onCancelTarget={controls.cancelTargeting}
+      />
+      <DiplomacyPanel
+        s={g}
+        me={myHouse}
+        humanTurn={myTurn}
+        onPropose={(to) => actions.act({ type: 'propose', to })}
+        onBetray={(other) => actions.act({ type: 'betray', other })}
+      />
+    </>
+  );
+  const dialogs = (
+    <>
+      {running && g.proposal && g.proposal.to === myHouse && (
+        <ProposalDialog s={g} online onRespond={(accept) => actions.act({ type: 'respond', accept })} />
+      )}
+      {battle && !(g.proposal && g.proposal.to === myHouse) && <BattleReport report={battle} onClose={closeBattle} />}
+      {rules && <RulesModal onClose={() => setRules(false)} />}
+    </>
+  );
+  const canSurrender = !spectating && myHouse && state.phase !== 'GAME_OVER' && !state.players.some((p) => p.isYou && p.left);
+
+  if (phone) {
+    return (
+      <PhoneGame
+        gameId={running ? 'throne' : null}
+        state={{ ...state, game: g }}
+        theme="table-throne"
+        kicker={`👑 ${t('throne.ui.roundOf', { round: g.round, limit: g.roundLimit })} · ${t(`throne.event.${g.event}.name`)}`}
+        title={myTurn ? t('throne.online.yourTurn') : house(cur)}
+        endsAt={running ? state.phaseEndsAt : null}
+        headerExtra={myHouse && <SigilBadge house={myHouse} className="h-10 w-10 shrink-0" />}
+        onRules={() => setRules(true)}
+        tabs={[
+          {
+            id: 'map',
+            label: t('phone.throne.map'),
+            icon: <PhoneIcon.map />,
+            fill: true,
+            keep: true,
+            content: <div className="relative min-h-0 flex-1">{map}</div>,
+            // Tapping a territory opens what can be done there right under
+            // the map; with nothing picked the bar holds the turn itself.
+            footer: (
+              <div className="scrollbar-thin max-h-[46vh] overflow-y-auto border-t border-white/[0.08] bg-black/55 p-2 backdrop-blur-xl">
+                {myHouse && g.houses[myHouse]?.out && running && (
+                  <p className="mb-2 rounded-lg bg-[#8f2a22]/25 px-3 py-1.5 text-center text-[12.5px] text-[#f0a090]">{t('throne.online.fallen')}</p>
+                )}
+                {controls.selected ? (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => controls.setSelected(null)}
+                      aria-label={t('phone.close')}
+                      className="absolute right-1.5 top-1.5 z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-black/50 text-[#e9dfc8]/70"
+                    >
+                      <Icon.close className="h-4 w-4" />
+                    </button>
+                    {selection}
+                  </div>
+                ) : running && (myTurn ? (
+                  <button type="button" onClick={() => actions.act({ type: 'endTurn' })} className="throne-btn throne-btn-gold w-full py-3 text-[15px]">
+                    {t('throne.ui.endTurn')}
+                  </button>
+                ) : (
+                  <p className="flex items-center justify-center gap-2 py-2 text-[13px] text-[#e9dfc8]/70">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-[#d9b765]" />
+                    {waitingText}
+                  </p>
+                ))}
+              </div>
+            ),
+          },
+          ...(myHouse && g.houses[myHouse] ? [{
+            id: 'house',
+            label: t('phone.throne.house'),
+            icon: <SigilBadge house={myHouse} />,
+            content: (
+              <PhoneStack>
+                <ResourcesPanel s={g} house={myHouse} />
+                {myPanels}
+              </PhoneStack>
+            ),
+          }] : []),
+          {
+            id: 'houses',
+            label: t('phone.throne.houses'),
+            icon: <Icon.users />,
+            content: (
+              <PhoneStack>
+                {spectating && <SpectatorBanner onLeave={onLeave} />}
+                <TurnBanner
+                  s={g}
+                  humanTurn={myTurn}
+                  onEndTurn={() => actions.act({ type: 'endTurn' })}
+                  aiBusy={running && !myTurn}
+                  lordName={owner ? owner.nickname : t('throne.online.computer')}
+                  waitingText={waitingText}
+                  aside={running && <Countdown endsAt={state.phaseEndsAt} />}
+                />
+                <HouseRoster s={g} names={names} onSelectHouse={(h) => { controls.setSelected(HOUSES[h].seat); setPhoneTab('map'); }} />
+                <EventPanel s={g} />
+                <SpectatorStrip spectators={state.spectators} />
+              </PhoneStack>
+            ),
+          },
+          {
+            id: 'log',
+            label: t('throne.online.log'),
+            icon: <PhoneIcon.log />,
+            fill: true,
+            content: <LogPanel s={g} className="min-h-0 flex-1 rounded-none border-0 shadow-none before:hidden after:hidden" />,
+          },
+          {
+            id: 'chat',
+            label: t('throne.online.chat'),
+            icon: <Icon.chat />,
+            badge: unread,
+            fill: true,
+            content: (
+              <RoomChat
+                messages={chat}
+                onSend={actions.sendChat}
+                players={state.players}
+                myPlayerId={state.players.find((p) => p.isYou)?.id}
+                renderSystem={(m) => t(`throne.system.${m.type}`, m.params)}
+                nameTone={() => 'text-[#e8c262]'}
+                className="min-h-0 flex-1"
+              />
+            ),
+          },
+        ]}
+        tab={phoneTab}
+        onTab={setPhoneTab}
+        act={{ tab: 'map', active: myTurn, text: t('throne.online.yourTurn') }}
+        resetKey={`${g.round}-${cur}`}
+        roomCode={state.roomCode}
+        onLeave={onLeave}
+        onSurrender={canSurrender ? actions.surrender : null}
+      >
+        {dialogs}
+      </PhoneGame>
+    );
+  }
+
   return (
     <div className="table-throne flex min-h-screen flex-col lg:h-[100dvh] lg:min-h-0 lg:overflow-hidden">
       <header className="z-30 shrink-0 border-b border-[#6e5a2c]/30 bg-[#0e0d0b]/90 backdrop-blur">
@@ -251,7 +434,7 @@ export default function ThroneOnline({
           </button>
           {/* Giving up hands the house to the computer at once; the war
               goes on without its lord. The dialog asks first. */}
-          {!spectating && myHouse && state.phase !== 'GAME_OVER' && !state.players.some((p) => p.isYou && p.left) && (
+          {canSurrender && (
             <SurrenderButton onSurrender={actions.surrender} className="btn-danger shrink-0 px-2.5 py-1.5 text-[13px]" />
           )}
           <button type="button" onClick={onLeave} className="btn-quiet shrink-0 px-2.5 py-1.5 text-[13px]">{t('throne.online.leave')}</button>
@@ -294,61 +477,17 @@ export default function ThroneOnline({
         </aside>
 
         <section className="relative order-1 h-[62vh] min-h-[340px] shrink-0 lg:order-2 lg:h-auto lg:min-h-0">
-          <ThroneMap
-            state={g}
-            selected={controls.selected}
-            targets={controls.targets}
-            onLand={controls.onLand}
-            onSea={controls.onSea}
-            onThrone={controls.onThrone}
-          >
-            {controls.targeting != null && myHouse && (
-              <p className="pointer-events-none absolute left-1/2 top-3 z-20 -translate-x-1/2 rounded-full border border-[#c9a0f2]/40 bg-black/70 px-3 py-1 text-[12px] text-[#e3cffa]">
-                {t('throne.ui.pickTarget', { card: t(`throne.card.${g.houses[myHouse].hand[controls.targeting]}.name`) })}
-              </p>
-            )}
-            {state.phase === 'GAME_OVER' && state.results && !hideResults && (
-              <OnlineGameOver state={state} actions={actions} onLeave={onLeave} onHide={() => setHideResults(true)} />
-            )}
-            {state.phase === 'GAME_OVER' && hideResults && (
-              <div className="absolute inset-x-0 top-3 z-20 flex justify-center">
-                <button type="button" onClick={() => setHideResults(false)} className="throne-btn throne-btn-gold px-4 py-2">🏆 {t('throne.online.showResults')}</button>
-              </div>
-            )}
-          </ThroneMap>
+          {map}
         </section>
 
         <aside className="scrollbar-thin order-3 flex flex-col gap-2 lg:min-h-0 lg:overflow-y-auto">
           {selection}
-          {myHouse && g.houses[myHouse] && (
-            <>
-              <HandPanel
-                s={g}
-                me={myHouse}
-                humanTurn={myTurn}
-                targeting={controls.targeting}
-                onPlay={controls.playCard}
-                onBuy={() => actions.act({ type: 'buyCard' })}
-                onCancelTarget={controls.cancelTargeting}
-              />
-              <DiplomacyPanel
-                s={g}
-                me={myHouse}
-                humanTurn={myTurn}
-                onPropose={(to) => actions.act({ type: 'propose', to })}
-                onBetray={(other) => actions.act({ type: 'betray', other })}
-              />
-            </>
-          )}
+          {myPanels}
           <ChronicleAndChat state={state} chat={chat} actions={actions} />
         </aside>
       </main>
 
-      {running && g.proposal && g.proposal.to === myHouse && (
-        <ProposalDialog s={g} online onRespond={(accept) => actions.act({ type: 'respond', accept })} />
-      )}
-      {battle && !(g.proposal && g.proposal.to === myHouse) && <BattleReport report={battle} onClose={closeBattle} />}
-      {rules && <RulesModal onClose={() => setRules(false)} />}
+      {dialogs}
     </div>
   );
 }

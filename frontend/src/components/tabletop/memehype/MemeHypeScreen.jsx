@@ -61,9 +61,10 @@ function Header({
   const { t } = useTranslation();
   return (
     <header className="flex flex-wrap items-center gap-3">
-      <div className="min-w-0 flex-1">
+      {/* On a phone the title takes its own row and the badges the next. */}
+      <div className="min-w-0 flex-1 basis-full md:basis-auto">
         <h1 className="hype-title font-display text-[clamp(1.6rem,3.6vw,2.6rem)] font-black leading-none tracking-tight">MEME HYPE</h1>
-        <p className="mt-1 text-[12.5px] font-semibold text-white/55">{subtitle}</p>
+        <p className="mt-1 line-clamp-2 text-[12.5px] font-semibold text-white/55 md:line-clamp-none">{subtitle}</p>
       </div>
       <span className="rounded-lg bg-white/10 px-2.5 py-1 font-display text-[15px] font-black tracking-[0.2em] text-white/80">{state.roomCode}</span>
       <span className={`rounded-lg px-2 py-1 text-[12px] font-black ${state.settings.rating === '18' ? 'bg-rose-600 text-white' : 'bg-sky-500/80 text-white'}`}>
@@ -155,7 +156,7 @@ function Lobby({
         <Header state={state} onLeave={onLeave} subtitle={t('hype.lobby.subtitle')} />
         {spectating && <SpectatorBanner onLeave={onLeave} />}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr),minmax(0,1.1fr)]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,0.9fr),minmax(0,1.1fr)]">
           <section className="hype-panel flex flex-col items-center gap-3 p-5 text-center">
             <p className="text-[12px] font-black uppercase tracking-[0.2em] text-white/50">{t('hype.lobby.scan')}</p>
             <div className="hype-float rounded-2xl bg-white p-2 shadow-[0_0_40px_-8px_rgba(255,79,163,0.7)]">
@@ -217,7 +218,7 @@ function Lobby({
             </Choice>
 
             <Choice label={t('hype.lobby.packs')} hint={t('hype.lobby.packsHint')}>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {state.options.packs.map((pack) => {
                   const on = s.packs.includes(pack.id);
                   const size = pack.sizes[s.rating];
@@ -244,7 +245,7 @@ function Lobby({
               <div className="mt-2"><PhotoCredits rating={s.rating} /></div>
             </Choice>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Choice label={t('hype.lobby.maxPlayers')}>{seg('maxPlayers', state.options.maxPlayers, String)}</Choice>
               <Choice label={t('hype.lobby.rounds')}>{seg('rounds', state.options.rounds, String)}</Choice>
               <Choice label={t('hype.lobby.pickSec')}>{seg('pickSec', state.options.pickSec, (v) => `${v}s`)}</Choice>
@@ -529,7 +530,7 @@ function Game({
             tap away - the same strip every game here uses. */}
         <GameGuide gameId="memehype" state={state} className="hype-panel" />
 
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr),300px]">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr),300px]">
           <div className="flex min-w-0 flex-col gap-4">
             {state.phase !== 'GAME_OVER' && <Situation state={state} />}
             {board}

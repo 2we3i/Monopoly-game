@@ -85,7 +85,7 @@ function TileForm({
   const setRent = (i, v) => set({ rent: tile.rent.map((r, j) => (j === i ? (v === '' ? 0 : v) : r)) });
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FieldRow label={t('creator.fields.type')} hint={corner ? t('creator.fields.cornerFixed') : null}>
           <Select
             value={tile.type}
@@ -100,14 +100,14 @@ function TileForm({
           </FieldRow>
         )}
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FieldRow label={t('creator.fields.nameRu')}><TextInput value={tile.nameRu} onChange={(nameRu) => set({ nameRu })} maxLength={60} /></FieldRow>
         <FieldRow label={t('creator.fields.nameEn')}><TextInput value={tile.name} onChange={(name) => set({ name })} maxLength={60} /></FieldRow>
       </div>
       <LocalizedInputs label={t('creator.fields.description')} value={tile.description || {}} onChange={(description) => set({ description })} multiline rows={2} />
       <ImageField label={t('creator.fields.image')} value={tile.image || ''} onChange={(image) => set({ image })} title={tile.name} />
       {['PROPERTY', 'RAILROAD', 'UTILITY'].includes(tile.type) && (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <FieldRow label={t('creator.fields.price')}><NumberInput value={tile.price} min={1} onChange={(price) => set({ price })} /></FieldRow>
           {tile.type === 'PROPERTY' && <FieldRow label={t('creator.fields.houseCost')}><NumberInput value={tile.houseCost} min={1} onChange={(houseCost) => set({ houseCost })} /></FieldRow>}
         </div>
@@ -211,7 +211,7 @@ export default function FieldsSection({ token }) {
         </div>
       </SectionHeader>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(320px,0.9fr),1.3fr] 4xl:grid-cols-[1fr,1.4fr]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(320px,0.9fr),1.3fr] 4xl:grid-cols-[1fr,1.4fr]">
         <div className="flex flex-col gap-3">
           <Card bodyClass="p-3">
             <BoardOutline board={board.board} sideLength={board.sideLength} selected={selected} onSelect={setSelected} />

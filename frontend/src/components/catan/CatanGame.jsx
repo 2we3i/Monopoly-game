@@ -10,6 +10,8 @@ import {
 } from 'react';
 import { useTranslation } from '../../i18n/LanguageContext';
 import GameGuide from '../rules/GameGuide';
+import PhoneGame, { PhoneIcon, PhoneStack, useUnread } from '../phone/PhoneGame';
+import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import PlayerAvatar from '../PlayerAvatar';
 import Modal from '../Modal';
 import Icon from '../icons';
@@ -495,14 +497,14 @@ function TradeOfferPanel({ state, actions, t }) {
   );
 }
 
-function LogList({ log, t }) {
+function LogList({ log, t, className = 'scrollbar-thin min-h-0 flex-1 overflow-y-auto px-3 py-2' }) {
   const ref = useRef(null);
   const entries = useMemo(() => visibleLog(log), [log]);
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [entries.length]);
   return (
-    <ul ref={ref} className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-3 py-2">
+    <ul ref={ref} className={className}>
       {entries.map((e, i) => (
         <li key={`${e.ts}-${i}`} className="flex gap-2 py-[3px] text-[11.5px] leading-snug text-parch/70">
           <span className="w-5 shrink-0 text-right text-parch/25 tnum">{e.turn || '·'}</span>
@@ -959,6 +961,9 @@ export default function CatanGame({
   const { you, turn, setup } = state;
 
   const isMyMain = state.phase === 'PLAY' && !!you?.isYourTurn && turn?.step === 'MAIN';
+  const phone = usePhoneLayout();
+  const [phoneTab, setPhoneTab] = useState('island');
+  const unread = useUnread(chat, phone && phoneTab === 'chat', you?.id);
   useTurnSound(!!you?.setupTurn || !!(state.phase === 'PLAY' && you?.isYourTurn && turn?.step === 'ROLL'));
 
   useEffect(() => {
@@ -996,34 +1001,16 @@ export default function CatanGame({
     if (mode === 'robber') actions.moveRobber(id);
   };
 
-  return (
-    <div className="table-catan flex min-h-screen flex-col lg:h-[100dvh] lg:min-h-0">
-      <div className="mx-auto flex w-full max-w-[1760px] flex-1 flex-col gap-3 px-3 py-3 lg:min-h-0 4xl:max-w-[2500px] 4xl:gap-4 4xl:px-6">
-        <TopBar state={state} onLeave={onLeave} t={t} actions={actions} spectating={spectating} />
-        {spectating && <SpectatorBanner onLeave={onLeave} />}
-        <SpectatorStrip spectators={state.spectators} />
-        {/* What this player has to do right now, with the rules one
-            tap away - the same strip every game here uses. */}
-        <GameGuide gameId="catan" state={state} className="panel shrink-0" />
-        <div className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-[minmax(0,1fr),22rem] 3xl:grid-cols-[minmax(0,1fr),26rem] 4xl:grid-cols-[minmax(0,1fr),32rem]">
-          <div className="flex min-w-0 flex-col gap-3 lg:min-h-0">
-            <div className="relative h-[60vh] min-h-[320px] lg:h-auto lg:min-h-[280px] lg:flex-1">
-              {state.board && (
-                <CatanBoard state={state} mode={mode} onVertex={onVertex} onEdge={onEdge} onHex={onHex} t={t} />
-              )}
-              {mode && <ModeHint mode={mode} cancellable={!forced && !!picked} onCancel={() => setPicked(null)} t={t} />}
-            </div>
-            <ActionPanel state={state} actions={actions} mode={mode} pickMode={pickMode} onTrade={() => setTradeOpen(true)} t={t} />
-            {you && state.phase !== 'LOBBY' && <HandPanel state={state} actions={actions} onDevChoice={setDevChoice} t={t} />}
-          </div>
-          <aside className="scrollbar-thin flex min-w-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
-            <PlayersPanel state={state} t={t} />
-            {state.trade && state.phase === 'PLAY' && <TradeOfferPanel state={state} actions={actions} t={t} />}
-            <SidePanel state={state} chat={chat} actions={actions} t={t} />
-          </aside>
-        </div>
-      </div>
-
+  const board = (
+    <>
+      {state.board && (
+        <CatanBoard state={state} mode={mode} onVertex={onVertex} onEdge={onEdge} onHex={onHex} t={t} />
+      )}
+      {mode && <ModeHint mode={mode} cancellable={!forced && !!picked} onCancel={() => setPicked(null)} t={t} />}
+    </>
+  );
+  const dialogs = (
+    <>
       {tradeOpen && isMyMain && <TradeModal state={state} actions={actions} onClose={() => setTradeOpen(false)} t={t} />}
       {devChoice && isMyMain && (
         <DevChoiceModal
@@ -1036,6 +1023,132 @@ export default function CatanGame({
       )}
       {you?.mustDiscard > 0 && <DiscardDialog key={`${state.turnNumber}-${you.mustDiscard}`} state={state} actions={actions} t={t} />}
       {state.phase === 'GAME_OVER' && state.results && <GameOver state={state} actions={actions} onLeave={onLeave} t={t} />}
+    </>
+  );
+
+  if (phone) {
+    const actorId = state.setup?.playerId || turn?.playerId;
+    const actor = state.players.find((p) => p.id === actorId);
+    const needed = !spectating && (!!you?.setupTurn || (state.phase === 'PLAY' && !!you?.isYourTurn));
+    const offer = state.trade && state.phase === 'PLAY' ? state.trade : null;
+    const offerForMe = !!offer && !!you && offer.to.includes(you.id) && !offer.responses[you.id];
+    const canSurrender = !spectating && actions?.surrender && state.phase !== 'GAME_OVER' && state.players.some((p) => p.isYou && !p.left);
+    return (
+      <PhoneGame
+        gameId="catan"
+        state={state}
+        theme="table-catan"
+        kicker={`🏝️ ${t(`catan.phase.${state.phase}`)}${state.phase === 'SETUP' && state.setup ? ` · ${t('catan.setupRound', { n: state.setup.round })}` : ''} · 🏆 ${state.settings.victoryPoints}`}
+        title={actor && state.phase !== 'GAME_OVER' ? (actor.isYou ? t('catan.yourTurn') : t('catan.nameTurn', { name: actor.nickname })) : t(`catan.phase.${state.phase}`)}
+        endsAt={state.phaseEndsAt}
+        tabs={[
+          {
+            id: 'island',
+            label: t('phone.catan.island'),
+            icon: <PhoneIcon.map />,
+            fill: true,
+            keep: true,
+            content: <div className="relative min-h-0 flex-1">{board}</div>,
+            // The island and what to do on it are one screen: picking
+            // "build a road" lights the spots on the island right above.
+            footer: (
+              <div className="scrollbar-thin max-h-[46vh] overflow-y-auto border-t border-white/[0.08] bg-black/45 p-2 backdrop-blur-xl">
+                {offer && <div className="mb-2"><TradeOfferPanel state={state} actions={actions} t={t} /></div>}
+                <ActionPanel state={state} actions={actions} mode={mode} pickMode={pickMode} onTrade={() => setTradeOpen(true)} t={t} />
+              </div>
+            ),
+          },
+          ...(you && state.phase !== 'LOBBY' ? [{
+            id: 'hand',
+            label: t('phone.catan.hand'),
+            icon: <PhoneIcon.cards />,
+            content: (
+              <PhoneStack>
+                <HandPanel state={state} actions={actions} onDevChoice={setDevChoice} t={t} />
+              </PhoneStack>
+            ),
+          }] : []),
+          {
+            id: 'players',
+            label: t('catan.players'),
+            icon: <Icon.users />,
+            content: (
+              <PhoneStack>
+                {spectating && <SpectatorBanner onLeave={onLeave} />}
+                <PlayersPanel state={state} t={t} />
+                <SpectatorStrip spectators={state.spectators} />
+              </PhoneStack>
+            ),
+          },
+          {
+            id: 'log',
+            label: t('catan.logTitle'),
+            icon: <PhoneIcon.log />,
+            fill: true,
+            content: <LogList log={state.log} t={t} className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 py-3 [&_li]:text-[13px]" />,
+          },
+          {
+            id: 'chat',
+            label: t('catan.chat'),
+            icon: <Icon.chat />,
+            badge: unread,
+            fill: true,
+            content: (
+              <RoomChat
+                messages={chat}
+                onSend={actions.sendChat}
+                players={state.players}
+                myPlayerId={you?.id}
+                renderSystem={(m) => t(`catan.system.${m.type}`, m.params)}
+                nameTone={() => 'text-sky-200'}
+                className="min-h-0 flex-1"
+              />
+            ),
+          },
+        ]}
+        tab={phoneTab}
+        onTab={setPhoneTab}
+        act={{
+          tab: 'island',
+          active: needed || offerForMe,
+          text: offerForMe && !needed ? t('phone.catan.goOffer') : t('catan.yourTurn'),
+        }}
+        resetKey={`${state.phase}-${state.turnNumber}-${turn?.step || ''}`}
+        roomCode={state.roomCode}
+        onLeave={onLeave}
+        onSurrender={canSurrender ? actions.surrender : null}
+      >
+        {dialogs}
+      </PhoneGame>
+    );
+  }
+
+  return (
+    <div className="table-catan flex min-h-screen flex-col lg:h-[100dvh] lg:min-h-0">
+      <div className="mx-auto flex w-full max-w-[1760px] flex-1 flex-col gap-3 px-3 py-3 lg:min-h-0 4xl:max-w-[2500px] 4xl:gap-4 4xl:px-6">
+        <TopBar state={state} onLeave={onLeave} t={t} actions={actions} spectating={spectating} />
+        {spectating && <SpectatorBanner onLeave={onLeave} />}
+        <SpectatorStrip spectators={state.spectators} />
+        {/* What this player has to do right now, with the rules one
+            tap away - the same strip every game here uses. */}
+        <GameGuide gameId="catan" state={state} className="panel shrink-0" />
+        <div className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-[minmax(0,1fr),22rem] 3xl:grid-cols-[minmax(0,1fr),26rem] 4xl:grid-cols-[minmax(0,1fr),32rem]">
+          <div className="flex min-w-0 flex-col gap-3 lg:min-h-0">
+            <div className="relative h-[60vh] min-h-[320px] lg:h-auto lg:min-h-[280px] lg:flex-1">
+              {board}
+            </div>
+            <ActionPanel state={state} actions={actions} mode={mode} pickMode={pickMode} onTrade={() => setTradeOpen(true)} t={t} />
+            {you && state.phase !== 'LOBBY' && <HandPanel state={state} actions={actions} onDevChoice={setDevChoice} t={t} />}
+          </div>
+          <aside className="scrollbar-thin flex min-w-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
+            <PlayersPanel state={state} t={t} />
+            {state.trade && state.phase === 'PLAY' && <TradeOfferPanel state={state} actions={actions} t={t} />}
+            <SidePanel state={state} chat={chat} actions={actions} t={t} />
+          </aside>
+        </div>
+      </div>
+
+      {dialogs}
     </div>
   );
 }

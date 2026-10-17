@@ -44,7 +44,7 @@ export default function StatsSection({ token }) {
         <StatCard label={t('creator.stats.errors7d')} value={errorsTotal} icon="flag" accent="#f87171" />
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <Card title={t('admin.chart.perDay')} subtitle={t('admin.chart.last30')}>
           <BarChart data={perDay} colors={GAME_COLORS} emptyText={t('admin.chart.empty')} />
         </Card>
@@ -53,7 +53,7 @@ export default function StatsSection({ token }) {
         </Card>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <Card title={t('admin.chart.popularity')}>
           <HBarList
             items={data.popularity.map((m) => ({

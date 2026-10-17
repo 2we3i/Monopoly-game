@@ -28,7 +28,7 @@ export default function BotsSection({ token }) {
   return (
     <div className="flex flex-col gap-5">
       <SectionHeader title={t('creator.bots.title')} subtitle={t('creator.bots.subtitle')} updatedAt={updatedAt} onRefresh={reload} loading={loading} />
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-4">
         {data.modes.map((mode) => (
           <section key={mode.id} className="flex flex-col gap-3 rounded-2xl border border-white/[0.07] bg-[#121418] p-4">
             <div className="flex items-center gap-2">

@@ -372,15 +372,15 @@
 .motion-off .bunker-anim { animation: none !important; }
 .motion-off .bunker-out { filter: grayscale(0.85) brightness(0.72); }
 
-/* The Bunker's phone layout is one screen tall - header, tabs, tab bar -
-   and scrolls inside. dvh follows the browser's own toolbars; vh is the
+/* A game's phone layout (components/phone) is one screen tall - header,
+   tabs, tab bar - and scrolls inside. dvh follows the browser's own toolbars; vh is the
    fallback for browsers that do not know it. Toasts drop in from the top
    edge there, so they never cover the buttons along the bottom. */
-.bunker-phone {
+.phone-frame {
   height: 100vh;
   height: 100dvh;
 }
-body:has(.bunker-phone) .toast-stack {
+body:has(.phone-frame) .toast-stack {
   top: calc(env(safe-area-inset-top, 0px) + 0.5rem);
   bottom: auto;
 }
@@ -623,3 +623,16 @@ body:has(.bunker-phone) .toast-stack {
 .motion-off .hype-tick,
 .motion-off .hype-confetti-piece { animation: none !important; }
 .motion-off .hype-confetti-piece { display: none; }
+
+/* A lobby's Ready / Start bar on a phone: pinned to the bottom edge
+   while the rest of the page scrolls under it. Same breakpoint as
+   hooks/usePhoneLayout.js. Kept at the end of the file: the panels it
+   sits on (.throne-panel and the like) set their own position. */
+@media (max-width: 767px), (max-height: 500px) and (pointer: coarse) {
+  .phone-dock {
+    position: sticky;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+    z-index: 20;
+    box-shadow: 0 -14px 34px -14px rgba(0, 0, 0, 0.9);
+  }
+}

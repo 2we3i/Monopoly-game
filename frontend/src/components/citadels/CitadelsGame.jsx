@@ -7,6 +7,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from '../../i18n/LanguageContext';
 import GameGuide from '../rules/GameGuide';
+import PhoneGame, {
+  PhoneIcon, PhoneSection, PhoneStack, useUnread,
+} from '../phone/PhoneGame';
+import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import { useCitadelsConfig } from '../../hooks/useCitadels';
 import PlayerAvatar from '../PlayerAvatar';
 import Modal from '../Modal';
@@ -440,7 +444,7 @@ function TurnPanel({
       </div>
 
       {my.step === 'RESOURCE' && (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <button type="button" onClick={actions.takeGold} className="btn-ghost flex-col gap-0.5 py-4 text-[14px]">
             <span className="text-[24px]" aria-hidden="true">🪙</span>
             {t('citadels.takeGold')}
@@ -602,14 +606,14 @@ function YouCard({
 }
 
 function LogPanel({
-  log, config, t, language,
+  log, config, t, language, className = 'panel flex max-h-72 flex-col overflow-hidden p-0',
 }) {
   const ref = useRef(null);
   useEffect(() => {
     if (ref.current) ref.current.scrollTop = ref.current.scrollHeight;
   }, [log.length]);
   return (
-    <section className="panel flex max-h-72 flex-col overflow-hidden p-0">
+    <section className={className}>
       <p className="section-label border-b border-white/[0.07] px-3 py-2">📜 {t('citadels.log')}</p>
       <ul ref={ref} className="scrollbar-thin flex-1 overflow-y-auto px-3 py-2">
         {log.map((entry, i) => (
@@ -624,10 +628,10 @@ function LogPanel({
 }
 
 function ChatPanel({
-  chat, onSend, players, myPlayerId, t,
+  chat, onSend, players, myPlayerId, t, className = 'panel flex h-[19rem] flex-col overflow-hidden 4xl:h-[30rem]',
 }) {
   return (
-    <section className="panel flex h-[19rem] flex-col overflow-hidden 4xl:h-[30rem]">
+    <section className={className}>
       <RoomChat
         messages={chat}
         onSend={onSend}
@@ -719,7 +723,11 @@ export default function CitadelsGame({
   const lookup = useLookup(config, language);
   const [cityOfId, setCityOfId] = useState(null);
   const meNow = state.players.find((p) => p.isYou);
-  useTurnSound((state.phase === 'TURNS' && !!meNow?.isCurrent) || (state.phase === 'DRAFT' && state.draft?.pickerId === meNow?.id));
+  const myMove = (state.phase === 'TURNS' && !!meNow?.isCurrent) || (state.phase === 'DRAFT' && state.draft?.pickerId === meNow?.id);
+  useTurnSound(myMove);
+  const phone = usePhoneLayout();
+  const [phoneTab, setPhoneTab] = useState('game');
+  const unread = useUnread(chat, phone && phoneTab === 'chat', meNow?.id);
 
   if (!config) {
     return (
@@ -732,6 +740,113 @@ export default function CitadelsGame({
   const me = state.players.find((p) => p.isYou);
   const cityOf = state.players.find((p) => p.id === cityOfId);
   const cityOfIndex = state.players.findIndex((p) => p.id === cityOfId);
+
+  const overlays = (
+    <>
+      {cityOf && (
+        <Modal
+          onClose={() => setCityOfId(null)}
+          title={t('citadels.cityOf', { name: cityOf.nickname })}
+          subtitle={`🪙 ${cityOf.gold} · 🂠 ${cityOf.handCount} · 🏠 ${cityOf.city.length}/${state.settings.citySize}`}
+          icon={<PlayerAvatar player={{ ...cityOf, color: SEAT_COLORS[cityOfIndex % SEAT_COLORS.length] }} sizeClassName="h-8 w-8" ringClassName="" />}
+          widthClass="max-w-3xl"
+        >
+          <CityGrid player={cityOf} state={state} lookup={lookup} language={language} t={t} />
+        </Modal>
+      )}
+
+      {state.phase === 'GAME_OVER' && state.results && (
+        <GameOver state={state} lookup={lookup} actions={actions} onLeave={onLeave} t={t} />
+      )}
+    </>
+  );
+
+  if (phone) {
+    const lastRound = state.players.some((p) => p.completed) && state.phase !== 'GAME_OVER';
+    const canSurrender = !spectating && actions?.surrender && state.phase !== 'GAME_OVER' && state.players.some((p) => p.isYou && !p.left);
+    return (
+      <PhoneGame
+        gameId="citadels"
+        state={state}
+        theme="table-citadel"
+        kicker={`🏰 ${t('citadels.round', { n: Math.max(1, state.round) })} · ${t('citadels.deck', { n: state.deckCount })}`}
+        title={t(`citadels.phase.${state.phase}`)}
+        endsAt={state.phaseEndsAt}
+        tabs={[
+          {
+            id: 'game',
+            label: t('phone.citadels.game'),
+            icon: <Icon.target />,
+            content: (
+              <PhoneStack>
+                {spectating && <SpectatorBanner onLeave={onLeave} />}
+                {lastRound && <p className="panel px-3.5 py-2.5 text-[13px] font-semibold text-brass-light">🏁 {t('citadels.lastRound')}</p>}
+                <RoleTrack state={state} lookup={lookup} t={t} />
+                {state.phase === 'DRAFT' && <DraftPanel state={state} lookup={lookup} actions={actions} t={t} />}
+                {state.phase === 'TURNS' && me && <TurnPanel state={state} me={me} lookup={lookup} actions={actions} t={t} language={language} />}
+                {state.you && me && <HandPanel state={state} me={me} lookup={lookup} actions={actions} t={t} language={language} />}
+              </PhoneStack>
+            ),
+          },
+          ...(me ? [{
+            id: 'city',
+            label: t('phone.citadels.city'),
+            icon: <PhoneIcon.city />,
+            content: (
+              <PhoneStack>
+                {state.you && <YouCard state={state} me={me} lookup={lookup} t={t} />}
+                <section className="panel p-3">
+                  <p className="section-label mb-2">{t('citadels.yourCity')} · {me.city.length}/{state.settings.citySize}</p>
+                  <CityGrid player={me} state={state} lookup={lookup} language={language} t={t} />
+                </section>
+              </PhoneStack>
+            ),
+          }] : []),
+          {
+            id: 'players',
+            label: t('phone.citadels.players'),
+            icon: <Icon.users />,
+            content: (
+              <PhoneStack>
+                <PhoneSection title={t('phone.citadels.tapCity')}>
+                  <div className="flex flex-col gap-2">
+                    {state.players.map((p, i) => (
+                      <PlayerSeat key={p.id} player={p} index={i} state={state} lookup={lookup} t={t} onOpenCity={setCityOfId} />
+                    ))}
+                  </div>
+                </PhoneSection>
+                <SpectatorStrip spectators={state.spectators} />
+              </PhoneStack>
+            ),
+          },
+          {
+            id: 'log',
+            label: t('phone.citadels.log'),
+            icon: <PhoneIcon.log />,
+            fill: true,
+            content: <LogPanel log={state.log} config={config} t={t} language={language} className="flex min-h-0 flex-1 flex-col overflow-hidden" />,
+          },
+          {
+            id: 'chat',
+            label: t('citadels.chat'),
+            icon: <Icon.chat />,
+            badge: unread,
+            fill: true,
+            content: <ChatPanel chat={chat} onSend={actions.sendChat} players={state.players} myPlayerId={me?.id} t={t} className="flex min-h-0 flex-1 flex-col" />,
+          },
+        ]}
+        tab={phoneTab}
+        onTab={setPhoneTab}
+        act={{ tab: 'game', active: !spectating && myMove, text: state.phase === 'DRAFT' ? t('phone.citadels.goDraft') : t('phone.citadels.goTurn') }}
+        resetKey={`${state.phase}-${state.round}-${state.roleTrack?.find((r) => r.state === 'current')?.id || ''}`}
+        roomCode={state.roomCode}
+        onLeave={onLeave}
+        onSurrender={canSurrender ? actions.surrender : null}
+      >
+        {overlays}
+      </PhoneGame>
+    );
+  }
 
   return (
     <div className="table-citadel min-h-screen">
@@ -749,7 +864,7 @@ export default function CitadelsGame({
           ))}
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-[1fr,21rem] 3xl:grid-cols-[1fr,26rem] 4xl:grid-cols-[1fr,36rem] 4xl:gap-5">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr,21rem] 3xl:grid-cols-[1fr,26rem] 4xl:grid-cols-[1fr,36rem] 4xl:gap-5">
           <div className="flex min-w-0 flex-col gap-3">
             {state.phase === 'DRAFT' && <DraftPanel state={state} lookup={lookup} actions={actions} t={t} />}
             {state.phase === 'TURNS' && me && <TurnPanel state={state} me={me} lookup={lookup} actions={actions} t={t} language={language} />}
@@ -769,21 +884,7 @@ export default function CitadelsGame({
         </div>
       </div>
 
-      {cityOf && (
-        <Modal
-          onClose={() => setCityOfId(null)}
-          title={t('citadels.cityOf', { name: cityOf.nickname })}
-          subtitle={`🪙 ${cityOf.gold} · 🂠 ${cityOf.handCount} · 🏠 ${cityOf.city.length}/${state.settings.citySize}`}
-          icon={<PlayerAvatar player={{ ...cityOf, color: SEAT_COLORS[cityOfIndex % SEAT_COLORS.length] }} sizeClassName="h-8 w-8" ringClassName="" />}
-          widthClass="max-w-3xl"
-        >
-          <CityGrid player={cityOf} state={state} lookup={lookup} language={language} t={t} />
-        </Modal>
-      )}
-
-      {state.phase === 'GAME_OVER' && state.results && (
-        <GameOver state={state} lookup={lookup} actions={actions} onLeave={onLeave} t={t} />
-      )}
+      {overlays}
     </div>
   );
 }

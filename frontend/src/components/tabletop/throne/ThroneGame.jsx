@@ -91,7 +91,7 @@ function Setup({
           <h3 className="throne-heading text-[18px]">{t('throne.ui.chooseHouses')}</h3>
           <p className="text-[12.5px] text-[#e9dfc8]/50">{t('throne.ui.chooseHint')}</p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {HOUSE_IDS.map((h) => {
             const control = setup.houses[h];
             return (
@@ -133,7 +133,7 @@ function Setup({
         </div>
       </section>
 
-      <section className="grid gap-3 md:grid-cols-2">
+      <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="throne-panel p-3">
           <p className="throne-label mb-1.5">{t('throne.ui.rounds')}</p>
           <div className="grid grid-cols-3 gap-1">

@@ -7,6 +7,7 @@ import { useTranslation } from '../../i18n/LanguageContext';
 import { useCitadelsConfig } from '../../hooks/useCitadels';
 import PlayerAvatar from '../PlayerAvatar';
 import Icon from '../icons';
+import ShareRoom from '../phone/ShareRoom';
 import SocialBar from '../social/SocialBar';
 import { PlayerStatus, SpectatorStrip } from '../room/RoomStatus';
 import FramedAvatar from '../../cosmetics/FramedAvatar';
@@ -61,11 +62,13 @@ export default function CitadelsLobby({
       <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6 3xl:max-w-6xl 4xl:max-w-[1700px] 4xl:gap-6 4xl:py-10">
         <header className="flex flex-wrap items-center gap-3">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500/80 to-violet-900 text-[20px] shadow-lift">🏰</span>
-          <div className="min-w-0 flex-1">
+          {/* On a phone the title takes its own row and the buttons the
+              next: sharing one line squeezed it into a narrow column. */}
+          <div className="min-w-0 flex-1 basis-[calc(100%-3.5rem)] md:basis-auto">
             <h1 className="font-display text-[21px] font-black leading-tight text-parch">{t('menu.citadels.title')}</h1>
-            <p className="text-[12px] text-parch/45">{t('citadels.lobbySubtitle')}</p>
+            <p className="line-clamp-2 text-[12px] text-parch/45 md:line-clamp-none">{t('citadels.lobbySubtitle')}</p>
           </div>
-          <SocialBar compact />
+          <SocialBar compact className="max-md:ml-auto" />
           <button type="button" onClick={onLeave} className="btn-quiet px-3 py-2 text-[12.5px]">{t('waiting.leave')}</button>
         </header>
 
@@ -77,14 +80,15 @@ export default function CitadelsLobby({
               {copied === 'code' ? <Icon.check className="h-3.5 w-3.5" /> : null}
               {copied === 'code' ? t('waiting.copied') : t('waiting.copy')}
             </button>
-            <button type="button" onClick={() => copy('link', `${window.location.origin}/?room=${state.roomCode}`)} className="btn-ghost px-3 py-1.5 text-[12.5px]">
+            <button type="button" onClick={() => copy('link', `${window.location.origin}/?room=${state.roomCode}`)} className="btn-ghost px-3 py-1.5 text-[12.5px] max-md:hidden">
               {copied === 'link' ? <Icon.check className="h-3.5 w-3.5" /> : null}
               {copied === 'link' ? t('waiting.copied') : t('waiting.copyInviteLink')}
             </button>
           </div>
+          <ShareRoom code={state.roomCode} className="px-3 pt-1" />
         </section>
 
-        <div className="grid gap-4 lg:grid-cols-[1.1fr,1fr]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.1fr,1fr]">
           <section className="panel flex flex-col p-4">
             <div className="mb-3 flex items-center gap-2">
               <Icon.users className="h-4 w-4 text-parch/40" />
@@ -178,7 +182,8 @@ export default function CitadelsLobby({
           </section>
         )}
 
-        <div className="panel flex flex-wrap items-center gap-2 p-3">
+        {/* The one button that matters stays under the thumb on a phone. */}
+        <div className="phone-dock panel flex flex-wrap items-center gap-2 p-3">
           {!isHost && (
             <button type="button" onClick={() => actions.setReady(!me?.ready)} className={`${me?.ready ? 'btn-ghost' : 'btn-success'} flex-1 py-3 text-[15px]`}>
               <Icon.check className="h-4 w-4" />

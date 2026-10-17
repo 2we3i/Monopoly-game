@@ -9,6 +9,7 @@ import { useTranslation } from '../../i18n/LanguageContext';
 import PlayerAvatar from '../PlayerAvatar';
 import MafiaSettingsModal from './MafiaSettings';
 import Icon from '../icons';
+import ShareRoom from '../phone/ShareRoom';
 import SocialBar from '../social/SocialBar';
 import { PlayerStatus, SpectatorStrip } from '../room/RoomStatus';
 import FramedAvatar from '../../cosmetics/FramedAvatar';
@@ -75,11 +76,11 @@ export default function MafiaLobby({
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rent to-rent-deep text-white shadow-lift">
             🔪
           </span>
-          <div className="min-w-0 flex-1 basis-[calc(100%-3rem)] sm:basis-auto">
+          <div className="min-w-0 flex-1 basis-[calc(100%-3rem)] md:basis-auto">
             <h1 className="font-display text-[20px] font-black leading-tight text-parch">{t('menu.mafia.title')}</h1>
-            <p className="text-[12px] text-parch/45">{t('mafia.lobbySubtitle')}</p>
+            <p className="line-clamp-2 text-[12px] text-parch/45 md:line-clamp-none">{t('mafia.lobbySubtitle')}</p>
           </div>
-          <SocialBar compact />
+          <SocialBar compact className="max-md:ml-auto" />
           <button type="button" onClick={onLeave} className="btn-quiet px-3 py-2 text-[12.5px]">
             {t('waiting.leave')}
           </button>
@@ -97,11 +98,12 @@ export default function MafiaLobby({
             ? <Icon.check className="h-5 w-5 text-go-light" />
             : <Icon.scroll className="h-5 w-5 text-parch/40" />}
         </button>
-        <button type="button" onClick={copyLink} className="-mt-2 self-center text-[12.5px] font-medium text-brass-light underline decoration-brass-light/40 underline-offset-4 hover:decoration-brass-light">
+        <button type="button" onClick={copyLink} className="-mt-2 self-center text-[12.5px] max-md:hidden font-medium text-brass-light underline decoration-brass-light/40 underline-offset-4 hover:decoration-brass-light">
           {t('waiting.copyInviteLink')}
         </button>
+        <ShareRoom code={state.roomCode} />
 
-        <div className="grid gap-4 lg:grid-cols-[1.2fr,1fr]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr,1fr]">
           {/* Players ----------------------------------------------- */}
           <section className="panel flex flex-col p-4">
             <div className="mb-3 flex items-center gap-2">
@@ -219,7 +221,8 @@ export default function MafiaLobby({
         </div>
 
         {/* Actions -------------------------------------------------- */}
-        <div className="panel flex flex-wrap items-center gap-2 p-3">
+        {/* The one button that matters stays under the thumb on a phone. */}
+        <div className="phone-dock panel flex flex-wrap items-center gap-2 p-3">
           {!me && (
             <p className="w-full text-center text-[12.5px] text-parch/45">{t('mafia.watchingLobby')}</p>
           )}

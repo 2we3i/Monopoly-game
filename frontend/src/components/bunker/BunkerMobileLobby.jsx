@@ -104,7 +104,7 @@ export default function BunkerMobileLobby({
   else status = me.ready ? t('bunker.m.youReady') : t('bunker.m.pressReady');
 
   return (
-    <div className="table-bunker bunker-phone flex flex-col overflow-hidden">
+    <div className="table-bunker phone-frame flex flex-col overflow-hidden">
       <header className="z-20 flex shrink-0 items-center gap-2 border-b border-white/[0.07] bg-[#121315]/95 px-3 pb-2 pt-[max(0.5rem,env(safe-area-inset-top))] backdrop-blur">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-zinc-600 to-zinc-900 text-[19px]" aria-hidden="true">☢️</span>
         <div className="min-w-0 flex-1">

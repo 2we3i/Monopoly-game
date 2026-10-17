@@ -82,7 +82,7 @@ export default function SettingsSection({ token }) {
         subtitle={t('creator.settings.platformHint')}
         action={<Button tone="subtle" icon="refresh" onClick={() => reset('platform')}>{t('creator.settings.reset')}</Button>}
       >
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-3">
             <Toggle checked={draft.platform.registrationOpen} onChange={(registrationOpen) => setPlatform({ registrationOpen })} label={t('creator.settings.registrationOpen')} hint={t('creator.settings.registrationOpenHint')} />
             <Toggle checked={draft.platform.shopOpen} onChange={(shopOpen) => setPlatform({ shopOpen })} label={t('creator.settings.shopOpen')} hint={t('creator.settings.shopOpenHint')} />
@@ -99,7 +99,7 @@ export default function SettingsSection({ token }) {
         subtitle={t('creator.settings.economyHint')}
         action={<Button tone="subtle" icon="refresh" onClick={() => reset('economy')}>{t('creator.settings.reset')}</Button>}
       >
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {ECONOMY_FIELDS.map(([key, min, max]) => (
             <FieldRow key={key} label={t(`creator.settings.field.${key}`)} hint={t('creator.mode.defaultIs', { value: d.economy[key] })}>
               <NumberInput value={draft.economy[key]} min={min} max={max} onChange={(v) => setEconomy({ [key]: v === '' ? d.economy[key] : v })} disabled={key === 'minMatchSeconds' && data.environment.minMatchFromEnv} />
@@ -110,7 +110,7 @@ export default function SettingsSection({ token }) {
           </FieldRow>
         </div>
         <p className="mb-2 mt-5 text-[11px] font-medium uppercase tracking-wider text-zinc-500">{t('creator.settings.achievements')}</p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {Object.keys(draft.economy.achievements).map((id) => (
             <FieldRow key={id} label={t(`achievement.${id}.title`)} hint={String(d.economy.achievements[id])}>
               <NumberInput value={draft.economy.achievements[id]} min={0} onChange={(v) => setEconomy({ achievements: { ...draft.economy.achievements, [id]: v === '' ? 0 : v } })} />

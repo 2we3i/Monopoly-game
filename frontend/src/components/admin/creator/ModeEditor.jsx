@@ -274,7 +274,7 @@ export default function ModeEditor({
 
         {tab === 'players' && (
           <div className="flex flex-col gap-4">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <FieldRow label={t('creator.mode.minPlayers')} hint={t('creator.mode.hardRange', { min: hardLimits.min, max: hardLimits.max })}>
                 <NumberInput value={draft.minPlayers} min={hardLimits.min} max={hardLimits.max} onChange={(v) => set({ minPlayers: v === '' ? hardLimits.min : v })} />
               </FieldRow>
@@ -290,7 +290,7 @@ export default function ModeEditor({
         {tab === 'settings' && (
           <div className="flex flex-col gap-3">
             <p className="text-[12px] text-zinc-400">{t('creator.mode.settingsHint')}</p>
-            <div className="grid gap-2 md:grid-cols-2 3xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2 3xl:grid-cols-3">
               {settingPaths.map((path) => (
                 <SettingControl
                   key={path}
@@ -307,7 +307,7 @@ export default function ModeEditor({
         )}
 
         {tab === 'rules' && isMonopoly && (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {[
               ['startingMoney', 0, 1000000],
               ['goSalary', 0, 100000],
@@ -350,7 +350,7 @@ export default function ModeEditor({
               </FieldRow>
             )}
             {timerPaths.length ? (
-              <div className="grid gap-2 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 {timerPaths.map((path) => (
                   <SettingControl
                     key={path}

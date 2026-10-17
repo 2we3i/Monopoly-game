@@ -90,17 +90,18 @@ export function ChpokLobby({
       <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6 4xl:max-w-[1500px]">
         <header className="flex flex-wrap items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-rent to-rent-deep text-white shadow-lift">💥</span>
-          <div className="min-w-0 flex-1">
+          {/* On a phone the title takes its own row and the buttons the next. */}
+          <div className="min-w-0 flex-1 basis-[calc(100%-3.25rem)] md:basis-auto">
             <h1 className="font-display text-[20px] font-black leading-tight text-parch">{t('chpok.title')}</h1>
-            <p className="text-[12px] text-parch/45">{t('chpok.lobbySubtitle')}</p>
+            <p className="line-clamp-2 text-[12px] text-parch/45 md:line-clamp-none">{t('chpok.lobbySubtitle')}</p>
           </div>
-          <SocialBar compact />
+          <SocialBar compact className="max-md:ml-auto" />
           <button type="button" onClick={onLeave} className="btn-quiet px-3 py-2 text-[12.5px]">{t('waiting.leave')}</button>
         </header>
 
         {spectating && <SpectatorBanner onLeave={onLeave} />}
 
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),minmax(0,1.1fr)]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr),minmax(0,1.1fr)]">
           {/* Joining ------------------------------------------------- */}
           <section className="panel flex flex-col items-center gap-3 p-5 text-center">
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-parch/40">{t('chpok.scanToJoin')}</p>
@@ -340,7 +341,7 @@ function AnswerBoard({ state }) {
   return (
     <section className="panel p-4">
       <h2 className="mb-3 text-[13px] font-bold uppercase tracking-wide text-parch/60">{t('chpok.writingNow')}</h2>
-      <ul className="grid gap-1.5 sm:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
         {state.players.filter((p) => !p.left && p.playing).map((p) => (
           <li
             key={p.id}
@@ -375,7 +376,7 @@ function VoteBoard({ state, actions }) {
         <PhaseClock endsAt={state.phaseEndsAt} />
       </div>
       <p className="mb-3 text-[12.5px] text-parch/45">{t('chpok.voteHint')}</p>
-      <ul className="grid gap-2 sm:grid-cols-2">
+      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {state.answers.map((a) => {
           // The screen votes from here only when it holds a seat of its
           // own; otherwise the cards are simply something to read out.
@@ -506,7 +507,7 @@ export function ChpokScreen({
       <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-5 4xl:max-w-[1500px]">
         <header className="flex flex-wrap items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-rent to-rent-deep text-white shadow-lift">💥</span>
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-[calc(100%-3.25rem)] md:basis-auto">
             <h1 className="font-display text-[18px] font-black leading-tight text-parch">{t('chpok.title')}</h1>
             <p className="text-[12px] text-parch/45">{t(`chpok.phase.${state.phase}`)}</p>
           </div>
@@ -534,7 +535,7 @@ export function ChpokScreen({
 
         <section className="panel p-4">
           <h2 className="mb-3 text-[13px] font-bold uppercase tracking-wide text-parch/60">{t('chpok.scores')}</h2>
-          <ul className="grid gap-1.5 sm:grid-cols-2">
+          <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {[...state.players].sort((a, b) => (a.left - b.left) || b.score - a.score).map((p) => (
               <Seat key={p.id} player={p} />
             ))}

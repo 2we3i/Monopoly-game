@@ -16,6 +16,7 @@ import { Segmented } from '../../mafia/MafiaSettings';
 import { HOUSES } from './houses';
 import { IronThroneBadge, SigilBadge } from './throneArt';
 import { RulesModal } from './ThronePanels';
+import ShareRoom from '../../phone/ShareRoom';
 
 export default function ThroneLobby({
   state, actions, onLeave, openSettings = false, onSettingsOpened,
@@ -63,11 +64,11 @@ export default function ThroneLobby({
       <div className="mx-auto flex max-w-5xl flex-col gap-4 px-4 py-6 3xl:max-w-6xl 4xl:max-w-[1700px] 4xl:gap-6 4xl:py-10">
         <header className="flex flex-wrap items-center gap-3">
           <IronThroneBadge className="h-11 w-11 shrink-0" />
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 basis-[calc(100%-3.5rem)] md:basis-auto">
             <h1 className="throne-heading text-[22px] leading-tight">{t('menu.throne.title')}</h1>
-            <p className="text-[12px] text-[#e9dfc8]/50">{t('throne.lobby.subtitle')}</p>
+            <p className="line-clamp-2 text-[12px] text-[#e9dfc8]/50 md:line-clamp-none">{t('throne.lobby.subtitle')}</p>
           </div>
-          <SocialBar compact />
+          <SocialBar compact className="max-md:ml-auto" />
           <button type="button" onClick={() => setRules(true)} className="btn-quiet px-3 py-2 text-[12.5px]">
             <Icon.scroll className="h-4 w-4" />
             {t('throne.rules.title')}
@@ -83,11 +84,12 @@ export default function ThroneLobby({
               {copied === 'code' && <Icon.check className="h-3.5 w-3.5" />}
               {copied === 'code' ? t('waiting.copied') : t('waiting.copy')}
             </button>
-            <button type="button" onClick={() => copy('link', `${window.location.origin}/?room=${state.roomCode}`)} className="throne-btn px-3 py-1.5">
+            <button type="button" onClick={() => copy('link', `${window.location.origin}/?room=${state.roomCode}`)} className="throne-btn px-3 py-1.5 max-md:hidden">
               {copied === 'link' && <Icon.check className="h-3.5 w-3.5" />}
               {copied === 'link' ? t('waiting.copied') : t('waiting.copyInviteLink')}
             </button>
           </div>
+          <ShareRoom code={state.roomCode} className="px-3 pt-1" />
         </section>
 
         <section>
@@ -95,7 +97,7 @@ export default function ThroneLobby({
             <h2 className="throne-heading text-[18px]">{t('throne.lobby.houses')}</h2>
             <span className="text-[12px] text-[#e9dfc8]/50">{t('throne.lobby.houseCount', { n: atWar })}</span>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {state.houses.map((seat) => {
               const holder = seat.playerId ? byId[seat.playerId] : null;
               const mine = holder?.isYou;
@@ -173,7 +175,8 @@ export default function ThroneLobby({
           ))}
         </section>
 
-        <div className="throne-panel flex flex-wrap items-center gap-2 p-3">
+        {/* The one button that matters stays under the thumb on a phone. */}
+        <div className="phone-dock throne-panel flex flex-wrap items-center gap-2 p-3">
           {!isHost && (
             <button type="button" onClick={() => actions.setReady(!me?.ready)} className={`throne-btn flex-1 py-3 text-[15px] ${me?.ready ? '' : 'throne-btn-gold'}`}>
               <Icon.check className="h-4 w-4" />

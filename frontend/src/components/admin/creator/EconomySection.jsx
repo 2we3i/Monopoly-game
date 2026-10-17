@@ -60,7 +60,7 @@ function BulkPanel({ selected, wallets, onDone, onClear }) {
 
   return (
     <Card title={t('creator.economy.bulk')} subtitle={t('creator.economy.selected', { n: selected.size })} action={selected.size > 0 && <Button tone="subtle" onClick={onClear}>{t('creator.economy.clearSelection')}</Button>}>
-      <div className="grid gap-3 lg:grid-cols-[auto,140px,1fr,auto] lg:items-end">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[auto,140px,1fr,auto] lg:items-end">
         <Segmented value={mode} onChange={setMode} options={['add', 'remove', 'set'].map((m) => ({ value: m, label: t(`creator.crowns.mode.${m}`) }))} />
         <FieldRow label={t('creator.crowns.amount')}><NumberInput value={amount} min={0} onChange={setAmount} /></FieldRow>
         <FieldRow label={t('creator.crowns.reason')}><TextInput value={reason} onChange={setReason} placeholder={t('creator.crowns.reasonPlaceholder')} /></FieldRow>
@@ -212,7 +212,7 @@ export default function EconomySection({ token }) {
       )}
 
       {tab === 'breakdown' && (
-        <div className="grid gap-4 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <Card title={t('creator.economy.byKind')}>
             <HBarList
               items={totals.byKind.map((k) => ({

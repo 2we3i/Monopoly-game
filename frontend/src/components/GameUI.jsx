@@ -15,7 +15,7 @@ import TradePanel from './TradePanel';
 import TradeComposer from './TradeComposer';
 import ManagePropertiesModal from './ManagePropertiesModal';
 import ActionDock from './ActionDock';
-import ActivityLog from './ActivityLog';
+import ActivityLog, { ActivityList } from './ActivityLog';
 import SettingsModal from './SettingsModal';
 import PlayerAvatar from './PlayerAvatar';
 import Modal from './Modal';
@@ -31,6 +31,8 @@ import Icon from './icons';
 import SocialBar from './social/SocialBar';
 import { SpectatorBanner, SpectatorStrip, SurrenderButton } from './room/RoomStatus';
 import GameGuide from './rules/GameGuide';
+import PhoneGame, { PhoneIcon, PhoneStack } from './phone/PhoneGame';
+import { usePhoneLayout } from '../hooks/usePhoneLayout';
 import { StyledName, VictoryMark, useLook } from '../cosmetics/Cosmetics';
 import { useOutcomeEffects, useTurnSound } from '../cosmetics/useGameCosmetics';
 
@@ -408,6 +410,11 @@ export default function GameUI({
   const [expandedPlayerId, setExpandedPlayerId] = useState(null);
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [tradeFocus, setTradeFocus] = useState(null); // { id, at } | null
+  // On a phone the sidebar's tabs and the board become the frame's tabs.
+  const phone = usePhoneLayout();
+  const [phoneTab, setPhoneTab] = useState('board');
+  const chatOpen = phone ? phoneTab === 'chat' : sidebarTab === 'chat';
+  const tradesOpen = phone ? phoneTab === 'trades' : sidebarTab === 'trades';
   const lastSeenChatLength = useRef(chatMessages.length);
   const isFirstChatRender = useRef(true);
   const sidebarRef = useRef(null);
@@ -445,6 +452,7 @@ export default function GameUI({
   const me = gameState.players.find((p) => p.id === playerId);
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const isMyTurn = currentPlayer?.id === playerId;
+  const phoneCtx = useMemo(() => ({ isMyTurn }), [isMyTurn]);
   useTurnSound(isMyTurn && gameState.phase !== 'GAME_OVER');
   const selectedTile = selectedTileId != null ? gameState.board[selectedTileId] : null;
   const myTrades = gameState.trades.filter((tr) => tr.fromPlayerId === playerId || tr.toPlayerId === playerId);
@@ -463,6 +471,7 @@ export default function GameUI({
   const openTradeWith = (player) => {
     setComposer({ target: player });
     setSidebarTab('trades');
+    setPhoneTab('trades');
   };
 
   // Straight to an offer: close whatever is on top, open the Trades tab,
@@ -476,13 +485,14 @@ export default function GameUI({
     setSettingsOpen(false);
     setSelectedTileId(null);
     setSidebarTab('trades');
+    setPhoneTab('trades');
     setTradeFocus(id ? { id, at: Date.now() } : null);
     if (window.innerWidth < 1024) sidebarRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }, [gameState.trades, playerId]);
 
   useEffect(() => {
-    if (sidebarTab !== 'trades') setTradeFocus(null);
-  }, [sidebarTab]);
+    if (!tradesOpen) setTradeFocus(null);
+  }, [tradesOpen]);
 
   useEffect(() => {
     if (isFirstChatRender.current) {
@@ -493,7 +503,7 @@ export default function GameUI({
     if (chatMessages.length > lastSeenChatLength.current) {
       const newMessages = chatMessages.slice(lastSeenChatLength.current);
       const newFromOthers = newMessages.filter((m) => !m.system && m.playerId !== playerId);
-      if (newFromOthers.length > 0 && sidebarTab !== 'chat') {
+      if (newFromOthers.length > 0 && !chatOpen) {
         setUnreadChatCount((n) => n + newFromOthers.length);
       }
     }
@@ -502,9 +512,9 @@ export default function GameUI({
   }, [chatMessages.length]);
 
   useEffect(() => {
-    if (sidebarTab === 'chat' && unreadChatCount > 0) setUnreadChatCount(0);
+    if (chatOpen && unreadChatCount > 0) setUnreadChatCount(0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sidebarTab]);
+  }, [chatOpen]);
 
   const hasBlockingPendingAction = (gameState.pendingAction?.type === 'BUY_DECISION' || gameState.pendingAction?.type === 'CARD_REVEAL')
     && gameState.pendingAction?.playerId === playerId;
@@ -517,169 +527,117 @@ export default function GameUI({
 
   const showPropertyModal = selectedTile && !hasBlockingPendingAction;
 
-  return (
-    <div className="table-felt flex min-h-screen flex-col overflow-x-hidden lg:h-screen lg:overflow-hidden">
-      <TopBar
-        gameState={gameState}
-        me={me}
-        onLeave={onLeave}
-        onOpenSettings={() => setSettingsOpen(true)}
-        incomingTrades={incomingTrades}
-        onOpenTrades={openTrades}
-        onSurrender={actions.surrender}
-        spectating={spectating}
-      />
+  // Everything below is built once and placed by whichever layout is on:
+  // the desktop table, or the phone frame with its tabs.
+  const boardEl = (
+    <Board
+      gameState={gameState}
+      onSelectTile={setSelectedTileId}
+      selectedTileId={selectedTileId}
+      isMyTurn={isMyTurn}
+      viewerId={playerId}
+      highlightOwnerId={highlightMine && me ? playerId : null}
+      diceSlot={<Dice lastRoll={gameState.lastRoll} />}
+      overlay={(
+        <>
+          {/* On a phone the log has a tab of its own instead of a corner
+              of a board that is already small. */}
+          {settings.showActivityLog && !phone && (
+            <div className="pointer-events-none absolute bottom-3 left-3 right-[13rem] z-20 flex">
+              <ActivityLog log={gameState.log} board={gameState.board} />
+            </div>
+          )}
 
-      {spectating && <SpectatorBanner onLeave={onLeave} className="mx-2.5 mt-2.5" />}
-      {gameState.spectators?.length > 0 && <SpectatorStrip spectators={gameState.spectators} className="mx-2.5 mt-2.5" />}
+          {highlightMine && me && (
+            <div className="pointer-events-none absolute left-3 top-3 z-30 flex max-w-[calc(100%-1.5rem)]">
+              <div
+                className="pointer-events-auto flex items-center gap-2 rounded-full border bg-felt-800/90 py-1 pl-2.5 pr-1 text-[12px] font-semibold shadow-lift backdrop-blur-md"
+                style={{ borderColor: hexToRgba(me.color, 0.65) }}
+              >
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: me.color, boxShadow: `0 0 8px ${me.color}` }} />
+                <span className="truncate text-parch">{t('highlight.active', { count: myPropertyCount })}</span>
+                {settings.alwaysHighlightMine ? (
+                  <button type="button" onClick={() => setSettingsOpen(true)} className="shrink-0 rounded-full px-2 py-0.5 text-[11px] text-parch/60 hover:bg-white/10 hover:text-parch">
+                    {t('highlight.settings')}
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => setManualHighlight(false)} className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-bold text-parch hover:bg-white/20">
+                    {t('highlight.off')}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
-      {/* What this player has to do right now, with the rules one tap
-          away - the same strip every game here uses. */}
-      {gameState.phase !== 'LOBBY' && (
-        <GameGuide gameId="monopoly" state={gameState} ctx={{ isMyTurn }} className="panel mx-2.5 mt-2.5 shrink-0" />
+          {/* The buy decision belongs over the board, right above
+              the dock - not over the whole window, where it would
+              also cover the sidebar on a wide screen. */}
+          {myBuyDecision && !gameState.auction && me && (
+            <BuyPrompt
+              tile={gameState.board[myBuyDecision.tileId]}
+              player={me}
+              stamp={gameState.receivedAt}
+              onBuy={() => actions.buyProperty(myBuyDecision.tileId)}
+              onDecline={() => actions.declinePurchase(myBuyDecision.tileId)}
+              onRaise={() => setRaiseOpen(true)}
+            />
+          )}
+
+          {gameState.auction && <AuctionPanel gameState={gameState} playerId={playerId} actions={actions} />}
+        </>
       )}
+    />
+  );
 
-      <main className="flex min-h-0 flex-1 flex-col gap-2.5 p-2.5 lg:flex-row">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-2.5">
-          <div className="h-[52vh] min-h-0 lg:h-auto lg:flex-1">
-            <Board
-              gameState={gameState}
-              onSelectTile={setSelectedTileId}
-              selectedTileId={selectedTileId}
-              isMyTurn={isMyTurn}
-              viewerId={playerId}
-              highlightOwnerId={highlightMine && me ? playerId : null}
-              diceSlot={<Dice lastRoll={gameState.lastRoll} />}
-              overlay={(
-                <>
-                  {settings.showActivityLog && (
-                    <div className="pointer-events-none absolute bottom-3 left-3 right-[13rem] z-20 flex">
-                      <ActivityLog log={gameState.log} board={gameState.board} />
-                    </div>
-                  )}
+  const dockProps = {
+    gameState,
+    me,
+    isMyTurn,
+    actions,
+    onOpenTrade: () => setComposer({ target: null }),
+    onOpenManage: () => setManageOpen(true),
+    tradeCount: incomingTrades,
+    propertyCount: myPropertyCount,
+    diceSlot: <Dice lastRoll={gameState.lastRoll} size={26} showTotal={false} />,
+  };
 
-                  {highlightMine && me && (
-                    <div className="pointer-events-none absolute left-3 top-3 z-30 flex max-w-[calc(100%-1.5rem)]">
-                      <div
-                        className="pointer-events-auto flex items-center gap-2 rounded-full border bg-felt-800/90 py-1 pl-2.5 pr-1 text-[12px] font-semibold shadow-lift backdrop-blur-md"
-                        style={{ borderColor: hexToRgba(me.color, 0.65) }}
-                      >
-                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: me.color, boxShadow: `0 0 8px ${me.color}` }} />
-                        <span className="truncate text-parch">{t('highlight.active', { count: myPropertyCount })}</span>
-                        {settings.alwaysHighlightMine ? (
-                          <button type="button" onClick={() => setSettingsOpen(true)} className="shrink-0 rounded-full px-2 py-0.5 text-[11px] text-parch/60 hover:bg-white/10 hover:text-parch">
-                            {t('highlight.settings')}
-                          </button>
-                        ) : (
-                          <button type="button" onClick={() => setManualHighlight(false)} className="shrink-0 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-bold text-parch hover:bg-white/20">
-                            {t('highlight.off')}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
+  const playerCards = (
+    <>
+      {gameState.players.map((p) => (
+        <PlayerCard
+          key={p.id}
+          player={p}
+          isMe={p.id === playerId}
+          isCurrentTurn={currentPlayer?.id === p.id}
+          board={gameState.board}
+          properties={gameState.properties}
+          onTrade={openTradeWith}
+          expanded={expandedPlayerId === p.id}
+          onToggleExpand={() => setExpandedPlayerId((id) => (id === p.id ? null : p.id))}
+          onSelectTile={setSelectedTileId}
+        />
+      ))}
 
-                  {/* The buy decision belongs over the board, right above
-                      the dock - not over the whole window, where it would
-                      also cover the sidebar on a wide screen. */}
-                  {myBuyDecision && !gameState.auction && me && (
-                    <BuyPrompt
-                      tile={gameState.board[myBuyDecision.tileId]}
-                      player={me}
-                      stamp={gameState.receivedAt}
-                      onBuy={() => actions.buyProperty(myBuyDecision.tileId)}
-                      onDecline={() => actions.declinePurchase(myBuyDecision.tileId)}
-                      onRaise={() => setRaiseOpen(true)}
-                    />
-                  )}
+      <GameSnapshot gameState={gameState} />
+    </>
+  );
 
-                  {gameState.auction && <AuctionPanel gameState={gameState} playerId={playerId} actions={actions} />}
-                </>
-              )}
-            />
-          </div>
+  const tradePanel = (
+    <TradePanel
+      gameState={gameState}
+      playerId={playerId}
+      focus={tradeFocus}
+      onOpenComposer={(target) => setComposer({ target })}
+      onAcceptTrade={actions.acceptTrade}
+      onDeclineTrade={actions.declineTrade}
+      onCancelTrade={actions.cancelTrade}
+    />
+  );
 
-          <ActionDock
-            gameState={gameState}
-            me={me}
-            isMyTurn={isMyTurn}
-            actions={actions}
-            onOpenTrade={() => setComposer({ target: null })}
-            onOpenManage={() => setManageOpen(true)}
-            tradeCount={incomingTrades}
-            propertyCount={myPropertyCount}
-            diceSlot={<Dice lastRoll={gameState.lastRoll} size={26} showTotal={false} />}
-          />
-        </section>
+  const chatPanel = <Chat messages={chatMessages} onSend={sendChat} playerId={playerId} players={gameState.players} board={gameState.board} />;
 
-        <aside ref={sidebarRef} className="panel flex min-h-0 w-full shrink-0 flex-col lg:h-auto lg:w-[22rem] xl:w-[24rem] 3xl:w-[27rem] 4xl:w-[34rem] 5xl:w-[40rem]">
-          <div role="tablist" className="flex shrink-0 border-b border-white/[0.08]">
-            <SidebarTab
-              active={sidebarTab === 'players'}
-              onClick={() => setSidebarTab('players')}
-              icon={Icon.users}
-              label={t('sidebar.players')}
-            />
-            <SidebarTab
-              active={sidebarTab === 'trades'}
-              onClick={() => setSidebarTab('trades')}
-              icon={Icon.trade}
-              label={t('trade.pendingTrades')}
-              badge={sidebarTab !== 'trades' ? incomingTrades : 0}
-            />
-            <SidebarTab
-              active={sidebarTab === 'chat'}
-              onClick={() => setSidebarTab('chat')}
-              icon={Icon.chat}
-              label={t('sidebar.chat')}
-              badge={sidebarTab !== 'chat' ? unreadChatCount : 0}
-              badgeTone="rent"
-            />
-          </div>
-
-          {sidebarTab === 'players' && (
-            <div className="scrollbar-thin flex max-h-[60vh] min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2.5 lg:max-h-none">
-              {gameState.players.map((p) => (
-                <PlayerCard
-                  key={p.id}
-                  player={p}
-                  isMe={p.id === playerId}
-                  isCurrentTurn={currentPlayer?.id === p.id}
-                  board={gameState.board}
-                  properties={gameState.properties}
-                  onTrade={openTradeWith}
-                  expanded={expandedPlayerId === p.id}
-                  onToggleExpand={() => setExpandedPlayerId((id) => (id === p.id ? null : p.id))}
-                  onSelectTile={setSelectedTileId}
-                />
-              ))}
-
-              <GameSnapshot gameState={gameState} />
-            </div>
-          )}
-
-          {sidebarTab === 'trades' && (
-            <div className="flex max-h-[60vh] min-h-0 flex-1 flex-col lg:max-h-none">
-              <TradePanel
-                gameState={gameState}
-                playerId={playerId}
-                focus={tradeFocus}
-                onOpenComposer={(target) => setComposer({ target })}
-                onAcceptTrade={actions.acceptTrade}
-                onDeclineTrade={actions.declineTrade}
-                onCancelTrade={actions.cancelTrade}
-              />
-            </div>
-          )}
-
-          {sidebarTab === 'chat' && (
-            <div className="flex max-h-[60vh] min-h-0 flex-1 lg:max-h-none">
-              <Chat messages={chatMessages} onSend={sendChat} playerId={playerId} players={gameState.players} board={gameState.board} />
-            </div>
-          )}
-        </aside>
-      </main>
-
+  const dialogs = (
+    <>
       {gameState.pendingAction?.type === 'CARD_REVEAL' && gameState.pendingAction.playerId === playerId && (
         <CardPrompt pendingAction={gameState.pendingAction} onAcknowledge={actions.acknowledgeCard} />
       )}
@@ -726,6 +684,7 @@ export default function GameUI({
             setManualHighlight((on) => !on);
             // Close the manager so the lit-up board is actually visible.
             setManageOpen(false);
+            setPhoneTab('board');
           }}
         />
       )}
@@ -748,7 +707,7 @@ export default function GameUI({
 
       {/* Above everything, dialogs included: a trade offer for this player
           and short auction notices. */}
-      <div className="pointer-events-none fixed inset-x-0 top-14 z-[60] flex flex-col items-center gap-2 px-3">
+      <div className={`pointer-events-none fixed inset-x-0 z-[60] flex flex-col items-center gap-2 px-3 ${phone ? 'top-[max(0.5rem,env(safe-area-inset-top))]' : 'top-14'}`}>
         <div className="w-full max-w-md">
           {me && gameState.phase !== 'GAME_OVER' && (
             <TradeAlert
@@ -775,6 +734,172 @@ export default function GameUI({
           </div>
         ))}
       </div>
+    </>
+  );
+
+  const canSurrender = !spectating && me && !me.bankrupt && gameState.phase !== 'GAME_OVER' && gameState.phase !== 'LOBBY';
+
+  if (phone) {
+    // The game needs this player: their own turn, a purchase to decide,
+    // or an auction everyone can bid in.
+    const needed = !spectating && !!me && !me.bankrupt && gameState.phase !== 'GAME_OVER'
+      && (isMyTurn || !!gameState.auction || !!myBuyDecision);
+    return (
+      <PhoneGame
+        gameId="monopoly"
+        state={gameState}
+        ctx={phoneCtx}
+        theme="table-felt"
+        kicker={`${t('menu.monopoly.title')} · ${gameState.roomCode}`}
+        title={isMyTurn ? t('game.yourTurn') : t('game.nameTurn', { name: currentPlayer?.nickname || '' })}
+        headerExtra={me && (
+          <span className={`flex h-10 shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-black/40 px-2.5 font-display text-[16px] font-bold tnum ${me.money < 0 ? 'text-rent-light' : 'text-brass-light'}`}>
+            <PlayerAvatar player={me} sizeClassName="h-5 w-5" ringClassName="ring-1 ring-white/25" />
+            {formatMoney(me.money)}
+          </span>
+        )}
+        tabs={[
+          {
+            id: 'board',
+            label: t('phone.monopoly.board'),
+            icon: <PhoneIcon.board />,
+            fill: true,
+            keep: true,
+            content: <div className="flex min-h-0 flex-1 flex-col p-1.5">{boardEl}</div>,
+            footer: <ActionDock {...dockProps} compact />,
+          },
+          {
+            id: 'players',
+            label: t('sidebar.players'),
+            icon: <Icon.users />,
+            content: (
+              <PhoneStack className="gap-2">
+                {spectating && <SpectatorBanner onLeave={onLeave} />}
+                {gameState.spectators?.length > 0 && <SpectatorStrip spectators={gameState.spectators} />}
+                {playerCards}
+              </PhoneStack>
+            ),
+          },
+          {
+            id: 'trades',
+            label: t('phone.monopoly.trades'),
+            icon: <Icon.trade />,
+            badge: incomingTrades,
+            fill: true,
+            content: <div className="flex min-h-0 flex-1 flex-col">{tradePanel}</div>,
+          },
+          {
+            id: 'log',
+            label: t('log.title'),
+            icon: <PhoneIcon.log />,
+            content: <PhoneStack><ActivityList log={gameState.log} board={gameState.board} /></PhoneStack>,
+          },
+          {
+            id: 'chat',
+            label: t('sidebar.chat'),
+            icon: <Icon.chat />,
+            badge: unreadChatCount,
+            fill: true,
+            content: <div className="flex min-h-0 flex-1 flex-col">{chatPanel}</div>,
+          },
+        ]}
+        tab={phoneTab}
+        onTab={setPhoneTab}
+        act={{
+          tab: 'board',
+          active: needed,
+          text: gameState.auction ? t('phone.monopoly.goAuction') : myBuyDecision ? t('phone.monopoly.goBuy') : t('game.yourTurn'),
+        }}
+        resetKey={`${gameState.currentPlayerIndex}-${gameState.phase}`}
+        roomCode={gameState.roomCode}
+        onLeave={onLeave}
+        onSurrender={canSurrender ? actions.surrender : null}
+        menuItems={[
+          { id: 'settings', icon: <Icon.settings />, label: t('phone.settings'), hint: t('phone.settingsHint'), onClick: () => setSettingsOpen(true) },
+        ]}
+      >
+        {dialogs}
+      </PhoneGame>
+    );
+  }
+
+  return (
+    <div className="table-felt flex min-h-screen flex-col overflow-x-hidden lg:h-screen lg:overflow-hidden">
+      <TopBar
+        gameState={gameState}
+        me={me}
+        onLeave={onLeave}
+        onOpenSettings={() => setSettingsOpen(true)}
+        incomingTrades={incomingTrades}
+        onOpenTrades={openTrades}
+        onSurrender={actions.surrender}
+        spectating={spectating}
+      />
+
+      {spectating && <SpectatorBanner onLeave={onLeave} className="mx-2.5 mt-2.5" />}
+      {gameState.spectators?.length > 0 && <SpectatorStrip spectators={gameState.spectators} className="mx-2.5 mt-2.5" />}
+
+      {/* What this player has to do right now, with the rules one tap
+          away - the same strip every game here uses. */}
+      {gameState.phase !== 'LOBBY' && (
+        <GameGuide gameId="monopoly" state={gameState} ctx={{ isMyTurn }} className="panel mx-2.5 mt-2.5 shrink-0" />
+      )}
+
+      <main className="flex min-h-0 flex-1 flex-col gap-2.5 p-2.5 lg:flex-row">
+        <section className="flex min-h-0 min-w-0 flex-1 flex-col gap-2.5">
+          <div className="h-[52vh] min-h-0 lg:h-auto lg:flex-1">
+            {boardEl}
+          </div>
+
+          <ActionDock {...dockProps} />
+        </section>
+
+        <aside ref={sidebarRef} className="panel flex min-h-0 w-full shrink-0 flex-col lg:h-auto lg:w-[22rem] xl:w-[24rem] 3xl:w-[27rem] 4xl:w-[34rem] 5xl:w-[40rem]">
+          <div role="tablist" className="flex shrink-0 border-b border-white/[0.08]">
+            <SidebarTab
+              active={sidebarTab === 'players'}
+              onClick={() => setSidebarTab('players')}
+              icon={Icon.users}
+              label={t('sidebar.players')}
+            />
+            <SidebarTab
+              active={sidebarTab === 'trades'}
+              onClick={() => setSidebarTab('trades')}
+              icon={Icon.trade}
+              label={t('trade.pendingTrades')}
+              badge={sidebarTab !== 'trades' ? incomingTrades : 0}
+            />
+            <SidebarTab
+              active={sidebarTab === 'chat'}
+              onClick={() => setSidebarTab('chat')}
+              icon={Icon.chat}
+              label={t('sidebar.chat')}
+              badge={sidebarTab !== 'chat' ? unreadChatCount : 0}
+              badgeTone="rent"
+            />
+          </div>
+
+          {sidebarTab === 'players' && (
+            <div className="scrollbar-thin flex max-h-[60vh] min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2.5 lg:max-h-none">
+              {playerCards}
+            </div>
+          )}
+
+          {sidebarTab === 'trades' && (
+            <div className="flex max-h-[60vh] min-h-0 flex-1 flex-col lg:max-h-none">
+              {tradePanel}
+            </div>
+          )}
+
+          {sidebarTab === 'chat' && (
+            <div className="flex max-h-[60vh] min-h-0 flex-1 lg:max-h-none">
+              {chatPanel}
+            </div>
+          )}
+        </aside>
+      </main>
+
+      {dialogs}
     </div>
   );
 }

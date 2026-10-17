@@ -9,6 +9,8 @@ import {
 } from 'react';
 import { useTranslation } from '../../i18n/LanguageContext';
 import GameGuide from '../rules/GameGuide';
+import PhoneGame, { PhoneIcon, PhoneStack, useUnread } from '../phone/PhoneGame';
+import { usePhoneLayout } from '../../hooks/usePhoneLayout';
 import PlayerAvatar from '../PlayerAvatar';
 import Modal from '../Modal';
 import Icon from '../icons';
@@ -76,7 +78,6 @@ function TopBar({
   const enc = state.encounter;
   const current = state.players.find((p) => p.id === state.turnPlayerId);
   const c = cosmicColor(current?.color);
-  const phaseIndex = enc ? PHASE_ORDER.indexOf(enc.phase) : -1;
   return (
     <header className="panel flex flex-col gap-2 px-3 py-2">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -108,29 +109,37 @@ function TopBar({
       )}
       <button type="button" onClick={onLeave} className="btn-quiet px-3 py-2 text-[12.5px]">{t('waiting.leave')}</button>
       </div>
-      {state.phase === 'PLAY' && enc && (
-        <ol className="scrollbar-thin flex gap-1 overflow-x-auto pb-0.5" aria-label={t('cosmic.phaseTrack')}>
-          {PHASE_ORDER.map((ph, i) => {
-            const done = i < phaseIndex;
-            const now = i === phaseIndex;
-            return (
-              <li
-                key={ph}
-                aria-current={now ? 'step' : undefined}
-                className={`flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
-                  now ? 'border-violet-300 bg-violet-500/30 text-white shadow-[0_0_0_2px_rgba(180,139,255,0.3)]'
-                    : done ? 'border-white/10 bg-white/[0.04] text-parch/45' : 'border-white/[0.06] text-parch/35'
-                }`}
-              >
-                <span className="tnum">{i + 1}</span>
-                {done ? '✓ ' : ''}
-                {t(`cosmic.phase.${ph}`)}
-              </li>
-            );
-          })}
-        </ol>
-      )}
+      <PhaseTrack state={state} t={t} />
     </header>
+  );
+}
+
+// Where this encounter is among its eight phases.
+function PhaseTrack({ state, t }) {
+  const enc = state.encounter;
+  if (state.phase !== 'PLAY' || !enc) return null;
+  const phaseIndex = PHASE_ORDER.indexOf(enc.phase);
+  return (
+    <ol className="scrollbar-thin flex gap-1 overflow-x-auto pb-0.5" aria-label={t('cosmic.phaseTrack')}>
+      {PHASE_ORDER.map((ph, i) => {
+        const done = i < phaseIndex;
+        const now = i === phaseIndex;
+        return (
+          <li
+            key={ph}
+            aria-current={now ? 'step' : undefined}
+            className={`flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+              now ? 'border-violet-300 bg-violet-500/30 text-white shadow-[0_0_0_2px_rgba(180,139,255,0.3)]'
+                : done ? 'border-white/10 bg-white/[0.04] text-parch/45' : 'border-white/[0.06] text-parch/35'
+            }`}
+          >
+            <span className="tnum">{i + 1}</span>
+            {done ? '✓ ' : ''}
+            {t(`cosmic.phase.${ph}`)}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -807,7 +816,7 @@ function DealPanel({
       )}
 
       {main ? (
-        <div className="grid gap-2 md:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5">
             <p className="section-label mb-1">{t('cosmic.deal.cards')}</p>
             <p className="text-[12px] text-parch/65">{t('cosmic.deal.giveHint', { n: ui.dealGive.length })}</p>
@@ -862,7 +871,7 @@ function AlienChoice({ state, actions, t }) {
         <h2 className="text-center font-display text-[26px] font-black text-parch">{t('cosmic.chooseAlien.title')}</h2>
         <p className="mb-4 text-center text-[12.5px] text-parch/55">{t('cosmic.chooseAlien.hint')}</p>
         {you?.alienOptions && !you.alienId ? (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {you.alienOptions.map((id) => (
               <button key={id} type="button" onClick={() => actions.chooseAlien(id)} className="group flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-left transition-all hover:-translate-y-1 hover:border-violet-300/60 hover:bg-violet-500/10">
                 <AlienBlurb id={id} t={t} />
@@ -1041,14 +1050,28 @@ function DecksPanel({ state, t }) {
   );
 }
 
+function LogList({ log, t, className = 'scrollbar-thin min-h-0 flex-1 overflow-y-auto px-3 py-2' }) {
+  const ref = useRef(null);
+  useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [log.length]);
+  return (
+    <ul ref={ref} className={className}>
+      {log.map((e, i) => (
+        // eslint-disable-next-line react/no-array-index-key
+        <li key={`${e.ts}-${i}`} className="flex gap-2 py-[3px] text-[11.5px] leading-snug text-parch/70">
+          <span className="w-5 shrink-0 text-right text-parch/25 tnum">{e.turn || '·'}</span>
+          <span>{cosmicLogText(e, t)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function SidePanel({
   state, chat, actions, t,
 }) {
   const [tab, setTab] = useState('log');
   const [seen, setSeen] = useState(chat.length);
-  const ref = useRef(null);
   useEffect(() => { if (tab === 'chat') setSeen(chat.length); }, [tab, chat.length]);
-  useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [state.log.length, tab]);
   const unread = Math.max(0, chat.length - seen);
   const me = state.players.find((p) => p.isYou);
   return (
@@ -1062,15 +1085,7 @@ function SidePanel({
         ))}
       </div>
       {tab === 'log' ? (
-        <ul ref={ref} className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-3 py-2">
-          {state.log.map((e, i) => (
-            // eslint-disable-next-line react/no-array-index-key
-            <li key={`${e.ts}-${i}`} className="flex gap-2 py-[3px] text-[11.5px] leading-snug text-parch/70">
-              <span className="w-5 shrink-0 text-right text-parch/25 tnum">{e.turn || '·'}</span>
-              <span>{cosmicLogText(e, t)}</span>
-            </li>
-          ))}
-        </ul>
+        <LogList log={state.log} t={t} />
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
           <RoomChat messages={chat} onSend={actions.sendChat} players={state.players} myPlayerId={me?.id} renderSystem={(m) => t(`cosmic.system.${m.type}`, m.params)} nameTone={() => 'text-violet-200'} />
@@ -1101,6 +1116,9 @@ export default function CosmicGame({
 
   const myMove = !!state.players.find((p) => p.isYou)?.isCurrent;
   useTurnSound(myMove);
+  const phone = usePhoneLayout();
+  const [phoneTab, setPhoneTab] = useState('turn');
+  const unread = useUnread(chat, phone && phoneTab === 'chat', you?.id);
 
   const isAggr = enc?.aggressorId === you?.id;
   const launching = state.phase === 'PLAY' && enc?.phase === 'LAUNCH' && isAggr;
@@ -1127,6 +1145,121 @@ export default function CosmicGame({
     });
   };
 
+  const board = state.planets.length > 0 && (
+    <CosmicBoard
+      state={state}
+      t={t}
+      clickablePlanets={clickablePlanets}
+      selection={launching || accepting ? ui.selection : {}}
+      stackClickable={launching || accepting}
+      onPlanet={onPlanet}
+      onStack={onStack}
+    />
+  );
+  const encounterPanels = (
+    <>
+      {state.phase === 'PLAY' && enc && enc.phase !== 'START' && enc.phase !== 'REGROUP' && <EncounterStrip state={state} t={t} />}
+      {state.phase === 'PLAY' && enc?.phase === 'RESOLUTION' && enc.step === 'DEAL' && <DealPanel state={state} actions={actions} t={t} ui={ui} setUi={setUi} />}
+    </>
+  );
+  const actionPanel = <ActionPanel state={state} actions={actions} t={t} ui={ui} setUi={setUi} />;
+  const handPanel = <HandPanel state={state} actions={actions} t={t} ui={ui} setUi={setUi} onArtifact={setArtifactCard} />;
+  const overlays = (
+    <>
+      {state.phase === 'ALIENS' && <AlienChoice state={state} actions={actions} t={t} />}
+      {artifactCard && <ArtifactDialog state={state} card={artifactCard} actions={actions} onClose={() => setArtifactCard(null)} t={t} />}
+      {state.phase === 'GAME_OVER' && state.results && <GameOver state={state} actions={actions} onLeave={onLeave} t={t} />}
+    </>
+  );
+
+  if (phone) {
+    const current = state.players.find((p) => p.id === state.turnPlayerId);
+    // Launching ships and regrouping are done by tapping planets, so
+    // those steps happen on the map with their buttons right under it.
+    const onMap = launching || regrouping || accepting;
+    const canSurrender = !spectating && actions?.surrender && state.phase !== 'GAME_OVER' && state.players.some((p) => p.isYou && !p.left);
+    return (
+      <PhoneGame
+        gameId="cosmic"
+        state={state}
+        theme="table-cosmic"
+        kicker={`🛸 ${state.phase === 'PLAY' && enc ? `${t(`cosmic.phase.${enc.phase}`)} · ${t('cosmic.encounterNumber', { n: enc.number })}` : t(`cosmic.gamePhase.${state.phase}`)} · 🏆 ${state.winColonies}`}
+        title={current && state.phase === 'PLAY' ? (current.isYou ? t('cosmic.yourTurn') : t('cosmic.nameTurn', { name: current.nickname })) : t('menu.cosmic.title')}
+        endsAt={state.phaseEndsAt}
+        tabs={[
+          {
+            id: 'turn',
+            label: t('phone.cosmic.turn'),
+            icon: <Icon.target />,
+            content: (
+              <PhoneStack>
+                {spectating && <SpectatorBanner onLeave={onLeave} />}
+                <PhaseTrack state={state} t={t} />
+                {encounterPanels}
+                {onMap ? (
+                  <button type="button" onClick={() => setPhoneTab('space')} className="btn-primary w-full py-3 text-[15px]">
+                    <PhoneIcon.map className="h-5 w-5" />
+                    {t('phone.cosmic.toMap')}
+                  </button>
+                ) : actionPanel}
+                {handPanel}
+              </PhoneStack>
+            ),
+          },
+          {
+            id: 'space',
+            label: t('phone.cosmic.space'),
+            icon: <PhoneIcon.map />,
+            fill: true,
+            keep: true,
+            content: <div className="relative min-h-0 flex-1">{board}</div>,
+            footer: onMap ? (
+              <div className="scrollbar-thin max-h-[46vh] overflow-y-auto border-t border-white/[0.08] bg-black/45 p-2 backdrop-blur-xl">{actionPanel}</div>
+            ) : null,
+          },
+          {
+            id: 'players',
+            label: t('phone.cosmic.players'),
+            icon: <Icon.users />,
+            content: (
+              <PhoneStack>
+                <PlayersPanel state={state} t={t} />
+                <DecksPanel state={state} t={t} />
+                <SpectatorStrip spectators={state.spectators} />
+              </PhoneStack>
+            ),
+          },
+          {
+            id: 'log',
+            label: t('cosmic.logTitle'),
+            icon: <PhoneIcon.log />,
+            fill: true,
+            content: <LogList log={state.log} t={t} className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 py-3 [&_li]:text-[13px]" />,
+          },
+          {
+            id: 'chat',
+            label: t('cosmic.chat'),
+            icon: <Icon.chat />,
+            badge: unread,
+            fill: true,
+            content: (
+              <RoomChat messages={chat} onSend={actions.sendChat} players={state.players} myPlayerId={you?.id} renderSystem={(m) => t(`cosmic.system.${m.type}`, m.params)} nameTone={() => 'text-violet-200'} className="min-h-0 flex-1" />
+            ),
+          },
+        ]}
+        tab={phoneTab}
+        onTab={setPhoneTab}
+        act={{ tab: onMap ? 'space' : 'turn', active: !spectating && myMove, text: t('phone.cosmic.goTurn') }}
+        resetKey={stepKey}
+        roomCode={state.roomCode}
+        onLeave={onLeave}
+        onSurrender={canSurrender ? actions.surrender : null}
+      >
+        {overlays}
+      </PhoneGame>
+    );
+  }
+
   return (
     <div className="table-cosmic flex min-h-screen flex-col lg:h-[100dvh] lg:min-h-0">
       <div className="mx-auto flex w-full max-w-[1800px] flex-1 flex-col gap-3 px-3 py-3 lg:min-h-0 4xl:max-w-[2500px]">
@@ -1139,22 +1272,11 @@ export default function CosmicGame({
         <div className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-[minmax(0,1fr),23rem] 3xl:grid-cols-[minmax(0,1fr),27rem]">
           <div className="flex min-w-0 flex-col gap-3 lg:min-h-0">
             <div className="relative h-[58vh] min-h-[320px] lg:h-auto lg:min-h-[260px] lg:flex-1">
-              {state.planets.length > 0 && (
-                <CosmicBoard
-                  state={state}
-                  t={t}
-                  clickablePlanets={clickablePlanets}
-                  selection={launching || accepting ? ui.selection : {}}
-                  stackClickable={launching || accepting}
-                  onPlanet={onPlanet}
-                  onStack={onStack}
-                />
-              )}
+              {board}
             </div>
-            {state.phase === 'PLAY' && enc && enc.phase !== 'START' && enc.phase !== 'REGROUP' && <EncounterStrip state={state} t={t} />}
-            {state.phase === 'PLAY' && enc?.phase === 'RESOLUTION' && enc.step === 'DEAL' && <DealPanel state={state} actions={actions} t={t} ui={ui} setUi={setUi} />}
-            <ActionPanel state={state} actions={actions} t={t} ui={ui} setUi={setUi} />
-            <HandPanel state={state} actions={actions} t={t} ui={ui} setUi={setUi} onArtifact={setArtifactCard} />
+            {encounterPanels}
+            {actionPanel}
+            {handPanel}
           </div>
           <aside className="scrollbar-thin flex min-w-0 flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
             <PlayersPanel state={state} t={t} />
@@ -1164,9 +1286,7 @@ export default function CosmicGame({
         </div>
       </div>
 
-      {state.phase === 'ALIENS' && <AlienChoice state={state} actions={actions} t={t} />}
-      {artifactCard && <ArtifactDialog state={state} card={artifactCard} actions={actions} onClose={() => setArtifactCard(null)} t={t} />}
-      {state.phase === 'GAME_OVER' && state.results && <GameOver state={state} actions={actions} onLeave={onLeave} t={t} />}
+      {overlays}
     </div>
   );
 }

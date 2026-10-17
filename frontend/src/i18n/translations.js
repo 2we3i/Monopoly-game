@@ -13,6 +13,7 @@ import { throneOnlineEn, throneOnlineRu } from './throneOnlineTranslations';
 import { roomEn, roomRu } from './roomTranslations';
 import { hypeEn, hypeRu } from './hypeTranslations';
 import { creatorEn, creatorRu } from './creatorTranslations';
+import { phoneEn, phoneRu } from './phoneTranslations';
 
 export const LANGUAGES = {
   en: { label: 'English', nativeLabel: 'English' },
@@ -1074,8 +1075,8 @@ const ru = {
 };
 
 export const TRANSLATIONS = {
-  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn, ...tabletopEn, ...monopolyEn, ...catanEn, ...cosmicEn, ...throneEn, ...throneOnlineEn, ...roomEn, ...hypeEn, ...creatorEn },
-  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu, ...tabletopRu, ...monopolyRu, ...catanRu, ...cosmicRu, ...throneRu, ...throneOnlineRu, ...roomRu, ...hypeRu, ...creatorRu },
+  en: { ...en, ...platformEn, ...communityEn, ...bunkerEn, ...tabletopEn, ...monopolyEn, ...catanEn, ...cosmicEn, ...throneEn, ...throneOnlineEn, ...roomEn, ...hypeEn, ...creatorEn, ...phoneEn },
+  ru: { ...ru, ...platformRu, ...communityRu, ...bunkerRu, ...tabletopRu, ...monopolyRu, ...catanRu, ...cosmicRu, ...throneRu, ...throneOnlineRu, ...roomRu, ...hypeRu, ...creatorRu, ...phoneRu },
 };
 
 if (import.meta.env.DEV) {

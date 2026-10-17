@@ -72,7 +72,7 @@ export default function LeaderboardPage({ auth }) {
 
   return (
     <PlatformShell auth={auth} active="leaderboard">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr),320px] 3xl:grid-cols-[minmax(0,1fr),380px] 4xl:grid-cols-[minmax(0,1fr),520px] 4xl:gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr),320px] 3xl:grid-cols-[minmax(0,1fr),380px] 4xl:grid-cols-[minmax(0,1fr),520px] 4xl:gap-6">
         <div className="flex min-w-0 flex-col gap-4">
           <div className="flex flex-wrap items-end gap-3">
             <div className="min-w-0 flex-1">

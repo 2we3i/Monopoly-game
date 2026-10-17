@@ -164,7 +164,7 @@ function Step({
 
 function Cards({ items, language }) {
   return (
-    <ul className="grid gap-2 sm:grid-cols-2">
+    <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {items.map((item, i) => (
         // eslint-disable-next-line react/no-array-index-key
         <li key={i} className="flex gap-2.5 rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2.5">

@@ -255,7 +255,7 @@ function VerdictPanel({
         </div>
         <button type="button" onClick={onChange} className="btn-quiet px-3 py-2 text-[12.5px]">{t('tabletop.changePlayer')}</button>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">{children}</div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">{children}</div>
       {acceptHint && <p className="text-[12px] text-parch/45">{t('tabletop.acceptHint')}</p>}
     </section>
   );
@@ -294,7 +294,7 @@ function KnockoutTable({ game, dispatch }) {
         ))}
         <LetterCard key={`${letter}-${game.letters.length}`} letter={letter} />
       </CardStage>
-      <div className="grid gap-2 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <button type="button" onClick={() => dispatch({ type: 'answered' })} className="btn-success py-4 text-[15.5px]">
           <Icon.check className="h-5 w-5" />
           {t('tabletop.knockout.answered')}
@@ -422,7 +422,7 @@ function JudgeTable({ game, dispatch }) {
       <ThemeCard key={game.theme} text={game.theme} />
       <section>
         <p className="section-label mb-2">{t('tabletop.judge.order')}</p>
-        <ol className="grid gap-2 sm:grid-cols-2">
+        <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {seatsAfter(game.players.length, game.judge).map((seat, k) => (
             <li key={seat} className="panel-flat flex items-center gap-3 p-2.5">
               <span className="w-4 text-center font-mono text-[12px] text-parch/40">{k + 1}</span>
@@ -481,7 +481,7 @@ function ThirtyTable({ game, dispatch }) {
       {game.alcohol && (stealing ? (
         <PlayerPicker players={game.players} exclude={[game.current]} onPick={(seat) => dispatch({ type: 'steal', player: seat })} label={t('tabletop.thirty.steal')} />
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <button type="button" disabled={expired} onClick={() => dispatch({ type: 'pass' })} className="btn-ghost py-3">{t('tabletop.thirty.pass')}</button>
           <button type="button" disabled={expired} onClick={() => setStealing(true)} className="btn-ghost py-3">{t('tabletop.thirty.steal')}</button>
         </div>
@@ -557,7 +557,7 @@ function TalentTable({ game, dispatch }) {
       <>
         <TaskBanner who={name} task={t('tabletop.talent.pickTask', { letter: game.letter })} aside={<LetterCard letter={game.letter} size="sm" />} />
         <p className="text-[12.5px] text-parch/50">{t('tabletop.talent.hostTheme', { name: host, theme: game.theme })}</p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {game.hands[seat].map((text, k) => (
             // eslint-disable-next-line react/no-array-index-key
             <ThemeCard key={`${text}-${k}`} text={text} size="sm" selected={card === k} onClick={() => setCard(k)} />
@@ -576,7 +576,7 @@ function TalentTable({ game, dispatch }) {
   return (
     <>
       <TaskBanner role={role} who={host} task={t(allOpen ? 'tabletop.talent.chooseTask' : 'tabletop.talent.revealTask')} aside={<LetterCard letter={game.letter} size="sm" />} />
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {game.submissions.map((sub, k) => (k < game.revealed ? (
           // eslint-disable-next-line react/no-array-index-key
           <ThemeCard key={`open-${k}`} text={sub.card} size="sm" selected={card === k} onClick={allOpen ? () => setCard(k) : undefined} />
@@ -715,7 +715,7 @@ function Setup({
   const setName = (i, value) => onChange({ ...setup, names: names.map((n, k) => (k === i ? value : n)) });
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
       <section className="panel flex flex-col gap-3 p-4 4xl:p-6">
         <div>
           <p className="section-label">{t('tabletop.setup.players', { min: MIN_PLAYERS, max: MAX_PLAYERS })}</p>
